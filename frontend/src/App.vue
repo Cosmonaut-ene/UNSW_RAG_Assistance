@@ -40,13 +40,37 @@ watch(isDark, (val) => {
   document.documentElement.classList.toggle('dark', val)
 })
 
-const sendMessage = () => {
+const sendMessage = async () => {
   if (!userInput.value.trim()) return
 
-  messages.value.push({ sender: 'user', text: userInput.value })
-  messages.value.push({ sender: 'bot', text: 'This is a demo response. More content can be implemented here.' })
-
+  const question = userInput.value.trim()
+  messages.value.push({ sender: 'user', text: question })
   userInput.value = ''
+
+  messages.value.push({ sender: 'bot', text: 'Thinking...' })
+
+  try {
+    const res = await fetch('http://localhost:5000/api/query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        question,
+        session_id: 'demo-session'
+      })
+    })
+
+    const data = await res.json()
+
+    messages.value.pop()
+    messages.value.push({ sender: 'bot', text: data.answer })
+
+  } catch (err) {
+    messages.value.pop()
+    messages.value.push({ sender: 'bot', text: 'Sorry, something went wrong.' })
+    console.error(err)
+  }
 
   nextTick(() => {
     const main = document.querySelector('.chat-main')
