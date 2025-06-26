@@ -8,7 +8,7 @@ CORS(app)
 app.config['SECRET_KEY'] = 'your-secret-key'
 
 # Register Blueprints
-app.register_blueprint(user_bp, url_prefix='/api')
+app.register_blueprint(user_bp, url_prefix='/api/user')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
 if __name__ == '__main__':
