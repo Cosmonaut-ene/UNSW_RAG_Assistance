@@ -46,7 +46,7 @@ def save_queries(queries):
         print(f"✅ Saved {len(queries)} queries to file")
         return True
     except Exception as e:
-        print(f"❌ Error saving queries: {e}")
+        print(f"Error saving queries: {e}")
         return False
 
 def add_query(question, answer=None, answered=False, session_id=None, ip_address=None):
@@ -81,10 +81,10 @@ def update_query(query_id, answer, answered_by="admin"):
             query["answered_by"] = answered_by
             success = save_queries(queries)
             if success:
-                print(f"✅ Updated query {query_id}")
+                print(f"Updated query {query_id}")
             return success
     
-    print(f"❌ Query {query_id} not found")
+    print(f"Query {query_id} not found")
     return False
 
 def delete_query_by_id(query_id):
@@ -96,10 +96,10 @@ def delete_query_by_id(query_id):
             del queries[i]
             success = save_queries(queries)
             if success:
-                print(f"✅ Deleted query {query_id}")
+                print(f"Deleted query {query_id}")
             return success
     
-    print(f"❌ Query {query_id} not found for deletion")
+    print(f"Query {query_id} not found for deletion")
     return False
 
 # JWT Authentication
@@ -270,7 +270,7 @@ def add_response():
         except Exception as e:
             print(f"Error updating knowledge base: {str(e)}")
 
-        print(f"✅ Response added for question: {question[:50] if question else 'Unknown'}...")
+        print(f"Response added for question: {question[:50] if question else 'Unknown'}...")
         print(f"Answer: {response_text[:50]}...")
 
         return jsonify({
@@ -279,7 +279,7 @@ def add_response():
         }), 200
         
     except Exception as e:
-        print(f"❌ Error adding response: {str(e)}")
+        print(f"Error adding response: {str(e)}")
         return jsonify({"error": "Failed to add response"}), 500
 
 @admin_bp.route('/update-answer', methods=['POST'])
@@ -325,7 +325,7 @@ def update_answer():
                 break
         
         if not query_found:
-            print(f"❌ Query {query_id} not found")
+            print(f"Query {query_id} not found")
             return jsonify({"error": "Query not found"}), 404
 
         # save the updated queries
@@ -333,7 +333,7 @@ def update_answer():
         success = save_queries(queries)
         
         if not success:
-            print(f"❌ Failed to save updated data")
+            print(f"Failed to save updated data")
             return jsonify({"error": "Failed to save updated answer"}), 500
 
         # verify the update
@@ -343,11 +343,11 @@ def update_answer():
         for q in verification_queries:
             if q["id"] == query_id and q["answer"] == new_answer:
                 verification_success = True
-                print(f"✅ Verification successful: Answer updated in file")
+                print(f"Verification successful: Answer updated in file")
                 break
         
         if not verification_success:
-            print(f"❌ Verification failed: Answer not updated in file")
+            print(f"Verification failed: Answer not updated in file")
 
         # update knowledge base 
         try:
@@ -364,7 +364,7 @@ def update_answer():
         except Exception as e:
             print(f"Error updating knowledge base: {str(e)}")
 
-        print(f"✅ Answer update completed for question: {question[:50] if question else 'Unknown'}...")
+        print(f"Answer update completed for question: {question[:50] if question else 'Unknown'}...")
 
         return jsonify({
             "message": "Answer updated successfully",
@@ -373,7 +373,7 @@ def update_answer():
         }), 200
         
     except Exception as e:
-        print(f"❌ Error updating answer: {str(e)}")
+        print(f"Error updating answer: {str(e)}")
         return jsonify({"error": "Failed to update answer"}), 500
 
 @admin_bp.route('/delete-query/<query_id>', methods=['DELETE'])
