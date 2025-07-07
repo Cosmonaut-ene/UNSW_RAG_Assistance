@@ -1,0 +1,1294 @@
+[
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3782",
+    "code": "3782",
+    "name": "Advanced Science (Honours) / Computer Science",
+    "faculty": "Faculty of Science",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "5 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "240",
+    "award_type": "Bachelor (Honours) (Embedded)",
+    "award": "Bachelor of Advanced Science (Honours) - BAdvSci(Hons)",
+    "uac_code": "429361",
+    "cricos_code": "088867K",
+    "specialisations": [
+      {
+        "title": "Palaeoscience",
+        "code": "ARCYBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/ARCYBH"
+      },
+      {
+        "title": "Bioinformatics",
+        "code": "BABSBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BABSBH"
+      },
+      {
+        "title": "Molecular and Cell Biology",
+        "code": "BIOCFH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BIOCFH"
+      },
+      {
+        "title": "Genetics",
+        "code": "BIOCGH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BIOCGH"
+      },
+      {
+        "title": "Biology",
+        "code": "BIOSKH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BIOSKH"
+      },
+      {
+        "title": "Ecology",
+        "code": "BIOSLH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BIOSLH"
+      },
+      {
+        "title": "Biotechnology",
+        "code": "BIOTBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BIOTBH"
+      },
+      {
+        "title": "Chemistry",
+        "code": "CHEMFH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CHEMFH"
+      },
+      {
+        "title": "Climate Science",
+        "code": "CLIMDH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CLIMDH"
+      },
+      {
+        "title": "Geography",
+        "code": "GEOGTH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/GEOGTH"
+      },
+      {
+        "title": "Geology",
+        "code": "GEOLMH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/GEOLMH"
+      },
+      {
+        "title": "Applied Mathematics",
+        "code": "MATHAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHAH"
+      },
+      {
+        "title": "Physical Oceanography",
+        "code": "MATHNH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHNH"
+      },
+      {
+        "title": "Pure Mathematics",
+        "code": "MATHPH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHPH"
+      },
+      {
+        "title": "Statistics",
+        "code": "MATHTH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHTH"
+      },
+      {
+        "title": "Materials Science",
+        "code": "MATSCH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATSCH"
+      },
+      {
+        "title": "Microbiology",
+        "code": "MICRFH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MICRFH"
+      },
+      {
+        "title": "Marine Science",
+        "code": "MSCIJH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MSCIJH"
+      },
+      {
+        "title": "Neuroscience",
+        "code": "NEURBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/NEURBH"
+      },
+      {
+        "title": "Physics",
+        "code": "PHYSGH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/PHYSGH"
+      },
+      {
+        "title": "Psychology",
+        "code": "PSYCAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/PSYCAH"
+      },
+      {
+        "title": "Medical Science",
+        "code": "SOMSAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOMSAH"
+      },
+      {
+        "title": "Physiology",
+        "code": "SOMSBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOMSBH"
+      },
+      {
+        "title": "Pharmacology",
+        "code": "SOMSCH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOMSCH"
+      },
+      {
+        "title": "Pathology",
+        "code": "SOMSDH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOMSDH"
+      },
+      {
+        "title": "Anatomy",
+        "code": "SOMSEH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOMSEH"
+      },
+      {
+        "title": "Vision Science",
+        "code": "VISNBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/VISNBH"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/4515",
+    "code": "4515",
+    "name": "Computer Science & Engineering (Honours)",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "1 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "48",
+    "aqf_level": "Level 8",
+    "award_type": "Bachelor (Honours) (Separate)",
+    "award": "Bachelor of Science (Honours) - BSc (Hons)",
+    "cricos_code": "084277J",
+    "specialisations": [
+      {
+        "title": "Computational Biology",
+        "code": "BINFBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/BINFBH"
+      },
+      {
+        "title": "Computer Science",
+        "code": "COMPAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/COMPAH"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/4470",
+    "code": "4470",
+    "name": "Computing and Cyber Security (CDF)",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Undergraduate",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Semester 1",
+    "academic_calendar": "Semester",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Computing and Cyber Security - BCompCybSec",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3784",
+    "code": "3784",
+    "name": "Commerce / Computer Science",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Commerce - BCom",
+    "uac_code": "424100",
+    "cricos_code": "080282M",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/7003",
+    "code": "7003",
+    "name": "Computer Science",
+    "faculty": "UNSW College",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "1 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "48",
+    "aqf_level": "Level 5",
+    "award_type": "Diploma",
+    "award": "Diploma in Computer Science - DipCompSc",
+    "uac_code": "440300",
+    "cricos_code": "102393G",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3979",
+    "code": "3979",
+    "name": "Information Systems",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Information Systems - BIS",
+    "uac_code": "424500",
+    "cricos_code": "068782C",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3779",
+    "code": "3779",
+    "name": "Advanced Computer Science (Honours)",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Years(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "aqf_level": "Level 8",
+    "award_type": "Bachelor (Honours) (Embedded)",
+    "award": "Bachelor of Advanced Computer Science (Honours) - BAdvCompSci(Hons)",
+    "uac_code": "425805",
+    "cricos_code": "111284D",
+    "specialisations": [
+      {
+        "title": "Computer Science",
+        "code": "COMPCH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/COMPCH"
+      },
+      {
+        "title": "Artificial Intelligence",
+        "code": "COMPIH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/COMPIH"
+      },
+      {
+        "title": "Security Engineering",
+        "code": "COMPYH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/COMPYH"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3738",
+    "code": "3738",
+    "name": "Engineering Science / Computer Science",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Engineering Science - BEngSc",
+    "cricos_code": "103149M",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3778",
+    "code": "3778",
+    "name": "Computer Science",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science - BSc",
+    "uac_code": "425800",
+    "cricos_code": "015784F",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3792",
+    "code": "3792",
+    "name": "Computer Science / Fine Arts",
+    "faculty": "Faculty of Engineering",
+    "campus": "Paddington, Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science - BSc",
+    "uac_code": "425810",
+    "cricos_code": "110683H",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/7022",
+    "code": "7022",
+    "name": "Computer Science",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "0.7 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "24",
+    "aqf_level": "Not Applicable",
+    "award_type": "Undergraduate Certificate",
+    "award": "Undergraduate Certificate in Computer Science - UCCompSc",
+    "uac_code": "425970",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3785",
+    "code": "3785",
+    "name": "Engineering (Honours) / Computer Science",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "5 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "240",
+    "award_type": "Bachelor (Honours) (Embedded)",
+    "award": "Bachelor of Engineering (Honours) - BE (Hons)",
+    "uac_code": "425850",
+    "cricos_code": "085916G",
+    "specialisations": [
+      {
+        "title": "Aerospace Engineering",
+        "code": "AEROAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/AEROAH"
+      },
+      {
+        "title": "Chemical Engineering",
+        "code": "CEICAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CEICAH"
+      },
+      {
+        "title": "Chemical Product Engineering",
+        "code": "CEICDH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CEICDH"
+      },
+      {
+        "title": "Civil Engineering",
+        "code": "CVENAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CVENAH"
+      },
+      {
+        "title": "Environmental Engineering",
+        "code": "CVENBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/CVENBH"
+      },
+      {
+        "title": "Electrical Engineering",
+        "code": "ELECAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/ELECAH"
+      },
+      {
+        "title": "Quantum Engineering",
+        "code": "ELECCH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/ELECCH"
+      },
+      {
+        "title": "Surveying",
+        "code": "GMATDH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/GMATDH"
+      },
+      {
+        "title": "Mechanical and Manufacturing Engineering",
+        "code": "MANFBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MANFBH"
+      },
+      {
+        "title": "Mechanical Engineering",
+        "code": "MECHAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MECHAH"
+      },
+      {
+        "title": "Geoenergy and Geostorage Engineering",
+        "code": "MEREAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MEREAH"
+      },
+      {
+        "title": "Mining Engineering",
+        "code": "MINEAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MINEAH"
+      },
+      {
+        "title": "Robotics and Mechatronics Engineering",
+        "code": "MTRNBH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MTRNBH"
+      },
+      {
+        "title": "Photovoltaics and Solar Energy",
+        "code": "SOLAAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOLAAH"
+      },
+      {
+        "title": "Renewable Energy Engineering",
+        "code": "SOLABH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/SOLABH"
+      },
+      {
+        "title": "Telecommunications",
+        "code": "TELEAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/TELEAH"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3783",
+    "code": "3783",
+    "name": "Computer Science / Arts",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science - BSc",
+    "uac_code": "425800",
+    "cricos_code": "052229D",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3673",
+    "code": "3673",
+    "name": "Economics / Computer Science",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Economics - BEc",
+    "uac_code": "424480",
+    "cricos_code": "0101073",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3777",
+    "code": "3777",
+    "name": "Cyber Security (Sydney)",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "3 years (F/T)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1",
+    "academic_calendar": "3+",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Cyber Security - BCybSec",
+    "uac_code": "425860",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3674",
+    "code": "3674",
+    "name": "Actuarial Studies / Computer Science",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Actuarial Studies - BActSt",
+    "uac_code": "424350",
+    "cricos_code": "0101083",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3671",
+    "code": "3671",
+    "name": "Actuarial Studies / Information Systems",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Actuarial Studies - BActSt",
+    "uac_code": "424350",
+    "cricos_code": "0101081",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/4490",
+    "code": "4490",
+    "name": "Cyber Security (Canberra City)",
+    "faculty": "UNSW Canberra",
+    "campus": "Canberra City",
+    "study_level": "Undergraduate",
+    "duration": "3 years F/T",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1",
+    "academic_calendar": "3+",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Cyber Security - BCybSec",
+    "uac_code": "452001",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3789",
+    "code": "3789",
+    "name": "Science / Computer Science",
+    "faculty": "Faculty of Science",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science - BSc",
+    "uac_code": "425800",
+    "cricos_code": "048749C",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/4517",
+    "code": "4517",
+    "name": "Computing and Cyber Security (Honours)",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Undergraduate",
+    "duration": "1 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Semester 1",
+    "academic_calendar": "Semester",
+    "min_uoc": "48",
+    "aqf_level": "Level 8",
+    "award_type": "Bachelor (Honours) (Separate)",
+    "award": "Bachelor of Computing and Cyber Security (Honours) - BCompCybSec (Hons)",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/4427",
+    "code": "4427",
+    "name": "Computing and Cyber Security",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Undergraduate",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Semester 1",
+    "academic_calendar": "Semester",
+    "min_uoc": "144",
+    "aqf_level": "Level 7",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Computing and Cyber Security - BCompCybSec",
+    "uac_code": "450030",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3786",
+    "code": "3786",
+    "name": "Computer Science / Law",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "5 Year(s)",
+    "intake_period": "Term 1",
+    "academic_calendar": "3+",
+    "min_uoc": "240",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science - BSc",
+    "uac_code": "426000",
+    "cricos_code": "070768E",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3781",
+    "code": "3781",
+    "name": "Advanced Mathematics (Honours) / Computer Science",
+    "faculty": "Faculty of Science",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "5 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "240",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Science (Advanced Mathematics) (Honours) - BSc(AdvMath)(Hons)",
+    "uac_code": "429331",
+    "cricos_code": "088865A",
+    "specialisations": [
+      {
+        "title": "Applied Mathematics",
+        "code": "MATHAH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHAH"
+      },
+      {
+        "title": "Pure Mathematics",
+        "code": "MATHPH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHPH"
+      },
+      {
+        "title": "Statistics",
+        "code": "MATHTH",
+        "url": "https://www.handbook.unsw.edu.au/undergraduate/specialisations/2025/MATHTH"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3964",
+    "code": "3964",
+    "name": "Information Systems (Co-op) (Honours)",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "aqf_level": "Level 8",
+    "award_type": "Bachelor (Honours) (Embedded)",
+    "award": "Bachelor of Information Systems (Co-op) (Honours) - BIS(Co-op)(Hons)",
+    "uac_code": "424640",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3584",
+    "code": "3584",
+    "name": "Commerce / Information Systems",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Year(s)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Commerce - BCom",
+    "uac_code": "424100",
+    "cricos_code": "068783B",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/undergraduate/programs/2025/3795",
+    "code": "3795",
+    "name": "Information Systems / Computer Science",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Undergraduate",
+    "duration": "4 Years",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "192",
+    "award_type": "Bachelor",
+    "award": "Bachelor of Information Systems - BIS",
+    "uac_code": "424510",
+    "cricos_code": "116103G",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7543",
+    "code": "7543",
+    "name": "Computing",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "0.7 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "24",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Computing - GCertComp",
+    "cricos_code": "052690E",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8543",
+    "code": "8543",
+    "name": "Information Technology",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "2 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "96",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Coursework)",
+    "award": "Master of Information Technology - MIT",
+    "cricos_code": "061294J",
+    "specialisations": [
+      {
+        "title": "Artificial Intelligence",
+        "code": "COMPLS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPLS"
+      },
+      {
+        "title": "Information Technology",
+        "code": "COMPMS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPMS"
+      },
+      {
+        "title": "Database Systems",
+        "code": "COMPNS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPNS"
+      },
+      {
+        "title": "Data Science and Engineering",
+        "code": "COMPPS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPPS"
+      },
+      {
+        "title": "Internetworking",
+        "code": "COMPOS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPOS"
+      },
+      {
+        "title": "Cyber Security Engineering",
+        "code": "COMPXS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPXS"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7471",
+    "code": "7471",
+    "name": "Cyber Security Leadership",
+    "faculty": "UNSW Canberra",
+    "campus": "Canberra City",
+    "study_level": "Postgraduate",
+    "duration": "1.4 years P/T",
+    "delivery_mode": "Fully online",
+    "intake_period": "Term 1, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "24",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Cyber Security Leadership - GCertCyberSecLead",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/5546",
+    "code": "5546",
+    "name": "Information Technology",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "1.7 years FT/3 years PT",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "72",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Diploma",
+    "award": "Graduate Diploma in Information Technology - GDipIT",
+    "cricos_code": "113778K",
+    "specialisations": [
+      {
+        "title": "Artificial Intelligence",
+        "code": "COMPRS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPRS"
+      },
+      {
+        "title": "Information Technology",
+        "code": "COMPTS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPTS"
+      },
+      {
+        "title": "Database Systems",
+        "code": "COMPUS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPUS"
+      },
+      {
+        "title": "Internetworking",
+        "code": "COMPVS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPVS"
+      },
+      {
+        "title": "Data Science and Engineering",
+        "code": "COMPWS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPWS"
+      },
+      {
+        "title": "Cyber Security Engineering",
+        "code": "COMPYS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPYS"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8544",
+    "code": "8544",
+    "name": "Information Technology / Commerce",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "1.7 - 3 years",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "144",
+    "award_type": "Masters (Coursework)",
+    "award": "Master of Information Technology - MIT",
+    "cricos_code": "108473C",
+    "specialisations": [
+      {
+        "title": "Artificial Intelligence",
+        "code": "COMPLS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPLS"
+      },
+      {
+        "title": "Information Technology",
+        "code": "COMPMS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPMS"
+      },
+      {
+        "title": "Database Systems",
+        "code": "COMPNS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPNS"
+      },
+      {
+        "title": "Internetworking",
+        "code": "COMPOS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPOS"
+      },
+      {
+        "title": "Data Science and Engineering",
+        "code": "COMPPS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPPS"
+      },
+      {
+        "title": "Cyber Security Engineering",
+        "code": "COMPXS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPXS"
+      },
+      {
+        "title": "Accounting",
+        "code": "ACCTES",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ACCTES"
+      },
+      {
+        "title": "Global Sustainability and Social Impact",
+        "code": "COMMGS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMMGS"
+      },
+      {
+        "title": "Strategy and Innovation",
+        "code": "COMMKS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMMKS"
+      },
+      {
+        "title": "Economics and Finance",
+        "code": "ECONFS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ECONFS"
+      },
+      {
+        "title": "Finance",
+        "code": "FINSCS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/FINSCS"
+      },
+      {
+        "title": "Financial Technology",
+        "code": "FINSQS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/FINSQS"
+      },
+      {
+        "title": "Cybersecurity, Risk and Privacy",
+        "code": "INFSNS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/INFSNS"
+      },
+      {
+        "title": "Digital Transformation",
+        "code": "INFSTS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/INFSTS"
+      },
+      {
+        "title": "Marketing Analytics",
+        "code": "MARKGS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/MARKGS"
+      },
+      {
+        "title": "Marketing",
+        "code": "MARKTS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/MARKTS"
+      },
+      {
+        "title": "International Business",
+        "code": "MGMTBS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/MGMTBS"
+      },
+      {
+        "title": "Human Resource Management",
+        "code": "MGMTCS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/MGMTCS"
+      },
+      {
+        "title": "Risk Management",
+        "code": "RISKMS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/RISKMS"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7546",
+    "code": "7546",
+    "name": "Information Technology",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "1 year FT/ 2 year PT",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3",
+    "academic_calendar": "3+",
+    "min_uoc": "48",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Information Technology - GCertIT",
+    "cricos_code": "113781D",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7329",
+    "code": "7329",
+    "name": "Cyber Security Operations",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Postgraduate",
+    "duration": "0.5 Year(s) to 1 Year",
+    "delivery_mode": "Fully online",
+    "intake_period": "Semester 1, Semester 2",
+    "academic_calendar": "Semester",
+    "min_uoc": "24",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Cyber Security Operations - GradCertCybSecOps",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8649",
+    "code": "8649",
+    "name": "Cyber Security",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "2 Year(s)",
+    "delivery_mode": "Fully online",
+    "intake_period": "Hexamester 1, Hexamester 2, Hexamester 3, Hexamester 4, Hexamester 5, Hexamester 6",
+    "academic_calendar": "Hexamester",
+    "min_uoc": "72",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Coursework)",
+    "award": "Master of Cyber Security - MCyberSec",
+    "specialisations": [
+      {
+        "title": "Security Management and Leadership",
+        "code": "ZZENDS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZZENDS"
+      },
+      {
+        "title": "Security Engineering",
+        "code": "ZZENES",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZZENES"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1885",
+    "code": "1885",
+    "name": "Computer Science",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "3 - 4 Year(s)",
+    "delivery_mode": "Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Doctor of Philosophy",
+    "award": "Doctor of Philosophy - PhD",
+    "cricos_code": "085783E",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/2408",
+    "code": "2408",
+    "name": "Cyber Security (MRes)",
+    "faculty": "UNSW Canberra",
+    "campus": "Canberra City",
+    "study_level": "Research",
+    "duration": "2 Year(s)",
+    "delivery_mode": "Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "96",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Research)",
+    "award": "Master of Cyber Security (Research)  - MCS(Res)",
+    "cricos_code": "114617H",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1525",
+    "code": "1525",
+    "name": "Information Systems",
+    "faculty": "UNSW Business School",
+    "campus": "Sydney",
+    "study_level": "Research",
+    "duration": "3 - 4 Year(s)",
+    "delivery_mode": "Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Doctor of Philosophy",
+    "award": "Doctor of Philosophy - PhD",
+    "cricos_code": "008963F",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1743",
+    "code": "1743",
+    "name": "Information Technology",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended), Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Professional Doctorate",
+    "award": "Doctor of Information Technology - ITD",
+    "cricos_code": "085796M",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1083",
+    "code": "1083",
+    "name": "Professional Studies",
+    "faculty": "UNSW Canberra",
+    "campus": "Canberra City",
+    "study_level": "Research",
+    "duration": "3 - 4 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Doctor of Philosophy",
+    "award": "Doctor of Philosophy - PhD",
+    "cricos_code": "114619F",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1741",
+    "code": "1741",
+    "name": "Systems Engineering",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Face-to-face (includes blended), Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Professional Doctorate",
+    "award": "Doctor of Systems Engineering - DSysEng",
+    "cricos_code": "085769C",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/2925",
+    "code": "2925",
+    "name": "Computer Science (MRes)",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "2 Year(s)",
+    "delivery_mode": "Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "96",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Research)",
+    "award": "Master of Science (Research) - MSc(Res)",
+    "cricos_code": "085780G",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1749",
+    "code": "1749",
+    "name": "Cyber Security",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "3 - 4 Year(s)",
+    "delivery_mode": "Research",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Doctor of Philosophy",
+    "award": "Doctor of Philosophy - PhD",
+    "cricos_code": "093555F",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/research/programs/2025/1748",
+    "code": "1748",
+    "name": "Cyber Security",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Research",
+    "duration": "3 Year(s)",
+    "delivery_mode": "Research, Face-to-face (includes blended)",
+    "intake_period": "Term 1, Term 2, Term 3, Summer Term",
+    "academic_calendar": "Research",
+    "min_uoc": "144",
+    "aqf_level": "Level 10",
+    "award_type": "Professional Doctorate",
+    "award": "Doctor of Cyber Security - DCybSec",
+    "cricos_code": "093558C",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/5649",
+    "code": "5649",
+    "name": "Cyber Security",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "1.4 Year(s)",
+    "delivery_mode": "Fully online",
+    "intake_period": "Hexamester 1, Hexamester 2, Hexamester 3, Hexamester 4, Hexamester 5, Hexamester 6",
+    "academic_calendar": "Hexamester",
+    "min_uoc": "48",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Diploma",
+    "award": "Graduate Diploma in Cyber Security - Grad Dip Cyber",
+    "specialisations": [
+      {
+        "title": "Security Management and Leadership",
+        "code": "ZZENAS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZZENAS"
+      },
+      {
+        "title": "Security Engineering",
+        "code": "ZZENBS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZZENBS"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8629",
+    "code": "8629",
+    "name": "Cyber Security Operations",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Postgraduate",
+    "duration": "1 Year(s)",
+    "delivery_mode": "Distance (online with some face-to-face)",
+    "intake_period": "Semester 1, Semester 2",
+    "academic_calendar": "Semester",
+    "min_uoc": "48",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Coursework)",
+    "award": "Master of Cyber Security Operations - MCyberSecOps",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7649",
+    "code": "7649",
+    "name": "Cyber Security",
+    "faculty": "Faculty of Engineering",
+    "campus": "Sydney",
+    "study_level": "Postgraduate",
+    "duration": "0.7 Year(s)",
+    "delivery_mode": "Fully online",
+    "intake_period": "Hexamester 1, Hexamester 2, Hexamester 3, Hexamester 4, Hexamester 5, Hexamester 6",
+    "academic_calendar": "Hexamester",
+    "min_uoc": "24",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Cyber Security - GCCyber",
+    "specialisations": []
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8628",
+    "code": "8628",
+    "name": "Cyber Security",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Postgraduate",
+    "duration": "1 Year(s)",
+    "delivery_mode": "Distance (online with some face-to-face)",
+    "intake_period": "Semester 1, Semester 2",
+    "academic_calendar": "Semester",
+    "min_uoc": "48",
+    "aqf_level": "Level 9",
+    "award_type": "Masters (Coursework)",
+    "award": "Master of Cyber Security - MCyberSec",
+    "specialisations": [
+      {
+        "title": "Digital Forensics",
+        "code": "ZEITDS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZEITDS"
+      },
+      {
+        "title": "Advanced Tradecraft",
+        "code": "ZEITIS",
+        "url": "https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/ZEITIS"
+      }
+    ]
+  },
+  {
+    "link": "https://www.handbook.unsw.edu.au/postgraduate/programs/2025/7328",
+    "code": "7328",
+    "name": "Cyber Security",
+    "faculty": "UNSW Canberra",
+    "campus": "UNSW Canberra",
+    "study_level": "Postgraduate",
+    "duration": "0.5 Year(s) to 1 year",
+    "delivery_mode": "Distance (online with some face-to-face)",
+    "intake_period": "Semester 1, Semester 2",
+    "academic_calendar": "Semester",
+    "min_uoc": "24",
+    "aqf_level": "Level 8",
+    "award_type": "Graduate Certificate",
+    "award": "Graduate Certificate in Cyber Security - GradCertCybSec",
+    "specialisations": []
+  }
+]
