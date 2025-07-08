@@ -177,3 +177,72 @@ def save_feedback(session_id, feedback_type, timestamp_hint=None, question_text=
 #                 stats['copy'] += 1
     
 #     return stats
+def update_chat_log_with_admin_response(message_id, admin_response):
+    """
+    Update the answer
+    """
+    try:
+        logs = []
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r", encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        logs.append(json.loads(line.strip()))
+                    except json.JSONDecodeError:
+                        continue
+        
+        updated = False
+        for log in logs:
+            if log.get('message_id') == message_id:
+                log['answer'] = admin_response
+                log['ai_answered'] = True  
+                log['status'] = 'answered'
+                log['admin_answered'] = True  
+                log['admin_response_time'] = datetime.utcnow().isoformat()
+                updated = True
+                print(f"[AdminStore] Updated message {message_id} with admin response")
+                break
+        
+        if not updated:
+            print(f"[AdminStore] Message {message_id} not found for admin response")
+            return False
+        
+        with open(LOG_FILE, "w", encoding='utf-8') as f:
+            for log in logs:
+                f.write(json.dumps(log, ensure_ascii=False) + "\n")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[AdminStore] Failed to update admin response: {e}")
+        return False
+
+def delete_chat_log_by_id(message_id):
+
+    try:
+        logs = []
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r", encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        logs.append(json.loads(line.strip()))
+                    except json.JSONDecodeError:
+                        continue
+        
+        original_count = len(logs)
+        logs = [log for log in logs if log.get('message_id') != message_id]
+        
+        if len(logs) == original_count:
+            print(f"[AdminStore] Message {message_id} not found for deletion")
+            return False
+        
+        with open(LOG_FILE, "w", encoding='utf-8') as f:
+            for log in logs:
+                f.write(json.dumps(log, ensure_ascii=False) + "\n")
+        
+        print(f"[AdminStore] Deleted message {message_id}")
+        return True
+        
+    except Exception as e:
+        print(f"[AdminStore] Failed to delete message: {e}")
+        return False
