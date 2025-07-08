@@ -7,7 +7,7 @@ from services.auth import require_admin, create_admin_token, verify_admin_creden
 from services.log_store import load_all_chat_logs
 from services.export_chatlog import export_chat_logs
 from werkzeug.utils import secure_filename
-
+from services.log_store import load_all_chat_logs, update_chat_log_with_admin_response, delete_chat_log_by_id
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -141,6 +141,139 @@ def get_stats():
         "daily_trends": daily
     }), 200
 
+# (NEW) modify the answers
+@admin_bp.route('/queries', methods=['GET'])
+@require_admin
+def get_queries():
+    """
+    Get the queries that need to be processed (unanswered questions + negative feedback)
+    """
+    try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 20))
+        query_type = request.args.get('type', 'all')  # all, unanswered, negative
+        
+        all_logs = load_all_chat_logs()
+        filtered_logs = []
+        
+        if query_type == 'unanswered':
+            filtered_logs = [log for log in all_logs if not log.get("ai_answered")]
+        elif query_type == 'negative':
+            filtered_logs = [log for log in all_logs if log.get("user_feedback") == "negative"]
+        else:  # all
+            filtered_logs = [
+                log for log in all_logs 
+                if not log.get("ai_answered") or log.get("user_feedback") == "negative"
+            ]
+
+        filtered_logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        total = len(filtered_logs)
+        start = (page - 1) * limit
+        end = start + limit
+        page_queries = filtered_logs[start:end]
+
+        formatted_queries = []
+        for log in page_queries:
+            query_item = {
+                "id": log.get("message_id"),
+                "question": log.get("question"),
+                "answer": log.get("answer"),
+                "answered": log.get("ai_answered", False),
+                "timestamp": log.get("timestamp"),
+                "session_id": log.get("session_id"),
+                "status": log.get("status"),
+                "user_feedback": log.get("user_feedback"),
+                "feedback_time": log.get("feedback_time"),
+                "admin_answered": log.get("admin_answered", False),
+                "admin_response_time": log.get("admin_response_time"),
+                "needs_attention_reason": []
+            }
+            
+            if not log.get("ai_answered"):
+                query_item["needs_attention_reason"].append("unanswered")
+            if log.get("user_feedback") == "negative":
+                query_item["needs_attention_reason"].append("negative_feedback")
+            
+            formatted_queries.append(query_item)
+        
+        return jsonify({
+            "queries": formatted_queries,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if total > 0 else 0,
+            "query_type": query_type
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching queries: {str(e)}")
+        return jsonify({"error": "Failed to fetch queries"}), 500
+
+
+@admin_bp.route('/update-query', methods=['POST'])
+@require_admin
+def update_query():
+
+    try:
+        data = request.get_json()
+        message_id = data.get("id")
+        new_answer = data.get("answer")
+        action_type = data.get("type", "update")  
+
+        if not message_id or not new_answer:
+            return jsonify({"error": "Missing message ID or answer"}), 400
+
+        logs = load_all_chat_logs()
+        original_log = None
+        for log in logs:
+            if log.get("message_id") == message_id:
+                original_log = log
+                break
+        
+        if not original_log:
+            return jsonify({"error": "Message not found"}), 404
+
+        action_reasons = []
+        if not original_log.get("ai_answered"):
+            action_reasons.append("answering unanswered question")
+        if original_log.get("user_feedback") == "negative":
+            action_reasons.append("updating negative feedback")
+        
+        print(f"Updating message {message_id} - Reasons: {', '.join(action_reasons)}")
+        print(f"New answer: {new_answer[:100]}...")
+
+        success = update_chat_log_with_admin_response(message_id, new_answer)
+        
+        if not success:
+            return jsonify({"error": "Failed to update message"}), 500
+
+        return jsonify({
+            "message": "Query updated successfully",
+            "message_id": message_id,
+            "action_reasons": action_reasons
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating query: {str(e)}")
+        return jsonify({"error": "Failed to update query"}), 500
+    
+@admin_bp.route('/delete-query/<message_id>', methods=['DELETE'])
+@require_admin
+def delete_query(message_id):
+    try:
+        success = delete_chat_log_by_id(message_id)
+        
+        if success:
+            return jsonify({"message": "Query deleted successfully"}), 200
+        else:
+            return jsonify({"error": "Query not found"}), 404
+        
+    except Exception as e:
+        print(f"Error deleting query: {str(e)}")
+        return jsonify({"error": "Failed to delete query"}), 500
+    
+    
 @admin_bp.route('/health', methods=['GET'])
 def health():
     return jsonify({
@@ -148,6 +281,7 @@ def health():
         "service": "admin_query_service",
         "timestamp": datetime.utcnow().isoformat()
     }), 200
+    
 
 # ========== Error handlers ==========
 @admin_bp.errorhandler(404)
