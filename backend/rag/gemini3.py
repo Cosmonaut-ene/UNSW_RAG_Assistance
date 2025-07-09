@@ -9,8 +9,8 @@ from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
 
 # ========== Google API keys ==========
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "rag/key.json"
-genai.configure(api_key="AIzaSyANTj4o2IDb4srLHgudP0sOtPPBHz83yF0")
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "rag/key.json")
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # ========== Vector Store ==========
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))

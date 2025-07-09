@@ -1,0 +1,50 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chatbot-backend-dev
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@unsw.edu.au}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-unswcse2025}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=rag/key.json
+      - HOST=0.0.0.0
+      - PORT=5000
+    volumes:
+      - ./backend:/app
+      - ./backend/logs:/app/logs
+      - ./backend/rag/docs:/app/rag/docs
+      - ./backend/rag/vector_store:/app/rag/vector_store
+      - ./backend/rag/key.json:/app/rag/key.json
+    networks:
+      - chatbot-network
+    restart: unless-stopped
+    command: python app.py
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: chatbot-frontend-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    networks:
+      - chatbot-network
+    restart: unless-stopped
+
+networks:
+  chatbot-network:
+    driver: bridge

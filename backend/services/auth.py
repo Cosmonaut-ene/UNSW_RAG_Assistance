@@ -1,12 +1,16 @@
 # services/auth.py
 import jwt
 import datetime
+import os
 from flask import request, jsonify, current_app
 from functools import wraps
 
-# Credentials hardcoded for demo; later can be loaded from env or DB
-ADMIN_EMAIL = "admin@unsw.edu.au"
-ADMIN_PASSWORD = "unswcse2025"
+# Load credentials from environment variables
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@unsw.edu.au')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
+
+if not ADMIN_PASSWORD:
+    raise ValueError("ADMIN_PASSWORD environment variable is required")
 
 def create_admin_token():
     """
