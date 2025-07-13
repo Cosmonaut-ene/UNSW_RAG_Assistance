@@ -1,7 +1,9 @@
 # rag/gemini3.py
 import os
+import spacy
 import google.generativeai as genai
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.docstore.document import Document
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.chains import RetrievalQA
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
@@ -40,6 +42,25 @@ def split_documents(documents, chunk_size=500, chunk_overlap=50):
     print(f"[Gemini3] Split documents into {len(chunks)} chunks.")
     return chunks
 
+# English spaCy language model for sentence segmentation
+nlp = spacy.load("en_core_web_sm")
+def split_documents_spacy(documents, sentences_per_chunk=3):
+    """
+        Split loaded documents using stacy.
+    """
+    new_chunks = []
+    for doc in documents:
+        spacy_doc = nlp(doc.page_content)
+        sentences = [sent.text.strip() for sent in spacy_doc.sents if sent.text.strip()]
+        metadata = doc.metadata
+
+        for i in range(0, len(sentences), sentences_per_chunk):
+            chunk_text = " ".join(sentences[i:i + sentences_per_chunk])
+            if chunk_text:
+                new_chunks.append(Document(page_content=chunk_text, metadata=metadata))
+    print(f"[spaCy Chunking] Created {len(new_chunks)} chunks from {len(documents)} documents.")
+    return new_chunks
+
 # ========== Vector store creation ==========
 def create_vector_store(docs):
     """
@@ -72,7 +93,7 @@ def update_vector_store(folder_path):
     if current_files != last_files:
         print("[Gemini3] Detected new or different files. Rebuilding vector store...")
         docs = load_documents_from_folder(folder_path)
-        chunks = split_documents(docs)
+        chunks = split_documents_spacy(docs)
         create_vector_store(chunks)
 
         # save current files list
