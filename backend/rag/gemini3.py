@@ -157,6 +157,22 @@ def is_query_safe_by_gemini(query: str) -> bool:
         print(f"[Gemini3] Safety check error: {e}")
         # Default to safe if check fails
         return True
+    
+# ========= Gemini Query Rewqrite =========
+def rewrite_query_gemini(original_query: str) -> str:
+    prompt = f"""
+        You are a helpful assistant that rewrites user queries to make them more specific, structured, and suitable for document retrieval.
+
+        Input: "{original_query}"
+        Rewritten:
+    """
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        return response.text.strip().split("\n")[0]
+    except Exception as e:
+        print("[Rewrite Error]", e)
+        return original_query
 
 # ========== Fallback ==========
 def fallback_llm_answer(question: str) -> str:
@@ -183,7 +199,10 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
             "safety_blocked": True
         }
     
-    result = qa_chain.invoke({"query": question})
+    rewritten_query = rewrite_query_gemini(question)
+    print(f"[Rewritten Query] {rewritten_query}")
+    
+    result = qa_chain.invoke({"query": rewritten_query})
 
     sources = result.get("source_documents", [])
     if not sources or all(len(doc.page_content.strip()) < 10 for doc in sources):
