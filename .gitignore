@@ -81,6 +81,9 @@ build/
 *.key
 key.json
 
+# Chat Logs
+backend/logs/chat_logs.jsonl
+
 # Vector store
 vector_store/
 
@@ -88,3 +91,6 @@ vector_store/
 *.tmp
 *.temp
 .tmp/
+
+# Claude
+/.claude
