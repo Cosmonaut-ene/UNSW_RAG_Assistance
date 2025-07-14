@@ -61,6 +61,12 @@ def process_with_ai(question):
         rag_result = process_with_rag_detailed(question)
         rag_answer = rag_result.get("answer", "")
         matched_files = rag_result.get("matched_files", [])
+        safety_blocked = rag_result.get("safety_blocked", False)
+        
+        # Handle safety blocked queries
+        if safety_blocked:
+            print(f"[QueryProcessor] Query blocked by safety filter")
+            return rag_answer, True, matched_files
         
         if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()):
             print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer.")
@@ -74,7 +80,7 @@ def process_with_ai(question):
     print(f"[QueryProcessor] No answer found for: {question}")
     return "I do not know the answer to this question.", False, []
 
-def save_to_admin_system(question, answer, answered, session_id, matched_files=None):
+def save_to_admin_system(question, answer, answered, session_id, matched_files=None, safety_blocked=False):
     """
     Return message_id so that the front end can use it
     """
@@ -84,9 +90,10 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
         "session_id": session_id,
         "question": question,
         "answer": answer,
-        "status": "answered" if answered else "unanswered",
+        "status": "safety_blocked" if safety_blocked else ("answered" if answered else "unanswered"),
         "ai_answered": answered,
-        "matched_files": matched_files or []
+        "matched_files": matched_files or [],
+        "safety_blocked": safety_blocked
     }
     
     message_id = append_chat_log(chat_entry)

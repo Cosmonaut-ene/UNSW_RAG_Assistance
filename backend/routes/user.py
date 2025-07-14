@@ -19,7 +19,15 @@ def query():
 
     ai_answer, can_answer, matched_files = process_with_ai(question)
 
-    if can_answer:
+    # Check if query was safety blocked
+    safety_blocked = "violate safety guidelines" in ai_answer.lower()
+
+    if safety_blocked:
+        status = "safety_blocked"
+        user_answer = ai_answer
+        save_to_admin_system(question, ai_answer, True, session_id, [], safety_blocked=True)
+        print(f"Query blocked by safety filter: {question[:30]}...")
+    elif can_answer:
         status = "answered"
         user_answer = ai_answer
         save_to_admin_system(question, ai_answer, True, session_id, matched_files)

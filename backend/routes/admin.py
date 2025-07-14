@@ -188,6 +188,7 @@ def get_queries():
                 "admin_answered": log.get("admin_answered", False),
                 "admin_response_time": log.get("admin_response_time"),
                 "matched_files": log.get("matched_files", []),
+                "safety_blocked": log.get("safety_blocked", False),
                 "needs_attention_reason": []
             }
             
@@ -195,6 +196,8 @@ def get_queries():
                 query_item["needs_attention_reason"].append("unanswered")
             if log.get("user_feedback") == "negative":
                 query_item["needs_attention_reason"].append("negative_feedback")
+            if log.get("safety_blocked"):
+                query_item["needs_attention_reason"].append("safety_blocked")
             
             formatted_queries.append(query_item)
         

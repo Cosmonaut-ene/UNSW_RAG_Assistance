@@ -139,6 +139,25 @@ def build_rag_qa_chain():
     print("[Gemini3] Built RAG QA chain with Chroma + Gemini.")
     return qa_chain
 
+
+# ========== Gemini Safety Check ==========
+def is_query_safe_by_gemini(query: str) -> bool:
+    """
+    Check if query is safe using Gemini's built-in safety filters
+    """
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(query)
+        if response.prompt_feedback and response.prompt_feedback.block_reason:
+            print(f"[Gemini3] Query blocked by Gemini Safety: {response.prompt_feedback.block_reason}")
+            return False
+        print("[Gemini3] Query passed safety check")
+        return True
+    except Exception as e:
+        print(f"[Gemini3] Safety check error: {e}")
+        # Default to safe if check fails
+        return True
+
 # ========== Fallback ==========
 def fallback_llm_answer(question: str) -> str:
     """
@@ -151,8 +170,19 @@ def fallback_llm_answer(question: str) -> str:
 def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     """
     Try answering via RAG first, fallback to direct LLM if no context found.
+    Includes safety check for all queries.
     """
     print(f"[Gemini3] Processing question with RAG: {question}")
+    
+    # Safety check first
+    if not is_query_safe_by_gemini(question):
+        return {
+            "answer": "I cannot process this query as it may violate safety guidelines. Please rephrase your question.",
+            "sources": [],
+            "matched_files": [],
+            "safety_blocked": True
+        }
+    
     result = qa_chain.invoke({"query": question})
 
     sources = result.get("source_documents", [])
@@ -162,7 +192,8 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
         return {
             "answer": fallback_answer,
             "sources": [],
-            "matched_files": []
+            "matched_files": [],
+            "safety_blocked": False
         }
 
     # Extract source file information from metadata
@@ -185,5 +216,6 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     return {
         "answer": result.get("result", "I don't know."),
         "sources": source_details,
-        "matched_files": matched_files
+        "matched_files": matched_files,
+        "safety_blocked": False
     }
