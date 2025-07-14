@@ -1,15 +1,22 @@
-# Environment variables
+# ==========================================
+# ENVIRONMENT & CONFIGURATION
+# ==========================================
+# Environment variables - CRITICAL: Never commit API keys!
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!.env.template
 
-# Python
+# ==========================================
+# PYTHON
+# ==========================================
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -30,67 +37,186 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
 # Virtual environments
 chatbot/
 venv/
 ENV/
 env/
 .venv/
+.conda/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Node.js
+# ==========================================
+# NODE.JS / FRONTEND
+# ==========================================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .npm
 .eslintcache
+.yarn-integrity
 
-# Build outputs
+# Production build
 dist/
 build/
+.next/
+out/
 
-# Database
-*.db
-*.sqlite3
-
-# Secrets and keys
+# ==========================================
+# SECRETS & KEYS - SECURITY CRITICAL
+# ==========================================
+# API Keys and secrets
 *.pem
 *.key
+*.p12
+*.pfx
 key.json
+credentials.json
+service-account.json
+google-credentials.json
 
-# Chat Logs
-backend/logs/chat_logs.jsonl
+# SSH keys
+id_rsa
+id_rsa.pub
+*.ppk
 
-# Vector store
+# SSL certificates
+*.crt
+*.cer
+*.cert
+
+# ==========================================
+# PROJECT SPECIFIC
+# ==========================================
+# Chat logs and user data
+backend/logs/
+backend/logs/*.jsonl
+chat_logs.jsonl
+
+# Knowledge base documents (may contain sensitive data)
+backend/rag/docs/
+backend/rag/docs/*.pdf
+docs/
+documents/
+
+# Vector store and embeddings
+backend/rag/vector_store/
+backend/rag/vector_store/*.sqlite3
+backend/rag/vector_store/*.bin
+backend/rag/vector_store/source_files.txt
 vector_store/
+embeddings/
+chroma/
 
-# Temporary files
+# Uploaded files
+uploads/
+upload/
+files/
+
+# ==========================================
+# DEVELOPMENT TOOLS
+# ==========================================
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+.emacs.d/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# ==========================================
+# OPERATING SYSTEM
+# ==========================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# ==========================================
+# DATABASES
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ==========================================
+# LOGS & MONITORING
+# ==========================================
+logs/
+*.log
+*.log.*
+log/
+
+# ==========================================
+# DOCKER & CONTAINERS
+# ==========================================
+# Docker override files
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+!docker-compose.dev.yml
+
+# ==========================================
+# TEMPORARY & CACHE FILES
+# ==========================================
 *.tmp
 *.temp
 .tmp/
+.cache/
+.parcel-cache/
 
-# Claude
-/.claude
+# ==========================================
+# AI/ML SPECIFIC
+# ==========================================
+# Model files
+*.model
+*.pkl
+*.pickle
+models/
+checkpoints/
+
+# ==========================================
+# BACKUP & ARCHIVE
+# ==========================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# ==========================================
+# CLAUDE AI ASSISTANT
+# ==========================================
+.claude

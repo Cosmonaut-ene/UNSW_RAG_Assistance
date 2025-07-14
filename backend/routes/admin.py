@@ -187,6 +187,7 @@ def get_queries():
                 "feedback_time": log.get("feedback_time"),
                 "admin_answered": log.get("admin_answered", False),
                 "admin_response_time": log.get("admin_response_time"),
+                "matched_files": log.get("matched_files", []),
                 "needs_attention_reason": []
             }
             

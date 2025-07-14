@@ -153,7 +153,6 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     Try answering via RAG first, fallback to direct LLM if no context found.
     """
     print(f"[Gemini3] Processing question with RAG: {question}")
-    update_vector_store(KNOWLEDGE_BASE_DIR)
     result = qa_chain.invoke({"query": question})
 
     sources = result.get("source_documents", [])
@@ -162,10 +161,29 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
         fallback_answer = fallback_llm_answer(question)
         return {
             "answer": fallback_answer,
-            "sources": []
+            "sources": [],
+            "matched_files": []
         }
 
+    # Extract source file information from metadata
+    matched_files = []
+    source_details = []
+    
+    for doc in sources:
+        source_details.append(doc.page_content)
+        # Get filename from metadata
+        if hasattr(doc, 'metadata') and doc.metadata:
+            source_file = doc.metadata.get('source', 'Unknown')
+            # Extract just the filename from the full path
+            if source_file != 'Unknown':
+                filename = source_file.split('/')[-1] if '/' in source_file else source_file
+                if filename not in matched_files:
+                    matched_files.append(filename)
+    
+    print(f"[Gemini3] Matched files: {matched_files}")
+    
     return {
         "answer": result.get("result", "I don't know."),
-        "sources": [doc.page_content for doc in sources]
+        "sources": source_details,
+        "matched_files": matched_files
     }
