@@ -227,9 +227,9 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
         filename = source_file.split('/')[-1] if '/' in source_file else source_file
         page = doc.metadata.get('page', 'Unknown') if hasattr(doc, 'metadata') and doc.metadata else 'Unknown'
         
-        print(f"📁 SOURCE: {filename}")
-        print(f"📄 PAGE: {page}")
-        print(f"📝 CONTENT ({len(doc.page_content)} chars):")
+        print(f"SOURCE: {filename}")
+        print(f"PAGE: {page}")
+        print(f"CONTENT ({len(doc.page_content)} chars):")
         
         lines = doc.page_content.split('\n')
         for line_num, line in enumerate(lines, 1):
