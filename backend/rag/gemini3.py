@@ -183,6 +183,7 @@ def fallback_llm_answer(question: str) -> str:
     print("[Gemini3] Using fallback direct Gemini LLM.")
     return llm.invoke(question).content
 
+# ========= Query Processing Pipeline ============
 def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     """
     Try answering via RAG first, fallback to direct LLM if no context found.
@@ -190,7 +191,7 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     """
     print(f"[Gemini3] Processing question with RAG: {question}")
     
-    # Safety check first
+    # 1.Safety Check
     if not is_query_safe_by_gemini(question):
         return {
             "answer": "I cannot process this query as it may violate safety guidelines. Please rephrase your question.",
@@ -199,6 +200,7 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
             "safety_blocked": True
         }
     
+    # 2.Rewrite Query
     rewritten_query = rewrite_query_gemini(question)
     print(f"[Rewritten Query] {rewritten_query}")
     
@@ -215,7 +217,27 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
             "safety_blocked": False
         }
 
-    # Extract source file information from metadata
+    # Visual chunk inspection
+    print(f"\n{'='*80}")
+    print(f"RETRIEVED {len(sources)} SOURCE CHUNKS FOR QUERY: {question}")
+    print(f"{'='*80}")
+    for i, doc in enumerate(sources, 1):
+        print(f"\n--- CHUNK {i} ---")
+        source_file = doc.metadata.get('source', 'Unknown') if hasattr(doc, 'metadata') and doc.metadata else 'Unknown'
+        filename = source_file.split('/')[-1] if '/' in source_file else source_file
+        page = doc.metadata.get('page', 'Unknown') if hasattr(doc, 'metadata') and doc.metadata else 'Unknown'
+        
+        print(f"📁 SOURCE: {filename}")
+        print(f"📄 PAGE: {page}")
+        print(f"📝 CONTENT ({len(doc.page_content)} chars):")
+        
+        lines = doc.page_content.split('\n')
+        for line_num, line in enumerate(lines, 1):
+            print(f"{line_num:3d}: {line}")
+        print(f"{'─'*60}")
+    print(f"{'='*80}\n")
+
+    # 3.Extract source file information from metadata
     matched_files = []
     source_details = []
     
