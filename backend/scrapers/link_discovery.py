@@ -9,7 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 from urllib.parse import urlparse, urlunparse
 
-from config import config
+from .config import config
 
 # ======== Logging Config ========
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -204,6 +204,10 @@ def save_links_to_file(links: Dict[str, List[str]]) -> None:
                 f.write(f"{url}\n")
             f.write("\n")
     logger.info(f"Successfully saved all links to: {filepath}")
+    
+def load_links_from_file(filepath: str) -> list:
+    with open(filepath, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
 def discover_and_save_cse_links() -> Dict[str, List[str]]:
     links = discover_cse_links()

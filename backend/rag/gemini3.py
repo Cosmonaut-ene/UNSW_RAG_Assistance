@@ -1,7 +1,9 @@
 # rag/gemini3.py
 import os
+import json
 import spacy
 import google.generativeai as genai
+from typing import List, Optional, Dict
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -18,6 +20,7 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 VECTOR_STORE_DIR = os.path.join(CURRENT_DIR, "vector_store")
 KNOWLEDGE_BASE_DIR = os.path.join(CURRENT_DIR, "docs")
+SCRAPED_CONTENT_DIR = os.path.join(CURRENT_DIR, "scraped_content")
 
 # ========== Load Documents ==========
 def load_documents_from_folder(folder_path):
@@ -32,6 +35,55 @@ def load_documents_from_folder(folder_path):
             print(f"[Gemini3] Loaded {len(doc_chunks)} pages from {filename}")
             documents.extend(doc_chunks)
     return documents
+
+
+
+
+def load_scraped_documents() -> List[Document]:
+    """
+    Load documents from scraped content directory.
+    Returns LangChain Documents from JSON files created by the scrapers module.
+    """
+    scraped_docs = []
+    content_dir = os.path.join(SCRAPED_CONTENT_DIR, "content")
+    
+    if not os.path.exists(content_dir):
+        print("[Gemini3] No scraped content directory found")
+        return []
+    
+    # Load all JSON files from content directory
+    json_files = [f for f in os.listdir(content_dir) if f.endswith('.json')]
+    
+    if not json_files:
+        print("[Gemini3] No scraped content files found")
+        return []
+    
+    print(f"[Gemini3] Loading {len(json_files)} scraped documents...")
+    
+    for filename in json_files:
+        filepath = os.path.join(content_dir, filename)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+                # Create Document from scraped data
+                document = Document(
+                    page_content=data.get("page_content", ""),
+                    metadata=data.get("metadata", {})
+                )
+                
+                # Add scraping metadata
+                document.metadata["scraped_from_file"] = filename
+                document.metadata["content_type"] = "scraped_web"
+                
+                scraped_docs.append(document)
+                
+        except Exception as e:
+            print(f"[Gemini3] Error loading scraped file {filename}: {e}")
+            continue
+    
+    print(f"[Gemini3] Successfully loaded {len(scraped_docs)} scraped documents")
+    return scraped_docs
     
 def split_documents(documents, chunk_size=500, chunk_overlap=50):
     """
@@ -73,34 +125,136 @@ def create_vector_store(docs):
     return db
 
 # ========== Update vector store ==========
-def update_vector_store(folder_path):
+def _validate_vector_database_exists():
     """
-    Check if docs folder has new or different files. If yes, rebuild vector store.
+    Check if vector database files exist and are accessible.
+    Returns True if database exists and appears valid, False otherwise.
+    """
+    if not os.path.exists(VECTOR_STORE_DIR):
+        print("[Gemini3] Vector store directory does not exist")
+        return False
+    
+    # Look for ChromaDB collection directories
+    chroma_dirs = [d for d in os.listdir(VECTOR_STORE_DIR) 
+                   if os.path.isdir(os.path.join(VECTOR_STORE_DIR, d)) and 
+                   d != "__pycache__" and not d.startswith('.')]
+    
+    if not chroma_dirs:
+        print("[Gemini3] No ChromaDB collection directories found")
+        return False
+    
+    # Check if any collection has essential ChromaDB files
+    essential_files = ['header.bin', 'data_level0.bin']
+    for chroma_dir in chroma_dirs:
+        chroma_path = os.path.join(VECTOR_STORE_DIR, chroma_dir)
+        has_essential_files = all(
+            os.path.exists(os.path.join(chroma_path, f)) 
+            for f in essential_files
+        )
+        if has_essential_files:
+            print(f"[Gemini3] Valid vector database found in {chroma_dir}")
+            return True
+    
+    print("[Gemini3] Vector database files appear to be missing or corrupted")
+    return False
+
+
+
+
+def update_vector_store(folder_path, include_scraped=True):
+    """
+    Check if docs folder or scraped content have changed. If yes, rebuild vector store.
     """
     source_record_file = os.path.join(VECTOR_STORE_DIR, "source_files.txt")
     current_files = sorted([f for f in os.listdir(folder_path) if f.endswith(".pdf")])
+    
 
-    if not current_files:
-        print("[Gemini3] No PDF files found in docs folder.")
-        return
+    # Check scraped content if enabled
+    current_scraped_files = []
+    if include_scraped:
+        scraped_content_dir = os.path.join(SCRAPED_CONTENT_DIR, "content")
+        if os.path.exists(scraped_content_dir):
+            current_scraped_files = sorted([f for f in os.listdir(scraped_content_dir) if f.endswith(".json")])
 
-    # read last files list
+    # Read last sources
     last_files = []
+    last_scraped_files = []
     if os.path.exists(source_record_file):
-        with open(source_record_file, 'r') as f:
-            last_files = sorted(line.strip() for line in f.readlines())
+        with open(source_record_file, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if content:
+                lines = content.split('\n')
+                # Separate files and scraped files
+                for line in lines:
+                    if line.startswith('scraped:'):
+                        last_scraped_files.append(line[8:])  # Remove 'scraped:' prefix
+                    else:
+                        last_files.append(line)
+                last_files = sorted(last_files)
+                last_scraped_files = sorted(last_scraped_files)
 
-    if current_files != last_files:
-        print("[Gemini3] Detected new or different files. Rebuilding vector store...")
-        docs = load_documents_from_folder(folder_path)
-        chunks = split_documents_spacy(docs)
-        create_vector_store(chunks)
+    # Check if sources changed
+    files_changed = current_files != last_files
+    scraped_changed = current_scraped_files != last_scraped_files
+    
+    # Check if vector database exists
+    db_exists = _validate_vector_database_exists()
+    
+    # Rebuild if sources changed OR database is missing
+    rebuild_needed = files_changed or scraped_changed or not db_exists
+    
+    if rebuild_needed:
+        # Log specific reasons for rebuild
+        reasons = []
+        if files_changed:
+            reasons.append(f"PDF files changed (was: {len(last_files)}, now: {len(current_files)})")
+        if scraped_changed:
+            reasons.append(f"Scraped content changed (was: {len(last_scraped_files)}, now: {len(current_scraped_files)})")
+        if not db_exists:
+            reasons.append("Vector database files missing or corrupted")
+        
+        print(f"[Gemini3] Rebuilding vector store. Reasons: {'; '.join(reasons)}")
+        
+        try:
+            # Load all documents
+            all_docs = []
+            
+            # Load PDF documents
+            if current_files:
+                pdf_docs = load_documents_from_folder(folder_path)
+                all_docs.extend(pdf_docs)
+                print(f"[Gemini3] Loaded {len(pdf_docs)} PDF documents")
+            
+            
+            # Load scraped documents
+            if include_scraped:
+                scraped_docs = load_scraped_documents()
+                all_docs.extend(scraped_docs)
+                print(f"[Gemini3] Loaded {len(scraped_docs)} scraped documents")
+            
+            if not all_docs:
+                print("[Gemini3] No documents found to process.")
+                return
+            
+            # Create vector store with all documents
+            chunks = split_documents_spacy(all_docs)
+            create_vector_store(chunks)
 
-        # save current files list
-        os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
-        with open(source_record_file, 'w') as f:
-            for filename in current_files:
-                f.write(f"{filename}\n")
+            # Only update source tracking after successful vector store creation
+            os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+            with open(source_record_file, 'w', encoding='utf-8') as f:
+                for filename in current_files:
+                    f.write(f"{filename}\n")
+                for scraped_file in current_scraped_files:
+                    f.write(f"scraped:{scraped_file}\n")
+            
+            scraped_count = len(current_scraped_files) if include_scraped else 0
+            print(f"[Gemini3] Vector store successfully rebuilt with {len(current_files)} PDFs and {scraped_count} scraped documents")
+            
+        except Exception as e:
+            print(f"[Gemini3] Error during vector store rebuild: {e}")
+            # Don't update source_files.txt if rebuild failed
+            raise
     else:
         print("[Gemini3] Vector store is up-to-date.")
 
@@ -138,6 +292,115 @@ def build_rag_qa_chain():
     )
     print("[Gemini3] Built RAG QA chain with Chroma + Gemini.")
     return qa_chain
+
+
+# ========== Scrapers Integration Functions ==========
+def update_vector_store_with_scraped():
+    """
+    Convenience function to update vector store including scraped content.
+    """
+    return update_vector_store(KNOWLEDGE_BASE_DIR, include_scraped=True)
+
+
+def get_content_sources_summary() -> Dict:
+    """
+    Get summary of all content sources in the vector store.
+    
+    Returns:
+        Dictionary with content source statistics
+    """
+    from datetime import datetime
+    
+    # PDF files
+    pdf_files = []
+    if os.path.exists(KNOWLEDGE_BASE_DIR):
+        pdf_files = [f for f in os.listdir(KNOWLEDGE_BASE_DIR) if f.endswith('.pdf')]
+    
+    
+    # Scraped content
+    scraped_files = []
+    scraped_content_dir = os.path.join(SCRAPED_CONTENT_DIR, "content")
+    if os.path.exists(scraped_content_dir):
+        scraped_files = [f for f in os.listdir(scraped_content_dir) if f.endswith('.json')]
+    
+    # Load source tracking file
+    source_record_file = os.path.join(VECTOR_STORE_DIR, "source_files.txt")
+    last_updated = None
+    if os.path.exists(source_record_file):
+        stat = os.stat(source_record_file)
+        last_updated = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    
+    return {
+        "pdf_sources": {
+            "count": len(pdf_files),
+            "files": pdf_files
+        },
+        "scraped_sources": {
+            "count": len(scraped_files),
+            "files": scraped_files[:10]  # Show first 10 for preview
+        },
+        "total_sources": len(pdf_files) + len(scraped_files),
+        "vector_store_last_updated": last_updated,
+        "vector_store_exists": _validate_vector_database_exists()
+    }
+
+
+def force_rebuild_vector_store():
+    """
+    Force rebuild of vector store regardless of changes.
+    Useful for admin operations.
+    """
+    print("[Gemini3] Force rebuilding vector store...")
+    
+    try:
+        # Load all documents
+        all_docs = []
+        
+        # Load PDF documents
+        if os.path.exists(KNOWLEDGE_BASE_DIR):
+            pdf_docs = load_documents_from_folder(KNOWLEDGE_BASE_DIR)
+            all_docs.extend(pdf_docs)
+            print(f"[Gemini3] Loaded {len(pdf_docs)} PDF documents")
+        
+        
+        # Load scraped documents
+        scraped_docs = load_scraped_documents()
+        all_docs.extend(scraped_docs)
+        print(f"[Gemini3] Loaded {len(scraped_docs)} scraped documents")
+        
+        if not all_docs:
+            print("[Gemini3] No documents found to process.")
+            return False
+        
+        # Create vector store with all documents
+        chunks = split_documents_spacy(all_docs)
+        create_vector_store(chunks)
+        
+        # Update source tracking
+        source_record_file = os.path.join(VECTOR_STORE_DIR, "source_files.txt")
+        os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+        
+        with open(source_record_file, 'w', encoding='utf-8') as f:
+            # Write PDF files
+            if os.path.exists(KNOWLEDGE_BASE_DIR):
+                pdf_files = [f for f in os.listdir(KNOWLEDGE_BASE_DIR) if f.endswith('.pdf')]
+                for filename in sorted(pdf_files):
+                    f.write(f"{filename}\n")
+            
+            
+            # Write scraped files
+            scraped_content_dir = os.path.join(SCRAPED_CONTENT_DIR, "content")
+            if os.path.exists(scraped_content_dir):
+                scraped_files = [f for f in os.listdir(scraped_content_dir) if f.endswith('.json')]
+                for scraped_file in sorted(scraped_files):
+                    f.write(f"scraped:{scraped_file}\n")
+        
+        print(f"[Gemini3] Force rebuild completed successfully")
+        return True
+        
+    except Exception as e:
+        print(f"[Gemini3] Force rebuild failed: {e}")
+        return False
 
 
 # ========== Gemini Safety Check ==========
