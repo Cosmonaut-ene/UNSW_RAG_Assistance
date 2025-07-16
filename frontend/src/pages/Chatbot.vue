@@ -405,7 +405,6 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
 .icon-btn:disabled { cursor: not-allowed; }
 .dark .icon-btn:hover:not(:disabled) { background: #2c2f36; }
 
-/* 聊天内容和输入框字体风格完全一致 */
 .message-content,
 .input-modern {
   font-family: var(--chat-font-family);
@@ -452,7 +451,6 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   opacity: 1;
 }
 
-/* 亮/暗模式适配 */
 .dark .message-content,
 .dark .input-modern {
   color: #fff;

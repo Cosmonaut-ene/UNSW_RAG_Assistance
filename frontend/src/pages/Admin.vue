@@ -8,52 +8,16 @@
         type="default"
         @click="logout"
       >Logout</el-button>
-      <el-button
-        class="export-btn"
-        type="success"
-        @click="exportChatLog"
-      >Export Chat Log</el-button>
     </header>
     <main class="admin-main">
-      <section class="upload-section">
-        <el-upload
-          class="upload-modern"
-          drag
-          action=""            
-          :show-file-list="false"
-          :auto-upload="false"
-          :before-upload="beforeUpload"
-          :on-change="handleFileChange"
-        >
-          <i class="el-icon-upload"></i>
-          <div class="el-upload__text">Drag or <em>click</em> to upload PDF</div>
-        </el-upload>
-        <el-button
-          class="upload-btn-modern"
-          type="primary"
-          :disabled="!file"
-          @click="uploadFile"
-        >Upload</el-button>
-      </section>
-
-      <section class="file-list-section">
-        <h3 class="section-title">Uploaded Files</h3>
-        <el-empty v-if="files.length === 0" description="No files yet." />
-        <el-table v-else :data="files" class="file-table-modern" border>
-          <el-table-column prop="name" label="File Name" min-width="260" />
-            <el-table-column label="Action" width="120">
-              <template #default="scope">
-                <el-button
-                  type="danger"
-                  size="small"
-                  @click="deleteFile(scope.row)"
-                >
-                  Delete
-                </el-button>
-              </template>
-            </el-table-column>
-        </el-table>
-      </section>
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="File Management" name="file">
+          <FileManagement />
+        </el-tab-pane>
+        <el-tab-pane label="Query Management" name="query">
+          <QueryManagement />
+        </el-tab-pane>
+      </el-tabs>
     </main>
   </div>
 </template>
@@ -63,8 +27,11 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 
+import FileManagement from '@/components/admin/FileManagement.vue'
+import QueryManagement from '@/components/admin/QueryManagement.vue'
+
 const router = useRouter()
-const token = localStorage.getItem('admin_token')
+const activeTab = ref('file')
 
 const logout = () => {
   localStorage.removeItem('admin_token')
@@ -72,184 +39,74 @@ const logout = () => {
   router.push('/login')
 }
 
-const files = ref([])
-const file = ref(null)
-
-const fetchFiles = async () => {
-  try {
-    const res = await fetch('http://localhost:5000/api/admin/files')
-    const data = await res.json()
-    files.value = data
-  } catch {
-    ElMessage.error('Failed to fetch files.')
-  }
-}
-
-const beforeUpload = rawFile => {
-  if (rawFile.type !== 'application/pdf') {
-    ElMessage.error('Only PDF files are allowed.')
-    return false
-  }
-  return true
-}
-
-const handleFileChange = (uploadFile) => {
-  file.value = uploadFile.raw
-}
-
-const uploadFile = async () => {
-  if (!file.value) return
-  const formData = new FormData()
-  formData.append('file', file.value)
-  try {
-    const token = localStorage.getItem('admin_token')
-    const res = await fetch('http://localhost:5000/api/admin/upload', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
-    })
-    if (!res.ok) throw new Error()
-    ElMessage.success('Upload success!')
-    file.value = null
-    await fetchFiles()
-  } catch {
-    ElMessage.error('Upload failed.')
-  }
-}
-
-const deleteFile = async (row) => {
-  try {
-    const res = await fetch(`http://localhost:5000/api/admin/delete/${encodeURIComponent(row.name)}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    if (!res.ok) throw new Error();
-    ElMessage.success('File deleted!');
-    await fetchFiles(); 
-  } catch {
-    ElMessage.error('Delete failed.');
-  }
-}
-
-const exportChatLog = async () => {
-  try {
-    const res = await fetch('http://localhost:5000/api/admin/chatlog', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-    if (!res.ok) throw new Error()
-    const data = await res.blob()
-    const url = window.URL.createObjectURL(data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'chatlogs.json'
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    ElMessage.success('Chat log exported!')
-  } catch {
-    ElMessage.error('Export failed.')
-  }
-}
-
-onMounted(fetchFiles)
-onMounted(async () => {
+onMounted(() => {
   const token = localStorage.getItem('admin_token')
-  if (!token) {
-    router.push('/login')
-    return
-  }
-  })
+  if (!token) router.push('/login')
+})
 </script>
+
 
 <style scoped>
 .admin-container {
-  min-height: 100vh;
-  background: #f7f8fa;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  min-height: 100vh;
+  background: #f7f8fc;
 }
 
 .admin-header {
-  width: 100%;
+  min-height: 74px;
+  font-size: 1.18rem;
+  font-weight: bold;
+  background: #fbdd4a;
+  border-bottom: 1.5px solid #ececec;
   display: flex;
   align-items: center;
-  gap: 16px;
-  justify-content: center;
-  font-size: 2rem;
-  font-weight: 600;
-  padding: 40px 0 24px 0;
-  background: #fff;
-  border-bottom: 1.5px solid #f1f1f1;
-}
-.admin-logo {
-  width: 54px;
+  padding: 0 32px;
+  position: relative;
+  letter-spacing: -0.01em;
+  gap: 18px;
+  margin: 0 auto;
+  width: 100%;
 }
 
+.admin-logo {
+  width: 86px;
+  margin-right: 16px;
+}
+
+.admin-header > span {
+  font-size: 1.16rem;
+  font-weight: 600;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.logout-btn,
+.export-btn {
+  margin-left: 16px;
+  border-radius: 20px;
+  min-width: 110px;
+  height: 38px;
+}
+
+.logout-btn {
+  background: #ff0000;
+}
+
+.export-btn {
+  background: #22c55e;
+  color: #fff;
+}
 .admin-main {
-  width: 600px;
-  margin: 0 auto;
-  padding: 40px 0 0 0;
+  flex: 1;
+  width: 100%;
+  max-width: 880px;
+  margin: 30px auto 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 44px;
-}
-
-.upload-section {
-  display: flex;
-  flex-direction: row;
-  gap: 24px;
-  width: 100%;
-  justify-content: center;
-  align-items: flex-end;
-}
-.upload-modern {
-  flex: 1;
-  background: #fff;
-  border-radius: 36px;
-  border: 1.5px solid #e4e4e4;
-  padding: 14px 0;
-  min-width: 0;
-  transition: border-color 0.15s;
-}
-.upload-modern .el-upload-dragger {
-  border-radius: 36px;
-  background: #fff;
-  min-height: 88px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}
-.upload-btn-modern {
-  border-radius: 36px !important;
-  min-width: 112px;
-  height: 56px;
-  font-size: 1.13rem;
-}
-
-.file-list-section {
-  width: 100%;
-}
-.section-title {
-  font-size: 1.17rem;
-  font-weight: 600;
-  margin-bottom: 14px;
-}
-.file-table-modern {
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-  background: #fff;
-}
-.file-table-modern .el-table__header th {
-  background: #f8fafc;
-  font-weight: 600;
-}
-.file-table-modern .el-link {
-  font-size: 1.08rem;
+  gap: 30px;
 }
 </style>
