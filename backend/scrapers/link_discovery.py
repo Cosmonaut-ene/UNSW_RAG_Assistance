@@ -205,10 +205,6 @@ def save_links_to_file(links: Dict[str, List[str]]) -> None:
             f.write("\n")
     logger.info(f"Successfully saved all links to: {filepath}")
     
-def load_links_from_file(filepath: str) -> list:
-    with open(filepath, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
-
 def discover_and_save_cse_links() -> Dict[str, List[str]]:
     links = discover_cse_links()
     total_links = sum(len(v) for v in links.values())

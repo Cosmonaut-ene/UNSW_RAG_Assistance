@@ -1,0 +1,620 @@
+import requests
+import json
+import os
+import re
+import time
+import random
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from bs4 import BeautifulSoup
+from langchain.docstore.document import Document
+from .config import config
+
+def slugify_url(url: str) -> str:
+    """transfer url to filename"""
+    return re.sub(r'\W+', '_', url.strip()).strip('_')
+
+def clean_text(text: str) -> str:
+    """Clean and normalize text content, removing redundant newlines and meaningless values"""
+    if not text:
+        return ""
+    
+    # Convert to string and check for meaningless values first
+    text_str = str(text).strip()
+    if not text_str or text_str.lower() in ["none", "null", "undefined"]:
+        return ""
+    
+    # Remove HTML tags and decode entities
+    text = BeautifulSoup(text_str, "html.parser").get_text(separator=" ")
+    
+    # Remove redundant newlines and normalize whitespace
+    text = re.sub(r'\n+', ' ', text)  # Replace multiple newlines with single space
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize all whitespace
+    
+    # Remove common HTML artifacts
+    text = re.sub(r'&[a-zA-Z0-9#]+;', '', text)
+    
+    # Final check for meaningless content after cleaning
+    if not text or text.lower() in ["none", "null", "undefined"]:
+        return ""
+    
+    return text
+
+
+def is_meaningful_value(value: Any) -> bool:
+    """Check if a value is meaningful (not empty, None, or useless cl_id)"""
+    if value is None:
+        return False
+    
+    str_val = str(value).strip()
+    if not str_val or str_val.lower() == "none":
+        return False
+    
+    # Filter out meaningless cl_id patterns (like cl_12345678)
+    if re.match(r'^cl_\d+$', str_val, re.IGNORECASE):
+        return False
+    
+    return True
+
+def extract_key_value(obj: Dict[str, Any], key: str, default: str = "") -> str:
+    """Extract value from nested dictionary structures, filtering out meaningless values"""
+    if not obj or not isinstance(obj, dict):
+        return default
+    
+    value = obj.get(key, default)
+    
+    # Handle different value formats from UNSW API
+    if isinstance(value, dict):
+        if "value" in value and is_meaningful_value(value["value"]):
+            return str(value["value"])
+        elif "label" in value and is_meaningful_value(value["label"]):
+            return str(value["label"])
+    elif isinstance(value, list) and value:
+        # For arrays, take the first meaningful item's value/label
+        for item in value:
+            if isinstance(item, dict):
+                if "value" in item and is_meaningful_value(item["value"]):
+                    return str(item["value"])
+                elif "label" in item and is_meaningful_value(item["label"]):
+                    return str(item["label"])
+    elif is_meaningful_value(value):
+        return str(value)
+    
+    return default
+
+
+def extract_list_values(obj: List[Dict[str, Any]], key: str = "value") -> List[str]:
+    """Extract meaningful values from list of objects, filtering out empty/useless values"""
+    if not obj or not isinstance(obj, list):
+        return []
+    
+    values = []
+    for item in obj:
+        if isinstance(item, dict):
+            if key in item and is_meaningful_value(item[key]):
+                values.append(str(item[key]))
+            elif "label" in item and is_meaningful_value(item["label"]):
+                values.append(str(item["label"]))
+    
+    return values
+
+
+def beautify_field_name(field_name: str) -> str:
+    """Convert technical field names to more readable format"""
+    # Remove common prefixes/suffixes
+    field_name = re.sub(r'(_value|_label|_single)$', '', field_name)
+    
+    # Handle common field name patterns
+    field_mappings = {
+        'parent_academic_org': 'faculty',
+        'academic_org': 'school', 
+        'full_time_duration': 'duration_fulltime',
+        'part_time_duration': 'duration_parttime',
+        'entry_requirements_onshore': 'entry_requirements_domestic',
+        'entry_requirements_offshore': 'entry_requirements_international',
+        'indicative_fee': 'fee_domestic',
+        'indicative_fee_international': 'fee_international',
+        'uac_code_single': 'uac_code',
+        'credit_points': 'credits'
+    }
+    
+    # Apply mappings
+    for old_name, new_name in field_mappings.items():
+        if old_name in field_name:
+            field_name = field_name.replace(old_name, new_name)
+    
+    return field_name
+
+
+def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
+    """
+    Recursively extract all meaningful fields from a nested object structure.
+    This ensures no valuable data is lost during content cleaning.
+    """
+    result = {}
+    
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            field_name = f"{prefix}_{key}" if prefix else key
+            
+            # Skip obviously technical/meaningless fields
+            skip_fields = {
+                'id', 'uuid', 'href', 'links', 'uri', 'url', 'path', 'slug', 
+                'created', 'updated', 'modified', 'timestamp', 'last_modified',
+                'meta', 'metadata', 'seo', 'canonical', 'redirect'
+            }
+            if key.lower() in skip_fields or key.startswith('_') or 'cl_' in key.lower():
+                continue
+            
+            if isinstance(value, (dict, list)):
+                # Recursively process nested structures
+                nested_fields = extract_all_meaningful_fields(value, field_name)
+                result.update(nested_fields)
+            else:
+                # Extract scalar values
+                if is_meaningful_value(value):
+                    result[field_name] = str(value)
+                    
+    elif isinstance(obj, list):
+        # Handle lists by extracting meaningful values
+        meaningful_values = []
+        for i, item in enumerate(obj):
+            if isinstance(item, dict):
+                # For objects in list, try to extract key meaningful fields
+                if "value" in item and is_meaningful_value(item["value"]):
+                    meaningful_values.append(str(item["value"]))
+                elif "label" in item and is_meaningful_value(item["label"]):
+                    meaningful_values.append(str(item["label"]))
+                elif "description" in item and is_meaningful_value(item["description"]):
+                    meaningful_values.append(clean_text(item["description"]))
+                else:
+                    # Extract all meaningful fields from object
+                    nested_fields = extract_all_meaningful_fields(item, f"{prefix}_{i}" if prefix else str(i))
+                    result.update(nested_fields)
+            elif is_meaningful_value(item):
+                meaningful_values.append(str(item))
+        
+        if meaningful_values:
+            result[prefix or "values"] = ", ".join(meaningful_values)
+    
+    return result
+
+
+def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Dynamically extract ALL meaningful fields from UNSW API content.
+    This approach preserves maximum information instead of filtering to predefined fields.
+    """
+    # Extract all meaningful fields dynamically
+    all_fields = extract_all_meaningful_fields(content)
+    
+    # Clean all extracted fields and beautify field names
+    cleaned = {}
+    for field_name, field_value in all_fields.items():
+        # Beautify field name for better readability
+        clean_field_name = beautify_field_name(field_name)
+        
+        if isinstance(field_value, str):
+            cleaned_value = clean_text(field_value)
+            if cleaned_value:  # Only keep non-empty values
+                cleaned[clean_field_name] = cleaned_value
+        else:
+            # For non-string values, try to extract meaningful content
+            extracted_value = extract_key_value(field_value if isinstance(field_value, dict) else {"value": field_value}, "value")
+            if extracted_value:
+                cleaned[clean_field_name] = extracted_value
+    
+    # Handle special complex fields that need custom processing
+    
+    # Learning outcomes - format as strict markdown numbered list
+    learning_outcomes = content.get("learning_outcomes", [])
+    if learning_outcomes:
+        outcomes_text = []
+        for i, outcome in enumerate(learning_outcomes):
+            if isinstance(outcome, dict):
+                # Extract all meaningful fields from each outcome
+                outcome_fields = extract_all_meaningful_fields(outcome, f"learning_outcome_{i}")
+                cleaned.update(outcome_fields)
+                
+                # Create numbered list format for each outcome
+                if "description" in outcome:
+                    clean_outcome = clean_text(outcome["description"])
+                    if clean_outcome:
+                        outcomes_text.append(f"{i+1}. {clean_outcome}")
+                elif "value" in outcome:
+                    clean_outcome = clean_text(outcome["value"])
+                    if clean_outcome:
+                        outcomes_text.append(f"{i+1}. {clean_outcome}")
+                elif isinstance(outcome, str):
+                    clean_outcome = clean_text(outcome)
+                    if clean_outcome:
+                        outcomes_text.append(f"{i+1}. {clean_outcome}")
+        
+        if outcomes_text:
+            # Join with newlines to create proper markdown numbered list
+            cleaned["learning_outcomes_formatted"] = "\n".join(outcomes_text)
+    
+    # Course structure - extract detailed structure information
+    if "course_structure" in content:
+        structure_data = content["course_structure"]
+        structure_fields = extract_all_meaningful_fields(structure_data, "course_structure")
+        cleaned.update(structure_fields)
+    
+    # Program structure - extract detailed program information  
+    if "program_structure" in content:
+        program_data = content["program_structure"]
+        program_fields = extract_all_meaningful_fields(program_data, "program_structure")
+        cleaned.update(program_fields)
+        
+    # Requirements - ensure all requirement types are captured
+    requirement_fields = [
+        "requirements", "entry_requirements", "admission_requirements",
+        "prerequisites", "corequisites", "exclusions", "assumed_knowledge",
+        "progression_requirements", "graduation_requirements"
+    ]
+    
+    for req_field in requirement_fields:
+        if req_field in content:
+            req_data = content[req_field]
+            if isinstance(req_data, (dict, list)):
+                req_fields = extract_all_meaningful_fields(req_data, req_field)
+                cleaned.update(req_fields)
+            elif is_meaningful_value(req_data):
+                cleaned[req_field] = clean_text(str(req_data))
+    
+    return cleaned
+
+
+def get_random_headers() -> Dict[str, str]:
+    """Generate randomized headers to avoid detection"""
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0"
+    ]
+    
+    accept_languages = [
+        "en-US,en;q=0.9",
+        "en-AU,en;q=0.9,en-US;q=0.8",
+        "en-GB,en;q=0.9,en-US;q=0.8",
+        "en-US,en;q=0.5"
+    ]
+    
+    return {
+        "User-Agent": random.choice(user_agents),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": random.choice(accept_languages),
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Charset": "UTF-8",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Cache-Control": "max-age=0"
+    }
+
+
+def add_random_delay(min_delay: float = 1.0, max_delay: float = 3.0):
+    """Add random delay between requests to avoid rate limiting"""
+    delay = random.uniform(min_delay, max_delay)
+    print(f"⏱️ Waiting {delay:.1f}s before next request...")
+    time.sleep(delay)
+
+
+def make_request_with_retry(url: str, max_retries: int = 3, backoff_factor: float = 2.0) -> Optional[requests.Response]:
+    """Make HTTP request with retries and exponential backoff"""
+    for attempt in range(max_retries):
+        try:
+            headers = get_random_headers()
+            
+            # Add delay before request (except first attempt)
+            if attempt > 0:
+                delay = backoff_factor ** attempt + random.uniform(0.5, 1.5)
+                print(f"🔄 Retry {attempt + 1}/{max_retries} after {delay:.1f}s delay...")
+                time.sleep(delay)
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                return response
+            elif response.status_code == 403:
+                print(f"⛔ HTTP 403 Forbidden - attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    continue
+            elif response.status_code == 429:
+                print(f"⏳ Rate limited (429) - attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    time.sleep(random.uniform(5, 10))
+                    continue
+            else:
+                response.raise_for_status()
+                
+        except requests.exceptions.RequestException as e:
+            print(f"🌐 Network error on attempt {attempt + 1}/{max_retries}: {e}")
+            if attempt < max_retries - 1:
+                continue
+            
+    print(f"❌ Failed to fetch {url} after {max_retries} attempts")
+    return None
+
+
+def parse_description(html_text: str) -> str:
+    """将 HTML 格式描述转为纯文本 (legacy function for compatibility)"""
+    return clean_text(html_text)
+
+
+def scrape_single_page(url: str) -> Optional[Document]:
+    """
+    使用 __NEXT_DATA__ 脚本提取 UNSW handbook 页面结构化内容。
+    适用于 program/specialisation/course 页面。
+    """
+    print(f"🔍 Scraping structured page: {url}")
+
+    # Use robust request function with retries
+    response = make_request_with_retry(url)
+    if not response:
+        return None
+
+    try:
+        soup = BeautifulSoup(response.text, "html.parser")
+        script_tag = soup.find("script", id="__NEXT_DATA__")
+        if not script_tag:
+            raise ValueError("❌ 找不到 __NEXT_DATA__ script 标签")
+    except Exception as e:
+        print(f"❌ HTML 解析失败: {e}")
+        return None
+
+    try:
+        next_data = json.loads(script_tag.string)
+        page_content = next_data.get("props", {}).get("pageProps", {}).get("pageContent", {})
+        if not page_content:
+            print("⚠️ 无 pageContent 字段")
+            return None
+
+        # Clean and extract content using new data cleansing functions
+        cleaned_content = clean_academic_content(page_content)
+        
+        # Build comprehensive structured content text, preserving maximum information
+        content_parts = []
+        
+        # Title and basic info
+        if cleaned_content.get("title"):
+            content_parts.append(f"# {cleaned_content['title']}")
+        
+        if cleaned_content.get("code"):
+            content_parts.append(f"**Code:** {cleaned_content['code']}")
+        
+        # Academic details
+        academic_info = []
+        academic_fields = [
+            ("faculty", "Faculty"), ("school", "School"), ("study_level", "Study Level"),
+            ("credit_points", "Credit Points"), ("duration", "Duration"), 
+            ("part_time_duration", "Part-time Duration"), ("program_type", "Program Type"),
+            ("content_type", "Content Type"), ("type", "Type")
+        ]
+        
+        for field, label in academic_fields:
+            if cleaned_content.get(field):
+                academic_info.append(f"**{label}:** {cleaned_content[field]}")
+        
+        if academic_info:
+            content_parts.append("## Academic Information")
+            content_parts.append(" ".join(academic_info))
+        
+        # Description
+        if cleaned_content.get("description"):
+            content_parts.append(f"## Description\n{cleaned_content['description']}")
+        
+        # Structure and curriculum
+        if cleaned_content.get("structure_summary"):
+            content_parts.append(f"## Program Structure\n{cleaned_content['structure_summary']}")
+        
+        if cleaned_content.get("curriculum_structure"):
+            content_parts.append(f"## Curriculum Structure\n{cleaned_content['curriculum_structure']}")
+        
+        # Entry requirements (comprehensive)
+        if cleaned_content.get("entry_requirements"):
+            content_parts.append(f"## Entry Requirements\n{cleaned_content['entry_requirements']}")
+        
+        if cleaned_content.get("entry_requirements_international"):
+            content_parts.append(f"## International Entry Requirements\n{cleaned_content['entry_requirements_international']}")
+        
+        if cleaned_content.get("assumed_knowledge"):
+            content_parts.append(f"## Assumed Knowledge\n{cleaned_content['assumed_knowledge']}")
+        
+        # Prerequisites and academic conditions
+        prereq_info = []
+        if cleaned_content.get("prerequisites"):
+            prereq_info.append(f"**Prerequisites:** {cleaned_content['prerequisites']}")
+        if cleaned_content.get("corequisites"):
+            prereq_info.append(f"**Corequisites:** {cleaned_content['corequisites']}")
+        if cleaned_content.get("exclusions"):
+            prereq_info.append(f"**Exclusions:** {cleaned_content['exclusions']}")
+        
+        if prereq_info:
+            content_parts.append("## Academic Prerequisites")
+            content_parts.append(" ".join(prereq_info))
+        
+        # Course content and assessment
+        if cleaned_content.get("course_outline"):
+            content_parts.append(f"## Course Outline\n{cleaned_content['course_outline']}")
+        
+        if cleaned_content.get("assessment"):
+            content_parts.append(f"## Assessment\n{cleaned_content['assessment']}")
+        
+        if cleaned_content.get("teaching_methods"):
+            content_parts.append(f"## Teaching Methods\n{cleaned_content['teaching_methods']}")
+        
+        # Learning outcomes (formatted as numbered list)
+        if cleaned_content.get("learning_outcomes_formatted"):
+            content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes_formatted']}")
+        elif cleaned_content.get("learning_outcomes"):
+            content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes']}")
+        
+        # Career and professional information
+        if cleaned_content.get("career_opportunities"):
+            content_parts.append(f"## Career Opportunities\n{cleaned_content['career_opportunities']}")
+        
+        if cleaned_content.get("professional_recognition"):
+            content_parts.append(f"## Professional Recognition\n{cleaned_content['professional_recognition']}")
+        
+        if cleaned_content.get("accreditation"):
+            content_parts.append(f"## Accreditation\n{cleaned_content['accreditation']}")
+        
+        # Specializations and majors
+        if cleaned_content.get("specializations"):
+            content_parts.append(f"## Specializations\n{cleaned_content['specializations']}")
+        
+        if cleaned_content.get("majors"):
+            content_parts.append(f"## Majors\n{cleaned_content['majors']}")
+        
+        # Study details and logistics
+        study_details = []
+        study_fields = [
+            ("study_modes", "Study Modes"), ("intake_periods", "Intake Periods"),
+            ("campus", "Campus"), ("contact_hours", "Contact Hours"),
+            ("workload", "Workload"), ("min_units", "Minimum Units"),
+            ("max_units", "Maximum Units")
+        ]
+        
+        for field, label in study_fields:
+            if cleaned_content.get(field):
+                study_details.append(f"**{label}:** {cleaned_content[field]}")
+        
+        if study_details:
+            content_parts.append("## Study Details")
+            content_parts.append(" ".join(study_details))
+        
+        # Fees and costs
+        fee_info = []
+        if cleaned_content.get("indicative_fee"):
+            fee_info.append(f"**Domestic Fee:** {cleaned_content['indicative_fee']}")
+        if cleaned_content.get("indicative_fee_international"):
+            fee_info.append(f"**International Fee:** {cleaned_content['indicative_fee_international']}")
+        
+        if fee_info:
+            content_parts.append("## Fees")
+            content_parts.append(" ".join(fee_info))
+        
+        # Administrative information
+        admin_info = []
+        admin_fields = [
+            ("cricos_code", "CRICOS Code"), ("uac_code", "UAC Code"), ("atar", "ATAR")
+        ]
+        
+        for field, label in admin_fields:
+            if cleaned_content.get(field):
+                admin_info.append(f"**{label}:** {cleaned_content[field]}")
+        
+        if admin_info:
+            content_parts.append("## Administrative Information")
+            content_parts.append(" ".join(admin_info))
+        
+        # Progression requirements
+        if cleaned_content.get("progression_requirements"):
+            content_parts.append(f"## Progression Requirements\n{cleaned_content['progression_requirements']}")
+
+        # Join all parts with double newline for proper markdown spacing
+        full_text = "\n\n".join(content_parts).strip()
+
+        # Create comprehensive metadata
+        metadata = {
+            "source": url,
+            "scraped_at": datetime.utcnow().isoformat(),
+            "content_length": len(full_text),
+        }
+        
+        # Add all cleaned content fields to metadata
+        metadata.update(cleaned_content)
+
+        return Document(page_content=full_text, metadata=metadata)
+
+    except Exception as e:
+        print(f"❌ 解析 structured JSON 失败: {e}")
+        return None
+
+
+def save_page_content(doc: Document, content_dir: str = None) -> str:
+    if content_dir is None:
+        content_dir = config.CONTENT_DIR
+    os.makedirs(content_dir, exist_ok=True)
+
+    # 使用 code 或 fallback 文件名
+    url = doc.metadata.get("source", "")
+    slug = slugify_url(url)
+    filename = f"{slug}.json"
+    filepath = os.path.join(content_dir, filename)
+
+    data = {
+        "page_content": doc.page_content,
+        "metadata": doc.metadata,
+        "saved_at": datetime.utcnow().isoformat()
+    }
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"💾 Saved content to: {filepath}")
+    return filepath
+
+
+def load_page_content(filepath: str) -> Optional[Document]:
+    if not os.path.exists(filepath):
+        print(f"❌ File not found: {filepath}")
+        return None
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return Document(
+            page_content=data["page_content"],
+            metadata=data["metadata"]
+        )
+    except Exception as e:
+        print(f"❌ Error loading {filepath}: {e}")
+        return None
+
+
+def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: tuple = (2.0, 5.0)) -> List[Document]:
+    """
+    Batch scrape URLs with anti-blocking measures
+    
+    Args:
+        urls: List of URLs to scrape
+        save_content: Whether to save content to files
+        delay_range: (min_delay, max_delay) in seconds between requests
+    """
+    docs = []
+    failed = []
+
+    print(f"🚀 Scraping {len(urls)} UNSW handbook pages with anti-blocking measures")
+    print(f"⏱️ Using random delays between {delay_range[0]}-{delay_range[1]}s")
+
+    for i, url in enumerate(urls):
+        print(f"\n[{i+1}/{len(urls)}] {url}")
+        
+        # Add delay between requests (except for first request)
+        if i > 0:
+            add_random_delay(delay_range[0], delay_range[1])
+        
+        doc = scrape_single_page(url)
+        if doc:
+            docs.append(doc)
+            if save_content:
+                save_page_content(doc)
+            print(f"✅ Successfully scraped: {doc.metadata.get('title', 'Unknown')}")
+        else:
+            failed.append(url)
+            print(f"❌ Failed to scrape: {url}")
+
+    print(f"\n🎯 Batch Results: {len(docs)} success, ❌ {len(failed)} failed")
+    
+    if failed:
+        print("\n❌ Failed URLs:")
+        for url in failed:
+            print(f"   - {url}")
+    
+    return docs

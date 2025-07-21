@@ -10,9 +10,9 @@ This module provides functionality for:
 Author: AI Assistant
 """
 
-from .link_discovery import discover_cse_links, save_links_to_file, load_links_from_file
+from .link_discovery import discover_cse_links, save_links_to_file
 from .page_scraper import scrape_single_page, save_page_content, load_page_content
-from .monitor import check_links_changed, get_new_links
+from .monitor import check_links_changed, get_new_links, load_links_from_file
 from .config import ScraperConfig
 
 __all__ = [
