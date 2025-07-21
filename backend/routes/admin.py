@@ -50,10 +50,37 @@ def upload_file():
     if filename == '':
         return jsonify({"error": "Invalid filename"}), 400
 
+    # Validate file type
+    if not filename.lower().endswith('.pdf'):
+        return jsonify({"error": "Only PDF files are allowed"}), 400
+
     file_path = os.path.join(DOCS_FOLDER, filename)
     file.save(file_path)
     print(f"[UPLOAD] Saved file to: {file_path}")
-    return jsonify({"message": "File uploaded successfully"}), 200
+    
+    # Automatically update vector store after successful upload
+    vector_updated = False
+    vector_error = None
+    try:
+        from rag.gemini3 import update_vector_store
+        # Use the same directory constant as defined in gemini3.py
+        update_vector_store(DOCS_FOLDER)
+        vector_updated = True
+        print(f"[UPLOAD] Vector store updated successfully after uploading {filename}")
+    except Exception as e:
+        vector_error = str(e)
+        print(f"[UPLOAD] Vector store update failed: {e}")
+    
+    response_data = {
+        "message": "File uploaded successfully",
+        "filename": filename,
+        "vector_store_updated": vector_updated
+    }
+    
+    if vector_error:
+        response_data["vector_store_error"] = vector_error
+    
+    return jsonify(response_data), 200
 
 @admin_bp.route('/files', methods=['GET'])
 def list_files():
@@ -73,7 +100,30 @@ def delete_file(filename):
     print("Trying to delete:", file_path)
     if os.path.exists(file_path):
         os.remove(file_path)
-        return jsonify({"message": f"{filename} deleted"}), 200
+        print(f"[DELETE] Removed file: {file_path}")
+        
+        # Automatically update vector store after successful deletion
+        vector_updated = False
+        vector_error = None
+        try:
+            from rag.gemini3 import update_vector_store
+            update_vector_store(DOCS_FOLDER)
+            vector_updated = True
+            print(f"[DELETE] Vector store updated successfully after deleting {filename}")
+        except Exception as e:
+            vector_error = str(e)
+            print(f"[DELETE] Vector store update failed: {e}")
+        
+        response_data = {
+            "message": f"{filename} deleted",
+            "filename": filename,
+            "vector_store_updated": vector_updated
+        }
+        
+        if vector_error:
+            response_data["vector_store_error"] = vector_error
+        
+        return jsonify(response_data), 200
     return jsonify({"error": "File not found"}), 404
 
 @admin_bp.route('/chatlog', methods=['GET'])
@@ -285,6 +335,305 @@ def health():
         "service": "admin_query_service",
         "timestamp": datetime.utcnow().isoformat()
     }), 200
+
+
+# ========== Scrapers Management ==========
+@admin_bp.route('/scrapers/status', methods=['GET'])
+@require_admin
+def get_scrapers_status():
+    """Get comprehensive status of scrapers and content sources"""
+    try:
+        from scrapers.monitor import get_scraping_status
+        from rag.gemini3 import get_content_sources_summary
+        
+        # Get scraping status
+        scraping_status = get_scraping_status()
+        
+        # Get content sources summary
+        sources_summary = get_content_sources_summary()
+        
+        return jsonify({
+            "scraping_status": scraping_status,
+            "content_sources": sources_summary,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting scrapers status: {e}")
+        return jsonify({"error": "Failed to get scrapers status"}), 500
+
+
+@admin_bp.route('/scrapers/links', methods=['GET'])
+@require_admin  
+def get_scraper_links():
+    """Get current links list from urls.txt file"""
+    try:
+        from scrapers.link_discovery import load_links_from_file
+        from scrapers.config import config
+        
+        links = load_links_from_file()
+        
+        # Categorize links
+        categorized = {"programs": [], "specialisations": [], "courses": [], "other": []}
+        for url in links:
+            if "/programs/" in url:
+                categorized["programs"].append(url)
+            elif "/specialisations/" in url:
+                categorized["specialisations"].append(url)
+            elif "/courses/" in url:
+                categorized["courses"].append(url)
+            else:
+                categorized["other"].append(url)
+        
+        return jsonify({
+            "links": links,
+            "categorized": categorized,
+            "total_count": len(links),
+            "urls_file": config.URLS_FILE
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting scraper links: {e}")
+        return jsonify({"error": "Failed to get scraper links"}), 500
+
+
+@admin_bp.route('/scrapers/links', methods=['POST'])
+@require_admin
+def update_scraper_links():
+    """Update links list in urls.txt file"""
+    try:
+        from scrapers.link_discovery import save_links_to_file
+        from scrapers.config import config
+        
+        data = request.get_json()
+        links = data.get("links", [])
+        
+        if not isinstance(links, list):
+            return jsonify({"error": "Links must be provided as a list"}), 400
+        
+        # Validate URLs
+        valid_links = []
+        for link in links:
+            if isinstance(link, str) and link.strip() and link.startswith("http"):
+                valid_links.append(link.strip())
+        
+        # Convert to format expected by save_links_to_file
+        categorized_links = {"programs": [], "specialisations": [], "courses": [], "other": []}
+        for url in valid_links:
+            if "/programs/" in url:
+                categorized_links["programs"].append(url)
+            elif "/specialisations/" in url:
+                categorized_links["specialisations"].append(url)
+            elif "/courses/" in url:
+                categorized_links["courses"].append(url)
+            else:
+                categorized_links["other"].append(url)
+        
+        # Save to file
+        save_links_to_file(categorized_links)
+        
+        return jsonify({
+            "message": "Links updated successfully",
+            "total_links": len(valid_links),
+            "categories": {k: len(v) for k, v in categorized_links.items()}
+        }), 200
+        
+    except Exception as e:
+        print(f"Error updating scraper links: {e}")
+        return jsonify({"error": "Failed to update scraper links"}), 500
+
+
+@admin_bp.route('/scrapers/discover', methods=['POST'])
+@require_admin
+def discover_links():
+    """Discover links and return preview for admin review"""
+    try:
+        from scrapers.link_discovery import discover_cse_links_with_preview
+        from scrapers.monitor import load_links_from_file
+        
+        data = request.get_json()
+        root_url = data.get("root_url", "https://www.handbook.unsw.edu.au/browse/By%20Area%20of%20Interest/InformationTechnology")
+        
+        # Get existing links
+        existing_urls = set()
+        try:
+            existing_urls = set(load_links_from_file())
+        except:
+            existing_urls = set()
+        
+        # Run discovery with preview
+        discovery_result = discover_cse_links_with_preview(root_url, existing_urls)
+        
+        return jsonify({
+            "success": True,
+            "root_url": root_url,
+            "discovery_summary": {
+                "total_links": discovery_result["total_links"],
+                "new_links": discovery_result["new_links_count"],
+                "existing_links": discovery_result["existing_links_count"],
+                "categories": discovery_result["categories"]
+            },
+            "new_links_preview": discovery_result["new_links_preview"],
+            "quality_check": discovery_result["quality_check"],
+            "full_discovery_data": discovery_result["all_links"]  # For saving after confirmation
+        }), 200
+        
+    except Exception as e:
+        print(f"Error during link discovery: {e}")
+        return jsonify({
+            "success": False, 
+            "error": f"Failed to discover links: {str(e)}"
+        }), 500
+
+
+@admin_bp.route('/scrapers/confirm-and-scrape', methods=['POST'])
+@require_admin
+def confirm_and_scrape():
+    """Confirm discovered links and start scraping"""
+    try:
+        from scrapers.link_discovery import save_links_to_file
+        from scrapers.page_scraper import start_scraping_with_progress
+        
+        data = request.get_json()
+        confirmed_links = data.get("confirmed_links", [])
+        auto_update_vector_store = data.get("update_vector_store", True)
+        
+        if not confirmed_links:
+            return jsonify({
+                "success": False,
+                "error": "No links provided for scraping"
+            }), 400
+        
+        # Save confirmed links to urls.txt
+        save_links_to_file(confirmed_links)
+        
+        # Start scraping with progress tracking
+        scraping_id = start_scraping_with_progress(
+            confirmed_links, 
+            auto_update_vector_store=auto_update_vector_store
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": "Scraping started successfully",
+            "scraping_id": scraping_id,
+            "total_urls": len(confirmed_links),
+            "progress_endpoint": f"/api/admin/scrapers/progress/{scraping_id}"
+        }), 200
+        
+    except Exception as e:
+        print(f"Error starting scraping: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to start scraping: {str(e)}"
+        }), 500
+
+
+@admin_bp.route('/scrapers/progress/<scraping_id>', methods=['GET'])
+@require_admin
+def get_scraping_progress(scraping_id):
+    """Get real-time scraping progress"""
+    try:
+        from scrapers.page_scraper import get_scraping_progress
+        
+        progress = get_scraping_progress(scraping_id)
+        
+        if progress is None:
+            return jsonify({
+                "success": False,
+                "error": "Scraping session not found"
+            }), 404
+            
+        return jsonify({
+            "success": True,
+            "progress": progress
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting scraping progress: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to get progress"
+        }), 500
+
+
+@admin_bp.route('/scrapers/cancel/<scraping_id>', methods=['POST'])
+@require_admin
+def cancel_scraping(scraping_id):
+    """Cancel ongoing scraping operation"""
+    try:
+        from scrapers.page_scraper import cancel_scraping_session
+        
+        result = cancel_scraping_session(scraping_id)
+        
+        return jsonify({
+            "success": True,
+            "message": "Scraping cancelled successfully",
+            "cancelled": result
+        }), 200
+        
+    except Exception as e:
+        print(f"Error cancelling scraping: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to cancel scraping"
+        }), 500
+
+
+@admin_bp.route('/scrapers/scrape', methods=['POST'])
+@require_admin
+def trigger_scraping():
+    """Legacy endpoint - redirects to new workflow"""
+    return jsonify({
+        "message": "Please use the new interactive workflow",
+        "workflow": "Use /scrapers/discover first, then /scrapers/confirm-and-scrape",
+        "deprecated": True
+    }), 200
+
+
+@admin_bp.route('/scrapers/monitor', methods=['POST'])
+@require_admin
+def run_monitoring():
+    """Run monitoring to check for changes and optionally auto-scrape"""
+    try:
+        from scrapers.monitor import monitor_and_scrape
+        
+        data = request.get_json()
+        auto_scrape = data.get("auto_scrape", False)
+        
+        result = monitor_and_scrape(auto_scrape=auto_scrape)
+        
+        return jsonify({
+            "message": "Monitoring completed",
+            "result": result
+        }), 200
+        
+    except Exception as e:
+        print(f"Error during monitoring: {e}")
+        return jsonify({"error": "Failed to run monitoring"}), 500
+
+
+@admin_bp.route('/vector-store/rebuild', methods=['POST'])
+@require_admin
+def rebuild_vector_store():
+    """Force rebuild of vector store with all content"""
+    try:
+        from rag.gemini3 import force_rebuild_vector_store
+        
+        success = force_rebuild_vector_store()
+        
+        if success:
+            return jsonify({
+                "message": "Vector store rebuilt successfully"
+            }), 200
+        else:
+            return jsonify({
+                "error": "Vector store rebuild failed"
+            }), 500
+            
+    except Exception as e:
+        print(f"Error rebuilding vector store: {e}")
+        return jsonify({"error": "Failed to rebuild vector store"}), 500
     
 
 # ========== Error handlers ==========

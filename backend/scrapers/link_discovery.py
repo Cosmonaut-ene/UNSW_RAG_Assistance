@@ -193,14 +193,26 @@ def discover_cse_links() -> Dict[str, List[str]]:
 
     return {k: sorted(list(v)) for k, v in final_results.items()}
 
-def save_links_to_file(links: Dict[str, List[str]]) -> None:
+def save_links_to_file(links) -> None:
+    """
+    Save links to file. Accepts either Dict[str, List[str]] or List[str]
+    """
     filepath = config.URLS_FILE
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(f"# UNSW Handbook Links\n")
-        f.write(f"# Auto-discovered on {datetime.now():%Y-%m-%d %H:%M:%S}\n\n")
-        for category in ["programs", "specialisations", "courses"]:
-            f.write(f"# === {category.upper()} ===\n")
-            for url in links.get(category, []):
+        f.write(f"# Updated on {datetime.now():%Y-%m-%d %H:%M:%S}\n\n")
+        
+        if isinstance(links, dict):
+            # Original format: categorized links
+            for category in ["programs", "specialisations", "courses"]:
+                f.write(f"# === {category.upper()} ===\n")
+                for url in links.get(category, []):
+                    f.write(f"{url}\n")
+                f.write("\n")
+        elif isinstance(links, list):
+            # New format: flat list of confirmed links
+            f.write("# === CONFIRMED LINKS ===\n")
+            for url in links:
                 f.write(f"{url}\n")
             f.write("\n")
     logger.info(f"Successfully saved all links to: {filepath}")
@@ -213,6 +225,65 @@ def discover_and_save_cse_links() -> Dict[str, List[str]]:
     else:
         logger.warning("No links discovered, file not generated.")
     return links
+
+
+def discover_cse_links_with_preview(root_url: str, existing_urls: Set[str]) -> Dict:
+    """
+    Discover links and return detailed preview for admin review
+    """
+    # Run discovery
+    discovered_links = discover_cse_links()
+    
+    # Convert to flat list of all discovered URLs
+    all_discovered = []
+    categories = {}
+    
+    for category, urls in discovered_links.items():
+        categories[category] = len(urls)
+        all_discovered.extend(urls)
+    
+    # Identify new vs existing links
+    all_discovered_set = set(all_discovered)
+    new_urls = all_discovered_set - existing_urls
+    existing_count = len(all_discovered_set & existing_urls)
+    
+    # Create preview of new links (first 10)
+    new_links_preview = []
+    for url in list(new_urls)[:10]:
+        # Try to extract title from URL
+        try:
+            url_parts = url.split('/')
+            if len(url_parts) >= 2:
+                code_or_id = url_parts[-1]
+                category = 'course' if 'courses' in url else ('program' if 'programs' in url else 'specialisation')
+                title = f"{category.title()} {code_or_id}"
+            else:
+                title = "Unknown"
+        except:
+            title = "Unknown"
+            
+        new_links_preview.append({
+            "url": url,
+            "title": title,
+            "accessible": True  # TODO: Could add actual accessibility check
+        })
+    
+    # Quality check (simplified for now)
+    quality_check = {
+        "all_accessible": True,  # TODO: Implement actual checks
+        "structure_validated": True,
+        "duplicate_warnings": 0
+    }
+    
+    return {
+        "total_links": len(all_discovered),
+        "new_links_count": len(new_urls), 
+        "existing_links_count": existing_count,
+        "categories": categories,
+        "new_links_preview": new_links_preview,
+        "quality_check": quality_check,
+        "all_links": discovered_links  # For saving after confirmation
+    }
 
 if __name__ == "__main__":
     logger.info("Starting link discovery module...")

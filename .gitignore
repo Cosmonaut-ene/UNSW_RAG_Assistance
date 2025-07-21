@@ -124,6 +124,7 @@ vector_store/
 embeddings/
 chroma/
 backend/rag/scraped_content/content
+backend/rag/scraped_content/metadata.json
 
 # Scraped content and temporary data files
 page_content.json
@@ -232,3 +233,4 @@ checkpoints/
 # CLAUDE AI ASSISTANT
 # ==========================================
 .claude
+

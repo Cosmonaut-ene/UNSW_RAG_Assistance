@@ -4,7 +4,7 @@ import json
 import spacy
 import google.generativeai as genai
 from typing import List, Optional, Dict
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from langchain.docstore.document import Document
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.chains import RetrievalQA
@@ -32,6 +32,9 @@ def load_documents_from_folder(folder_path):
         if filename.endswith(".pdf"):
             loader = PyMuPDFLoader(os.path.join(folder_path, filename))
             doc_chunks = loader.load()
+            # Mark PDF documents with content_type
+            for doc in doc_chunks:
+                doc.metadata["content_type"] = "pdf"
             print(f"[Gemini3] Loaded {len(doc_chunks)} pages from {filename}")
             documents.extend(doc_chunks)
     return documents
@@ -112,6 +115,76 @@ def split_documents_spacy(documents, sentences_per_chunk=3):
                 new_chunks.append(Document(page_content=chunk_text, metadata=metadata))
     print(f"[spaCy Chunking] Created {len(new_chunks)} chunks from {len(documents)} documents.")
     return new_chunks
+
+def split_documents_markdown(documents, chunk_size=1000, chunk_overlap=100):
+    """
+    Split loaded documents using MarkdownHeaderTextSplitter for better structure preservation.
+    
+    Args:
+        documents: List of Document objects with markdown content
+        chunk_size: Maximum size of each chunk after header splitting
+        chunk_overlap: Overlap between chunks for continuity
+    
+    Returns:
+        List of Document chunks with preserved markdown structure
+    """
+    # Define headers to split on - matching the structure from page_scraper
+    headers_to_split_on = [
+        ("#", "Header 1"),      # Main title (e.g., "# Course Title")
+        ("##", "Header 2"),     # Major sections (e.g., "## Learning Outcomes", "## Description")
+        ("###", "Header 3"),    # Sub-sections if any
+    ]
+    
+    # Create markdown splitter
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on,
+        return_each_line=False,
+        strip_headers=False  # Keep headers for context
+    )
+    
+    # Secondary splitter for large sections
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+    
+    all_chunks = []
+    
+    for doc in documents:
+        try:
+            # First split by markdown headers
+            header_splits = markdown_splitter.split_text(doc.page_content)
+            
+            for header_doc in header_splits:
+                # Preserve original metadata and add header info
+                chunk_metadata = doc.metadata.copy()
+                
+                # Add header hierarchy information
+                if hasattr(header_doc, 'metadata') and header_doc.metadata:
+                    chunk_metadata.update(header_doc.metadata)
+                
+                # If chunk is still too large, split further
+                if len(header_doc.page_content) > chunk_size:
+                    sub_chunks = text_splitter.split_documents([Document(
+                        page_content=header_doc.page_content,
+                        metadata=chunk_metadata
+                    )])
+                    all_chunks.extend(sub_chunks)
+                else:
+                    all_chunks.append(Document(
+                        page_content=header_doc.page_content,
+                        metadata=chunk_metadata
+                    ))
+                    
+        except Exception as e:
+            print(f"[Markdown Splitting] Error processing document: {e}")
+            # Fallback to simple text splitting
+            fallback_chunks = text_splitter.split_documents([doc])
+            all_chunks.extend(fallback_chunks)
+    
+    print(f"[Markdown Chunking] Created {len(all_chunks)} chunks from {len(documents)} documents.")
+    return all_chunks
 
 # ========== Vector store creation ==========
 def create_vector_store(docs):
@@ -236,8 +309,23 @@ def update_vector_store(folder_path, include_scraped=True):
                 print("[Gemini3] No documents found to process.")
                 return
             
-            # Create vector store with all documents
-            chunks = split_documents_spacy(all_docs)
+            # Split documents based on content type
+            pdf_docs = [doc for doc in all_docs if doc.metadata.get('content_type') == 'pdf']
+            json_docs = [doc for doc in all_docs if doc.metadata.get('content_type') == 'scraped_web']
+            
+            chunks = []
+            
+            # Use spaCy for PDF documents - better semantic chunking
+            if pdf_docs:
+                pdf_chunks = split_documents_spacy(pdf_docs)
+                chunks.extend(pdf_chunks)
+                print(f"[Gemini3] Created {len(pdf_chunks)} chunks from PDF documents using spaCy")
+            
+            # Keep JSON/scraped documents as whole chunks - preserves context
+            if json_docs:
+                chunks.extend(json_docs)  # Add JSON documents directly without splitting
+                print(f"[Gemini3] Added {len(json_docs)} JSON documents as whole chunks to preserve context")
+            
             create_vector_store(chunks)
 
             # Only update source tracking after successful vector store creation
@@ -263,7 +351,7 @@ def build_rag_qa_chain():
     """
     Build a RetrievalQA chain using Chroma + Gemini.
     """
-    update_vector_store(KNOWLEDGE_BASE_DIR)
+    update_vector_store(KNOWLEDGE_BASE_DIR, include_scraped=True)
     vectorstore = Chroma(
         persist_directory=VECTOR_STORE_DIR,
         embedding_function=GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -274,9 +362,13 @@ def build_rag_qa_chain():
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
         template=(
-            "You are a helpful assistant for UNSW CSE Open Day."
-            " Always answer politely and concisely."
-            " If you do not know the answer, say 'Sorry, I don't know the answer to that question.'\n\n"
+            "You are a helpful assistant for UNSW CSE Open Day.\n\n"
+            "IMPORTANT: Use the provided context to answer the question. The context contains structured academic information in markdown format with sections like Description, Program Structure, Learning Outcomes, etc.\n\n"
+            "Instructions:\n"
+            "- Answer based on the provided context\n"
+            "- If the context contains relevant information, provide a comprehensive answer\n"
+            "- Only say 'Sorry, I don't know the answer to that question' if the context is completely unrelated to the question\n"
+            "- Be specific and detailed when the context provides relevant information\n\n"
             "Context:\n{context}\n\n"
             "Question:\n{question}\n\n"
             "Answer:"
@@ -372,8 +464,23 @@ def force_rebuild_vector_store():
             print("[Gemini3] No documents found to process.")
             return False
         
-        # Create vector store with all documents
-        chunks = split_documents_spacy(all_docs)
+        # Split documents based on content type
+        pdf_docs = [doc for doc in all_docs if doc.metadata.get('content_type') == 'pdf']
+        json_docs = [doc for doc in all_docs if doc.metadata.get('content_type') == 'scraped_web']
+        
+        chunks = []
+        
+        # Use spaCy for PDF documents - better semantic chunking
+        if pdf_docs:
+            pdf_chunks = split_documents_spacy(pdf_docs)
+            chunks.extend(pdf_chunks)
+            print(f"[Gemini3] Created {len(pdf_chunks)} chunks from PDF documents using spaCy")
+        
+        # Keep JSON/scraped documents as whole chunks - preserves context
+        if json_docs:
+            chunks.extend(json_docs)  # Add JSON documents directly without splitting
+            print(f"[Gemini3] Added {len(json_docs)} JSON documents as whole chunks to preserve context")
+        
         create_vector_store(chunks)
         
         # Update source tracking
@@ -424,10 +531,43 @@ def is_query_safe_by_gemini(query: str) -> bool:
 # ========= Gemini Query Rewqrite =========
 def rewrite_query_gemini(original_query: str) -> str:
     prompt = f"""
-        You are a helpful assistant that rewrites user queries to make them more specific, structured, and suitable for document retrieval.
+    You are a helpful assistant that rewrites user queries to make them more comprehensive and structured, so they retrieve the most complete and relevant academic information.
 
-        Input: "{original_query}"
-        Rewritten:
+    All documents are structured in Markdown format, containing sections like:
+
+    - ## Description
+    - ## Learning Outcomes
+    - ## Program Structure
+    - ## Study Details
+    - ## Academic Information
+    - ## Administrative Information
+
+    If the user query is vague or general (e.g., "Tell me about COMP9315"), rewrite it to request **all key academic details** from the document.
+
+    If the query is about a course or program code, or a specific question (e.g., about availability or entry requirements), still rephrase to **encourage complete context retrieval**.
+
+    Always include the code or course name explicitly in the rewritten query.
+
+    ---
+
+    ### Example 1
+    Input: "Tell me about COMP9020"
+    Rewritten: "Provide full academic and program information for COMP9020, including description, learning outcomes, structure, and study details"
+
+    ### Example 2
+    Input: "What is 5546?"
+    Rewritten: "Give all available information about program 5546, including description, outcomes, structure, and campus details"
+
+    ### Example 3
+    Input: "Where is ACTL5105 taught?"
+    Rewritten: "Provide study details and all other academic information for ACTL5105"
+
+    ---
+
+    Now rewrite the following:
+
+    Input: "{original_query}"
+    Rewritten:
     """
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")

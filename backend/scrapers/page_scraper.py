@@ -618,3 +618,135 @@ def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: t
             print(f"   - {url}")
     
     return docs
+
+
+# Global storage for scraping progress (in production, use Redis or database)
+_scraping_sessions = {}
+
+def start_scraping_with_progress(urls: List[str], auto_update_vector_store: bool = True) -> str:
+    """
+    Start scraping with progress tracking and return a session ID
+    """
+    import uuid
+    from threading import Thread
+    
+    scraping_id = str(uuid.uuid4())[:8]
+    
+    # Initialize progress tracking
+    _scraping_sessions[scraping_id] = {
+        "status": "starting",
+        "total_urls": len(urls),
+        "completed": 0,
+        "failed": 0,
+        "current_url": None,
+        "completed_urls": [],
+        "failed_urls": [],
+        "start_time": datetime.now().isoformat(),
+        "estimated_completion": None,
+        "cancelled": False,
+        "statistics": {
+            "success_rate": 0,
+            "average_content_length": 0
+        }
+    }
+    
+    # Start scraping in background thread
+    def scrape_with_progress():
+        try:
+            session = _scraping_sessions[scraping_id]
+            session["status"] = "running"
+            
+            docs = []
+            failed = []
+            total_content_length = 0
+            
+            for i, url in enumerate(urls):
+                # Check if cancelled
+                if session.get("cancelled"):
+                    session["status"] = "cancelled"
+                    return
+                
+                # Update current progress
+                session["current_url"] = url
+                session["status"] = f"scraping_{i+1}_of_{len(urls)}"
+                
+                # Estimate completion time
+                if i > 0:
+                    elapsed = (datetime.now() - datetime.fromisoformat(session["start_time"])).total_seconds()
+                    avg_time_per_url = elapsed / i
+                    remaining_time = avg_time_per_url * (len(urls) - i)
+                    session["estimated_completion"] = (datetime.now().timestamp() + remaining_time)
+                
+                # Add delay between requests
+                if i > 0:
+                    add_random_delay(2.0, 4.0)
+                
+                # Scrape single page
+                doc = scrape_single_page(url)
+                if doc:
+                    docs.append(doc)
+                    save_page_content(doc)
+                    session["completed_urls"].append({
+                        "url": url,
+                        "title": doc.metadata.get("title", "Unknown"),
+                        "content_length": len(doc.page_content)
+                    })
+                    total_content_length += len(doc.page_content)
+                else:
+                    failed.append(url)
+                    session["failed_urls"].append(url)
+                
+                # Update counters
+                session["completed"] = len(docs)
+                session["failed"] = len(failed)
+                session["statistics"]["success_rate"] = (len(docs) / (i + 1)) * 100
+                
+                if len(docs) > 0:
+                    session["statistics"]["average_content_length"] = total_content_length // len(docs)
+            
+            # Final status
+            if not session.get("cancelled"):
+                session["status"] = "completed"
+                session["current_url"] = None
+                
+                # Auto-update vector store if requested
+                if auto_update_vector_store and docs:
+                    session["status"] = "updating_vector_store"
+                    try:
+                        from rag.gemini3 import update_vector_store_with_scraped
+                        update_vector_store_with_scraped()
+                        session["vector_store_updated"] = True
+                    except Exception as e:
+                        print(f"Vector store update failed: {e}")
+                        session["vector_store_updated"] = False
+                
+                session["status"] = "finished"
+                
+        except Exception as e:
+            session["status"] = "error"
+            session["error"] = str(e)
+            print(f"Scraping error: {e}")
+    
+    # Start background thread
+    thread = Thread(target=scrape_with_progress, daemon=True)
+    thread.start()
+    
+    return scraping_id
+
+
+def get_scraping_progress(scraping_id: str) -> Optional[Dict]:
+    """
+    Get current progress for a scraping session
+    """
+    return _scraping_sessions.get(scraping_id)
+
+
+def cancel_scraping_session(scraping_id: str) -> bool:
+    """
+    Cancel an ongoing scraping session
+    """
+    if scraping_id in _scraping_sessions:
+        _scraping_sessions[scraping_id]["cancelled"] = True
+        _scraping_sessions[scraping_id]["status"] = "cancelling"
+        return True
+    return False
