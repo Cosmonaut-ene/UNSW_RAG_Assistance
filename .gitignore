@@ -117,12 +117,24 @@ documents/
 
 # Vector store and embeddings
 backend/rag/vector_store/
-backend/rag/vector_store/*.sqlite3
+backend/rag/vector_store/chroma.sqlite3
 backend/rag/vector_store/*.bin
 backend/rag/vector_store/source_files.txt
 vector_store/
 embeddings/
 chroma/
+backend/rag/scraped_content/content
+
+# Scraped content and temporary data files
+page_content.json
+content.json
+scraped_data.json
+[0-9]*.json
+*.scraped.json
+
+# Python installer and setup scripts
+get-pip.py
+setup-*.py
 
 # Uploaded files
 uploads/
