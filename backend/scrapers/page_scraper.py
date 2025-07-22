@@ -382,11 +382,25 @@ def scrape_single_page(url: str) -> Optional[Document]:
         content_parts = []
         
         # Title and basic info
-        if cleaned_content.get("title"):
-            content_parts.append(f"# {cleaned_content['title']}")
+        title = cleaned_content.get("title", "").strip()
+        code = cleaned_content.get("code", "").strip()
+        source = url.strip()
+        type_label = (
+            cleaned_content.get("contentTypeLabel") or
+            cleaned_content.get("academic_item_type")
+        )
         
-        if cleaned_content.get("code"):
-            content_parts.append(f"**Code:** {cleaned_content['code']}")
+        if type_label == "Double Degree":
+            type_label = "Double Degree Program"
+
+        if title:
+            content_parts.append(f"# {title} - {type_label} {code}")
+
+        if code:
+            content_parts.append(f"**{type_label} Code:** {code}")
+            
+        if source:
+            content_parts.append(f"**Source URL:** {source}")
         
         # Academic details
         academic_info = []

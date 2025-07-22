@@ -726,17 +726,26 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             input_variables=["history", "context", "question"],
             template = (
                 "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+
                 "== Conversation History ==\n"
                 "{history}\n\n"
+
                 "== Current Query ==\n"
                 "The following context was retrieved using hybrid search (semantic + keyword matching):\n\n"
-                "Context: {context}\n\n"
-                "Question: {question}\n\n"
+                "📚 Context:\n{context}\n\n"
+                "❓ Question:\n{question}\n\n"
+
+                "== 🧠 Instructions ==\n"
                 "Please answer the question based on the conversation history and the provided context. "
-                "If the user uses pronouns like 'this course', 'it', or 'that program', refer to the previous messages to determine what they mean. "
-                "Use a friendly, conversational tone with emojis where appropriate. "
-                "If comparing multiple items, use markdown tables for clarity."
-                "If a source URL is available in the context (especially for the specific object being asked about), you must include the exact URL at the end of your answer as a clickable link. Do not omit it."
+                "If the user uses vague references like 'this course', 'it', or 'that program', refer to the conversation history to determine what they are referring to.\n\n"
+
+                "Use a friendly, conversational tone with emojis where appropriate 😊. "
+                "If comparing multiple items (e.g., programs or courses), use **markdown tables** for clarity.\n\n"
+
+                "== 🔗 Link Requirements ==\n"
+                "If a source URL is available in the context (e.g., a line like '**Source URL:** https://...'), you **must** extract it and include it at the end of your answer as a clickable markdown link. "
+                "Format it as: 📎 [View in Handbook](URL). Do **not** say 'no link available' if the URL is present in the context.\n\n"
+                "Always include a clickable link if the user requests one or if the question is about a specific program, specialisation or course."
             )
         )
         final_answer = llm.invoke(prompt_template.format(
