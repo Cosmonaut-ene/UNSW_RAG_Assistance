@@ -11,6 +11,7 @@ from langchain.chains import RetrievalQA
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
+from .hybrid_search import HybridSearchEngine
 
 # ========== Google API keys ==========
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "rag/key.json")
@@ -21,6 +22,17 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 VECTOR_STORE_DIR = os.path.join(CURRENT_DIR, "vector_store")
 KNOWLEDGE_BASE_DIR = os.path.join(CURRENT_DIR, "docs")
 SCRAPED_CONTENT_DIR = os.path.join(CURRENT_DIR, "scraped_content")
+
+# ========== Hybrid Search ==========
+# 初始化混合搜索引擎（延迟初始化）
+_hybrid_search_engine = None
+
+def get_hybrid_search_engine():
+    global _hybrid_search_engine
+    if _hybrid_search_engine is None:
+        content_dir = os.path.join(SCRAPED_CONTENT_DIR, "content")
+        _hybrid_search_engine = HybridSearchEngine(content_dir)
+    return _hybrid_search_engine
 
 # ========== Load Documents ==========
 def load_documents_from_folder(folder_path):
@@ -356,7 +368,7 @@ def build_rag_qa_chain():
         persist_directory=VECTOR_STORE_DIR,
         embedding_function=GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     )
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     prompt_template = PromptTemplate(
@@ -613,6 +625,163 @@ def fallback_llm_answer(question: str) -> str:
     return llm.invoke(question).content
 
 # ========= Query Processing Pipeline ============
+def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list = None) -> dict:
+    """
+    使用混合搜索(RAG + 关键词)回答问题
+    """
+    print(f"[Gemini3] Processing question with hybrid search: {question}")
+    
+    # 1.Safety Check
+    if not is_query_safe_by_gemini(question):
+        return {
+            "answer": "I cannot process this query as it may violate safety guidelines. Please rephrase your question.",
+            "sources": [],
+            "matched_files": [],
+            "safety_blocked": True
+        }
+    
+    # 2.Rewrite Query
+    rewritten_query = rewrite_query_gemini(question)
+    print(f"[Rewritten Query] {rewritten_query}")
+    
+    # 3.获取RAG结果
+    result = qa_chain.invoke({"query": rewritten_query})
+    rag_sources = result.get("source_documents", [])
+    
+    # 转换RAG结果为标准格式
+    rag_results = []
+    for doc in rag_sources:
+        rag_results.append({
+            'page_content': doc.page_content,
+            'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
+        })
+    
+    # 4.执行混合搜索
+    hybrid_engine = get_hybrid_search_engine()
+    hybrid_results = hybrid_engine.search_hybrid(rewritten_query, rag_results, max_results=5)
+    
+    print(f"[Hybrid Search] Found {len(hybrid_results)} combined results")
+    
+    # 如果混合搜索没有结果，使用fallback
+    if not hybrid_results:
+        print("[Gemini3] No results from hybrid search, using LLM fallback.")
+        fallback_answer = fallback_llm_answer(question)
+        return {
+            "answer": fallback_answer,
+            "sources": [],
+            "matched_files": [],
+            "safety_blocked": False
+        }
+    
+    # 显示混合搜索结果
+    print(f"\n{'='*80}")
+    print(f"HYBRID SEARCH RESULTS FOR QUERY: {question}")
+    print(f"{'='*80}")
+    for i, doc in enumerate(hybrid_results, 1):
+        print(f"\n--- RESULT {i} ---")
+        metadata = doc.get('metadata', {})
+        source_file = metadata.get('source', 'Unknown')
+        search_type = metadata.get('search_type', 'unknown')
+        hybrid_score = metadata.get('hybrid_score', 0)
+        
+        filename = source_file.split('/')[-1] if '/' in source_file else source_file
+        
+        print(f"SOURCE: {filename}")
+        print(f"SEARCH TYPE: {search_type}")
+        print(f"HYBRID SCORE: {hybrid_score:.2f}")
+        
+        if 'matched_terms' in metadata:
+            print(f"MATCHED: {metadata['matched_terms']}")
+        
+        print(f"CONTENT ({len(doc.get('page_content', ''))} chars):")
+        lines = doc.get('page_content', '').split('\n')
+        for line_num, line in enumerate(lines[:10], 1):  # 只显示前10行
+            print(f"{line_num:3d}: {line}")
+        if len(lines) > 10:
+            print("    ... (truncated)")
+        print(f"{'─'*60}")
+    print(f"{'='*80}\n")
+    
+    # 5.使用混合结果重新构建context并生成答案
+    context_parts = []
+    for doc in hybrid_results:
+        context_parts.append(doc.get('page_content', ''))
+    
+    combined_context = '\n\n'.join(context_parts)
+    
+    # 格式化对话历史
+    from services.query_processor import format_conversation_history
+    formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    
+    # 使用模板生成最终答案
+    vectorstore = Chroma(
+        persist_directory=VECTOR_STORE_DIR,
+        embedding_function=GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    )
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    
+    # 构建包含历史的prompt
+    if formatted_history:
+        prompt_template = PromptTemplate(
+            input_variables=["history", "context", "question"],
+            template = (
+                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "== Conversation History ==\n"
+                "{history}\n\n"
+                "== Current Query ==\n"
+                "The following context was retrieved using hybrid search (semantic + keyword matching):\n\n"
+                "Context: {context}\n\n"
+                "Question: {question}\n\n"
+                "Please answer the question based on the conversation history and the provided context. "
+                "If the user uses pronouns like 'this course', 'it', or 'that program', refer to the previous messages to determine what they mean. "
+                "Use a friendly, conversational tone with emojis where appropriate. "
+                "If comparing multiple items, use markdown tables for clarity."
+                "If a source URL is available in the context (especially for the specific object being asked about), you must include the exact URL at the end of your answer as a clickable link. Do not omit it."
+            )
+        )
+        final_answer = llm.invoke(prompt_template.format(
+            history=formatted_history,
+            context=combined_context, 
+            question=question
+        ))
+    else:
+        prompt_template = PromptTemplate(
+            input_variables=["context", "question"],
+            template=(
+                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "The following context was found using hybrid search (combining semantic and keyword matching):\n\n"
+                "Context: {context}\n\n"
+                "Question: {question}\n\n"
+                "Please provide a comprehensive answer based on the context above. "
+                "Use a friendly, conversational tone with emojis where appropriate. "
+                "If comparing multiple items, use markdown tables for clarity."
+            )
+        )
+        final_answer = llm.invoke(prompt_template.format(context=combined_context, question=question))
+    
+    # 6.提取源文件信息
+    matched_files = []
+    source_details = []
+    
+    for doc in hybrid_results:
+        source_details.append(doc.get('page_content', ''))
+        metadata = doc.get('metadata', {})
+        source_file = metadata.get('source', 'Unknown')
+        if source_file != 'Unknown':
+            filename = source_file.split('/')[-1] if '/' in source_file else source_file
+            if filename not in matched_files:
+                matched_files.append(filename)
+    
+    print(f"[Hybrid Search] Matched files: {matched_files}")
+    
+    return {
+        "answer": final_answer.content if hasattr(final_answer, 'content') else str(final_answer),
+        "sources": source_details,
+        "matched_files": matched_files,
+        "safety_blocked": False,
+        "search_type": "hybrid"
+    }
+
 def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     """
     Try answering via RAG first, fallback to direct LLM if no context found.
