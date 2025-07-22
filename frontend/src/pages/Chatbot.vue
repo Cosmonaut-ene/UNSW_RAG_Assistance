@@ -29,10 +29,16 @@
             :key="index"
             :class="msg.sender"
           >
-            <div class="message-content">
+            <div class="message-content"
+                v-if="msg.sender === 'bot'">
+              <LoadingSpinner v-if="msg.rawText === 'Thinking...'" />
+              <span v-else v-html="msg.displayText"></span>
+            </div>
+            <div class="message-content"
+                v-else>
               {{ msg.text }}
             </div>
-            <div v-if="msg.sender === 'bot'" class="msg-actions">
+            <div v-if="msg.canFeedback" class="msg-actions">
               <button 
                 class="icon-btn" 
                 @click="likeMsg(index)" 
@@ -55,7 +61,7 @@
               </button>
               <button 
                 class="icon-btn" 
-                @click="copyMsg(msg.text, index)" 
+                @click="copyMsg(msg.displayText, index)" 
                 title="Copy"
                 :data-message-index="index"
               >
@@ -81,19 +87,35 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
+import MarkdownIt from 'markdown-it'
+import LoadingSpinner from '../components/LoadingSpinner.vue'
+
+const md = new MarkdownIt({
+  breaks: true,
+  linkify: true,
+  html: false,
+})
+
+const renderMarkdown = (text) => {
+  return md.render(text || '')
+}
 
 const messages = ref([
-  { sender: 'bot', text: 'Hello! How can I help you today?' }
+  {
+    sender: 'bot',
+    rawText: 'Hello! How can I help you today?',
+    displayText: md.render('Hello! How can I help you today?'),
+    canFeedback: false
+  }
 ])
 const userInput = ref('')
 const isDark = ref(false)
 const chatMain = ref(null)
 const showSidebar = ref(window.innerWidth > 900)
 
-// 添加反馈功能所需的状态管理
 const sessionId = ref(`session_${Math.random().toString(36).substr(2, 9)}`)
-const botMessages = ref([]) // 存储每个bot消息的详细信息
-const ratingGiven = ref([]) // 追踪哪些消息已经给过评价
+const botMessages = ref([]) 
+const ratingGiven = ref([]) 
 
 watch(isDark, (val) => {
   document.documentElement.classList.toggle('dark', val)
@@ -113,9 +135,9 @@ const sendMessage = async () => {
   const question = userInput.value.trim()
   const questionTime = new Date().toISOString()
   
-  messages.value.push({ sender: 'user', text: question })
+  messages.value.push({ sender: 'user', text: question, canFeedback: false })
   userInput.value = ''
-  messages.value.push({ sender: 'bot', text: 'Thinking...' })
+  messages.value.push({ sender: 'bot', rawText: 'Thinking...', displayText: 'Thinking...', canFeedback: true })
   
   try {
     const res = await fetch('http://localhost:5000/api/query', {
@@ -128,9 +150,11 @@ const sendMessage = async () => {
     })
     const data = await res.json()
     messages.value.pop()
-    messages.value.push({ sender: 'bot', text: data.answer })
+    messages.value.push({ sender: 'bot', rawText: data.answer, displayText: '', canFeedback: true })
+    const msgIdx = messages.value.length - 1
+    typewriterEffect(msgIdx, data.answer)
     
-    // 记录这条bot回答的信息
+    
     const botMessageInfo = {
       messageIndex: messages.value.length - 1,
       questionText: question,
@@ -143,15 +167,14 @@ const sendMessage = async () => {
     
   } catch (err) {
     messages.value.pop()
-    messages.value.push({ sender: 'bot', text: 'Sorry, something went wrong.' })
+    messages.value.push({ sender: 'bot', rawText: 'Sorry, something went wrong.', displayText: md.render('Sorry, something went wrong.'), canFeedback: true })
     console.error(err)
   }
 }
 
-// 提交反馈到后端
+
 const submitFeedback = async (feedbackType, messageIndex) => {
   try {
-    // 直接通过messageIndex找到对应的bot消息信息
     const botMessageInfo = botMessages.value.find(b => b.messageIndex === messageIndex)
     
     if (!botMessageInfo) {
@@ -166,14 +189,14 @@ const submitFeedback = async (feedbackType, messageIndex) => {
         session_id: sessionId.value,
         feedback_type: feedbackType,
         timestamp: botMessageInfo.questionTime,
-        question_text: botMessageInfo.questionText // 可选：帮助后端更精确定位
+        question_text: botMessageInfo.questionText 
       })
     })
 
     const data = await res.json()
     
     if (res.ok) {
-      // 只有positive和negative才标记为已评价
+      
       if (feedbackType === 'positive' || feedbackType === 'negative') {
         const ratingIndex = botMessages.value.findIndex(b => b.messageIndex === messageIndex)
         if (ratingIndex !== -1) {
@@ -191,13 +214,13 @@ const submitFeedback = async (feedbackType, messageIndex) => {
   }
 }
 
-// 检查是否已经给过评价
+
 const hasRating = (messageIndex) => {
   const ratingIndex = botMessages.value.findIndex(b => b.messageIndex === messageIndex)
   return ratingIndex !== -1 ? ratingGiven.value[ratingIndex] : false
 }
 
-// 点赞功能
+
 const likeMsg = async (idx) => {
   if (hasRating(idx)) {
     ElMessage.info('You have already rated this message')
@@ -212,7 +235,7 @@ const likeMsg = async (idx) => {
   }
 }
 
-// 点踩功能
+
 const dislikeMsg = async (idx) => {
   if (hasRating(idx)) {
     ElMessage.info('You have already rated this message')
@@ -227,13 +250,11 @@ const dislikeMsg = async (idx) => {
   }
 }
 
-// 复制功能 - 可以多次使用
 const copyMsg = async (text, idx = null) => {
   try {
     await navigator.clipboard.writeText(text)
     ElMessage.success('Copied!')
     
-    // 每次复制都提交copy反馈（不受评价限制）
     if (idx !== null) {
       await submitFeedback('copy', idx)
     }
@@ -244,6 +265,22 @@ const copyMsg = async (text, idx = null) => {
 
 const handleResize = () => {
   showSidebar.value = window.innerWidth > 900
+}
+
+function typewriterEffect(messageIndex, rawMarkdown, speed = 18, step = 2) {
+  let i = 0
+
+  function type() {
+    i += Math.floor(Math.random() * (step - 1 + 1)) + 1
+    if (i > rawMarkdown.length) i = rawMarkdown.length
+    messages.value[messageIndex].displayText = md.render(rawMarkdown.slice(0, i))
+    if (i < rawMarkdown.length) {
+      setTimeout(type, speed)
+    } else {
+      messages.value[messageIndex].displayText = md.render(rawMarkdown)
+    }
+  }
+  type()
 }
 onMounted(() => window.addEventListener('resize', handleResize))
 onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
@@ -279,7 +316,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   padding: 0 32px;
   letter-spacing: -0.01em;
   gap: 18px;
-  position: relative; /* 让绝对居中生效 */
+  position: relative; 
 }
 
 .chat-header .sidebar-logo {
@@ -291,7 +328,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  white-space: nowrap; /* 避免换行导致偏移 */
+  white-space: nowrap; 
 }
 
 .header-actions {
@@ -374,19 +411,19 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
 }
 
 /* Message Styles */
-.chat-message { display: flex; flex-direction: column; max-width: 72%; }
+.chat-message { display: flex; flex-direction: column; width: 72%; }
 .bot { align-self: flex-start; }
 .bot .message-content {
   background-color: #f4f5f6;
-  border-radius: 18px 18px 6px 18px;
-  padding: 16px 20px;
+  border-radius: 18px 18px 18px 6px;
+  padding: 0 20px;
   margin-left: 0;
-  margin-right: auto;
+  margin-right: 0;
 }
 .user { align-self: flex-end; }
 .user .message-content {
   background-color: #cfe9ff;
-  border-radius: 18px 18px 18px 6px;
+  border-radius: 18px 18px 6px 18px;
   padding: 16px 20px;
   margin-right: 0;
   margin-left: auto;

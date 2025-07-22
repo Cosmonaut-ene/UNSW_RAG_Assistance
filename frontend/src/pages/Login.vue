@@ -31,7 +31,7 @@
               class="login-btn"
               type="primary"
               :loading="loading"
-              @click="handleLogin"
+              native-type="submit"
               style="width: 100%;"
             >Login</el-button>
           </el-form-item>
@@ -60,7 +60,7 @@ const handleLogin = async () => {
   }
   loading.value = true
   try {
-    const res = await fetch('/api/admin/login', {
+    const res = await fetch('http://localhost:5000/api/admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value)

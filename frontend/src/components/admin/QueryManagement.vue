@@ -86,6 +86,7 @@ const filterType = ref('all')
 const editDialogVisible = ref(false)
 const selectedQuery = ref(null)
 const editAnswer = ref('')
+const token = localStorage.getItem('admin_token')
 
 const fetchQueries = async () => {
   try {
@@ -95,7 +96,7 @@ const fetchQueries = async () => {
       type: filterType.value,
     })
     const res = await fetch(`http://localhost:5000/api/admin/queries?${params}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` }
+      headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
@@ -126,7 +127,7 @@ const saveEdit = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('admin_token')}`
+        Authorization: `Bearer ${token}`
       },
       body: JSON.stringify({ id: selectedQuery.value.id, answer: editAnswer.value })
     })
@@ -145,7 +146,7 @@ const deleteQuery = (row) => {
       const res = await fetch(`http://localhost:5000/api/admin/delete-query/${row.id}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('admin_token')}`
+          Authorization: `Bearer ${token}`
         }
       })
       if (!res.ok) throw new Error()
