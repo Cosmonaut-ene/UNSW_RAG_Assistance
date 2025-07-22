@@ -12,6 +12,7 @@ admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DOCS_FOLDER = os.path.abspath(os.path.join(CURRENT_DIR, "..", "rag", "docs"))
+SCRAPED_CONTENT_FOLDER = os.path.abspath(os.path.join(CURRENT_DIR, "..", "rag", "scraped_content", "content"))
 
 
 # ========== Auth ==========
@@ -85,12 +86,17 @@ def upload_file():
 @admin_bp.route('/files', methods=['GET'])
 def list_files():
     files = []
-    for filename in os.listdir(DOCS_FOLDER):
-        if filename.endswith(".pdf"):
-            files.append({
-                "name": filename,
-                "url": f"/docs/{filename}"
-            })
+    
+    # Add PDF files from docs folder
+    if os.path.exists(DOCS_FOLDER):
+        for filename in os.listdir(DOCS_FOLDER):
+            if filename.endswith(".pdf"):
+                files.append({
+                    "name": filename,
+                    "url": f"/docs/{filename}",
+                    "type": "pdf"
+                })    
+   
     return jsonify(files)
 
 @admin_bp.route('/delete/<path:filename>', methods=['DELETE'])

@@ -95,7 +95,7 @@ const fetchQueries = async () => {
       limit: limit.value,
       type: filterType.value,
     })
-    const res = await fetch(`http://localhost:5000/api/admin/queries?${params}`, {
+    const res = await fetch(`/api/admin/queries?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error()
@@ -123,7 +123,7 @@ const editQuery = (row) => {
 }
 const saveEdit = async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/admin/update-query', {
+    const res = await fetch('/api/admin/update-query', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -143,7 +143,7 @@ const saveEdit = async () => {
 const deleteQuery = (row) => {
   ElMessageBox.confirm('Confirm delete this query?', 'Warning', { type: 'warning' })
     .then(async () => {
-      const res = await fetch(`http://localhost:5000/api/admin/delete-query/${row.id}`, {
+      const res = await fetch(`/api/admin/delete-query/${row.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -163,7 +163,7 @@ const formatTime = (t) => {
 
 const exportChatLog = async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/admin/chatlog', {
+    const res = await fetch('/api/admin/chatlog', {
       headers: {
         Authorization: `Bearer ${token}`
       }

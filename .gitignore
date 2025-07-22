@@ -234,3 +234,4 @@ checkpoints/
 # ==========================================
 .claude
 
+backend/rag/vector_store/source_files.txt

@@ -51,10 +51,20 @@ const token = localStorage.getItem('admin_token')
 
 const fetchFiles = async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/admin/files')
+    const token = localStorage.getItem('admin_token')
+    const res = await fetch('/api/admin/files', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
     const data = await res.json()
+    console.log('Fetched files:', data)
     files.value = data
-  } catch {
+  } catch (error) {
+    console.error('Failed to fetch files:', error)
     ElMessage.error('Failed to fetch files.')
   }
 }
@@ -77,7 +87,7 @@ const uploadFile = async () => {
   formData.append('file', file.value)
   try {
     const token = localStorage.getItem('admin_token')
-    const res = await fetch('http://localhost:5000/api/admin/upload', {
+    const res = await fetch('/api/admin/upload', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`
@@ -95,7 +105,7 @@ const uploadFile = async () => {
 
 const deleteFile = async (row) => {
   try {
-    const res = await fetch(`http://localhost:5000/api/admin/delete/${encodeURIComponent(row.name)}`, {
+    const res = await fetch(`/api/admin/delete/${encodeURIComponent(row.name)}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`

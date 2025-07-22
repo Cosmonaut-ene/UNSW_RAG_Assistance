@@ -140,7 +140,7 @@ const sendMessage = async () => {
   messages.value.push({ sender: 'bot', rawText: 'Thinking...', displayText: 'Thinking...', canFeedback: true })
   
   try {
-    const res = await fetch('http://localhost:5000/api/query', {
+    const res = await fetch('/api/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -182,7 +182,7 @@ const submitFeedback = async (feedbackType, messageIndex) => {
       return false
     }
     
-    const res = await fetch('http://localhost:5000/api/feedback', {
+    const res = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
