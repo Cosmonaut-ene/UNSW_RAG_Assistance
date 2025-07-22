@@ -17,7 +17,7 @@ def query():
 
     print(f"\nProcessing question: {question}")
 
-    ai_answer, can_answer, matched_files = process_with_ai(question)
+    ai_answer, can_answer, matched_files = process_with_ai(question, session_id)
 
     # Check if query was safety blocked
     safety_blocked = "violate safety guidelines" in ai_answer.lower()

@@ -9,6 +9,52 @@ from dateutil import tz
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
+def get_recent_conversation_history(session_id, limit=5):
+    """获取指定session的最近5轮对话历史"""
+    if not session_id or session_id == "unknown_session":
+        return []
+    
+    all_logs = load_all_chat_logs()
+    # 只获取该session且AI已回答的记录
+    session_logs = [
+        log for log in all_logs 
+        if log.get('session_id') == session_id 
+        and log.get('ai_answered', False)
+        and log.get('question', '').strip()
+        and log.get('answer', '').strip()
+    ]
+    
+    # 按时间倒序排列，获取最近的记录
+    session_logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    recent_logs = session_logs[:limit]
+    
+    # 转回时间顺序（旧到新）以符合对话流程
+    recent_logs.reverse()
+    
+    print(f"[QueryProcessor] Found {len(recent_logs)} recent conversations for session {session_id}")
+    return recent_logs
+
+def format_conversation_history(history_logs):
+    """将历史对话格式化为prompt可用的格式"""
+    if not history_logs:
+        return ""
+    
+    formatted_lines = []
+    for i, log in enumerate(history_logs, 1):
+        question = log.get('question', '').strip()
+        answer = log.get('answer', '').strip()
+        
+        if question and answer:
+            # 截断过长的答案以节省token
+            if len(answer) > 200:
+                answer = answer[:200] + "..."
+            
+            formatted_lines.append(f"用户: {question}")
+            formatted_lines.append(f"助手: {answer}")
+            formatted_lines.append("")  # 空行分隔
+    
+    return "\n".join(formatted_lines).strip()
+
 def find_best_answer(question):
     all_logs = load_all_chat_logs()
     answered_logs = [log for log in all_logs if log.get("ai_answered")]
@@ -48,7 +94,7 @@ def find_best_answer(question):
 
 #     return None
 
-def process_with_ai(question):
+def process_with_ai(question, session_id=None):
     
     answer, found = find_best_answer(question)
     if found:
@@ -56,9 +102,13 @@ def process_with_ai(question):
 
     question_lower = question.lower().strip()
     
+    # 获取对话历史
+    conversation_history = get_recent_conversation_history(session_id) if session_id else []
+    
     try:
         print("[QueryProcessor] Trying RAG...")
-        rag_result = process_with_rag_detailed(question)
+        # 将历史传递给RAG处理函数
+        rag_result = process_with_rag_detailed(question, conversation_history=conversation_history)
         rag_answer = rag_result.get("answer", "")
         matched_files = rag_result.get("matched_files", [])
         safety_blocked = rag_result.get("safety_blocked", False)
@@ -73,6 +123,7 @@ def process_with_ai(question):
         else:
             print(f"[QueryProcessor] RAG Answer: {rag_answer[:50]}...")
             print(f"[QueryProcessor] Matched files: {matched_files}")
+            print(f"[QueryProcessor] Used conversation history: {len(conversation_history)} previous exchanges")
             return rag_answer, True, matched_files
     except Exception as e:
         print(f"[QueryProcessor] RAG failed: {e}")
