@@ -24,7 +24,7 @@ KNOWLEDGE_BASE_DIR = os.path.join(CURRENT_DIR, "docs")
 SCRAPED_CONTENT_DIR = os.path.join(CURRENT_DIR, "scraped_content")
 
 # ========== Hybrid Search ==========
-# 初始化混合搜索引擎（延迟初始化）
+# Initialize hybrid search engine (lazy initialization)
 _hybrid_search_engine = None
 
 def get_hybrid_search_engine():
@@ -631,7 +631,7 @@ def fallback_llm_answer(question: str) -> str:
 # ========= Query Processing Pipeline ============
 def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list = None) -> dict:
     """
-    使用混合搜索(RAG + 关键词)回答问题
+    Answer questions using hybrid search (RAG + keyword)
     """
     print(f"[Gemini3] Processing question with hybrid search: {question}")
     
@@ -648,11 +648,11 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
     rewritten_query = rewrite_query_gemini(question)
     print(f"[Rewritten Query] {rewritten_query}")
     
-    # 3.获取RAG结果
+    # 3. Get RAG results
     result = qa_chain.invoke({"query": rewritten_query})
     rag_sources = result.get("source_documents", [])
     
-    # 转换RAG结果为标准格式
+    # Convert RAG results to standard format
     rag_results = []
     for doc in rag_sources:
         rag_results.append({
@@ -660,13 +660,13 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
         })
     
-    # 4.执行混合搜索
+    # 4. Execute hybrid search
     hybrid_engine = get_hybrid_search_engine()
     hybrid_results = hybrid_engine.search_hybrid(rewritten_query, rag_results, max_results=5)
     
     print(f"[Hybrid Search] Found {len(hybrid_results)} results after threshold filtering")
     
-    # 如果混合搜索没有结果，使用fallback
+    # If hybrid search has no results, use fallback
     if not hybrid_results:
         print("[Gemini3] No results from hybrid search after filtering, using LLM fallback.")
         fallback_answer = fallback_llm_answer(question)
@@ -677,7 +677,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             "safety_blocked": False
         }
     
-    # 显示混合搜索结果
+    # Display hybrid search results
     print(f"\n{'='*80}")
     print(f"HYBRID SEARCH RESULTS FOR QUERY: {question}")
     print(f"{'='*80}")
@@ -699,32 +699,32 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
         
         print(f"CONTENT ({len(doc.get('page_content', ''))} chars):")
         lines = doc.get('page_content', '').split('\n')
-        for line_num, line in enumerate(lines[:10], 1):  # 只显示前10行
+        for line_num, line in enumerate(lines[:10], 1):  # Only show first 10 lines
             print(f"{line_num:3d}: {line}")
         if len(lines) > 10:
             print("    ... (truncated)")
         print(f"{'─'*60}")
     print(f"{'='*80}\n")
     
-    # 5.使用混合结果重新构建context并生成答案
+    # 5. Use hybrid results to rebuild context and generate answer
     context_parts = []
     for doc in hybrid_results:
         context_parts.append(doc.get('page_content', ''))
     
     combined_context = '\n\n'.join(context_parts)
     
-    # 格式化对话历史
+    # Format conversation history
     from services.query_processor import format_conversation_history
     formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
     
-    # 使用模板生成最终答案
+    # Use template to generate final answer
     vectorstore = Chroma(
         persist_directory=VECTOR_STORE_DIR,
         embedding_function=GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     )
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
     
-    # 构建包含历史的prompt
+    # Build prompt with history
     if formatted_history:
         prompt_template = PromptTemplate(
             input_variables=["history", "context", "question"],
@@ -772,7 +772,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
         )
         final_answer = llm.invoke(prompt_template.format(context=combined_context, question=question))
     
-    # 6.提取源文件信息
+    # 6. Extract source file information
     matched_files = []
     source_details = []
     
