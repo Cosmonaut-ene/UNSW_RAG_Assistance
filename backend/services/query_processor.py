@@ -5,9 +5,16 @@ from difflib import SequenceMatcher
 from services.log_store import load_all_chat_logs, append_chat_log
 from rag import process_with_rag, process_with_rag_detailed
 from dateutil import tz
+import time
+import uuid
 
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+def estimate_tokens(text):
+    if not text:
+        return 0
+    return len(text) // 4  #约4个字符=1个token
 
 def get_recent_conversation_history(session_id, limit=5):
     """获取指定session的最近5轮对话历史"""
@@ -15,13 +22,14 @@ def get_recent_conversation_history(session_id, limit=5):
         return []
     
     all_logs = load_all_chat_logs()
-    # 只获取该session且AI已回答的记录
+    # 只获取该session且AI已回答的记录，排除统计记录
     session_logs = [
         log for log in all_logs 
         if log.get('session_id') == session_id 
         and log.get('ai_answered', False)
         and log.get('question', '').strip()
         and log.get('answer', '').strip()
+        and log.get("type") != "stats_summary"
     ]
     
     # 按时间倒序排列，获取最近的记录
@@ -57,7 +65,7 @@ def format_conversation_history(history_logs):
 
 def find_best_answer(question):
     all_logs = load_all_chat_logs()
-    answered_logs = [log for log in all_logs if log.get("ai_answered")]
+    answered_logs = [log for log in all_logs if log.get("ai_answered") and log.get("type") != "stats_summary"] # 排除统计记录，只检查真实的查询记录
     print(f"[QueryProcessor] Checking {len(answered_logs)} answered logs.")
     best_match = None
     best_similarity = 0.0
@@ -95,18 +103,35 @@ def find_best_answer(question):
 #     return None
 
 def process_with_ai(question, session_id=None):
+    # 开始性能跟踪
+    start_time = time.time()
+    processing_steps = []
+    cache_hit = False
     
+    # 检查缓存记录
+    processing_steps.append("cache_check")
     answer, found = find_best_answer(question)
     if found:
-        return answer, True, []
+        cache_hit = True
+        processing_steps.append("cache_hit")
+        response_time = int((time.time() - start_time) * 1000)
+        tokens_used = estimate_tokens(question + answer)
+        return answer, True, [], {
+            "response_time_ms": response_time,
+            "tokens_used": tokens_used,
+            "processing_steps": processing_steps,
+            "cache_hit": cache_hit
+        }
 
     question_lower = question.lower().strip()
     
     # 获取对话历史
+    processing_steps.append("history_retrieval")
     conversation_history = get_recent_conversation_history(session_id) if session_id else []
     
     try:
         print("[QueryProcessor] Trying RAG...")
+        processing_steps.append("rag_processing")
         # 将历史传递给RAG处理函数
         rag_result = process_with_rag_detailed(question, conversation_history=conversation_history)
         rag_answer = rag_result.get("answer", "")
@@ -115,23 +140,84 @@ def process_with_ai(question, session_id=None):
         
         # Handle safety blocked queries
         if safety_blocked:
+            processing_steps.append("safety_blocked")
             print(f"[QueryProcessor] Query blocked by safety filter")
-            return rag_answer, True, matched_files
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + rag_answer)
+            return rag_answer, True, matched_files, {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit,
+                "safety_blocked": True
+            }
         
         if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()):
+            processing_steps.append("rag_fallback")
             print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer.")
         else:
+            processing_steps.append("rag_success")
             print(f"[QueryProcessor] RAG Answer: {rag_answer[:50]}...")
             print(f"[QueryProcessor] Matched files: {matched_files}")
             print(f"[QueryProcessor] Used conversation history: {len(conversation_history)} previous exchanges")
-            return rag_answer, True, matched_files
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + rag_answer)
+            return rag_answer, True, matched_files, {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit
+            }
     except Exception as e:
+        processing_steps.append("rag_error")
         print(f"[QueryProcessor] RAG failed: {e}")
 
+    processing_steps.append("no_answer")
     print(f"[QueryProcessor] No answer found for: {question}")
-    return "I do not know the answer to this question.", False, []
+    response_time = int((time.time() - start_time) * 1000)
+    tokens_used = estimate_tokens(question + "I do not know the answer to this question.")
+    return "I do not know the answer to this question.", False, [], {
+        "response_time_ms": response_time,
+        "tokens_used": tokens_used,
+        "processing_steps": processing_steps,
+        "cache_hit": cache_hit
+    }
 
-def save_to_admin_system(question, answer, answered, session_id, matched_files=None, safety_blocked=False):
+def log_current_stats():
+    """将记录写入chat_logs.jsonl"""
+    try:
+        sydney_tz = tz.gettz('Australia/Sydney')
+        logs = load_all_chat_logs()
+        
+        # 只统计真实的查询记录（排除统计记录本身）
+        query_logs = [log for log in logs if log.get("type") != "stats_summary"]
+        total_queries = len(query_logs)
+        
+        if total_queries == 0:
+            return
+
+        response_times = [log.get("response_time_ms", 0) for log in query_logs if log.get("response_time_ms")]
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+
+        total_tokens = sum(log.get("tokens_used", 0) for log in query_logs)
+
+        stats_entry = {
+            "timestamp": datetime.now(sydney_tz).isoformat(),
+            "type": "stats_summary",
+            "total_queries": total_queries,
+            "avg_response_time": round(avg_response_time, 2),
+            "total_tokens": total_tokens,
+            "message_id": str(uuid.uuid4())
+        }
+
+        append_chat_log(stats_entry)
+
+        print(f"[Stats] Total Queries: {total_queries} | Avg Response Time: {avg_response_time:.0f}ms | Total Tokens: {total_tokens}")
+        
+    except Exception as e:
+        print(f"[Stats] Error calculating stats: {e}")
+
+def save_to_admin_system(question, answer, answered, session_id, matched_files=None, safety_blocked=False, performance_data=None):
     """
     Return message_id so that the front end can use it
     """
@@ -147,7 +233,21 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
         "safety_blocked": safety_blocked
     }
     
+    if performance_data:
+        chat_entry.update({
+            "response_time_ms": performance_data.get("response_time_ms", 0),
+            "tokens_used": performance_data.get("tokens_used", 0),
+            "processing_steps": performance_data.get("processing_steps", []),
+            "cache_hit": performance_data.get("cache_hit", False),
+            "model_used": "gemini-pro",  # 默认模型
+        })
+    
     message_id = append_chat_log(chat_entry)
     print(f"[QueryProcessor] Saved to chat log. answered={answered}, matched_files={matched_files}, message_id={message_id}")
+    if performance_data:
+        print(f"[QueryProcessor] Performance: {performance_data.get('response_time_ms', 0)}ms, {performance_data.get('tokens_used', 0)} tokens")
+    
+    # 添加统计记录
+    log_current_stats()
     
     return message_id
