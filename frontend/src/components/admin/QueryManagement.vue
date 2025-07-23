@@ -11,7 +11,15 @@
       <el-table-column prop="question" label="Question" min-width="180" />
       <el-table-column prop="answer" label="Answer" min-width="180">
         <template #default="scope">
-          <span v-if="scope.row.answer">{{ scope.row.answer }}</span>
+          <span v-if="scope.row.answer">
+            <span v-if="scope.row.answer.length <= 80">
+              {{ scope.row.answer }}
+            </span>
+            <span v-else>
+              {{ scope.row.answer.slice(0, 80) }}...
+              <el-button size="small" type="text" @click="showFullAnswer(scope.row.answer)">More</el-button>
+            </span>
+          </span>
           <span v-else style="color:#d9534f">N/A</span>
         </template>
       </el-table-column>
@@ -20,7 +28,7 @@
           {{ formatTime(scope.row.timestamp) }}
         </template>
       </el-table-column>
-      <el-table-column prop="needs_attention_reason" label="Reason" min-width="100">
+      <el-table-column prop="needs_attention_reason" label="Reason" min-width="110">
         <template #default="scope">
           <el-tag
             v-for="reason in scope.row.needs_attention_reason"
@@ -55,14 +63,14 @@
       @click="exportChatLog"
     >Export Chat Log</el-button>
 
-    <el-dialog v-model="editDialogVisible" title="Edit Answer" width="400px">
-      <div>
+    <el-dialog v-model="editDialogVisible" title="Edit Answer" width="800px">
+      <div class="edit-dialog-content">
         <div style="margin-bottom: 8px"><b>Question:</b> {{ selectedQuery?.question }}</div>
         <el-input
           v-model="editAnswer"
           type="textarea"
           placeholder="Input new answer"
-          :rows="4"
+          :rows="10"
         />
       </div>
       <template #footer>
@@ -204,6 +212,10 @@ const exportChatLog = async () => {
   } catch {
     ElMessage.error('Export failed.')
   }
+}
+
+const showFullAnswer = (answer) => {
+  ElMessageBox.alert(answer, 'Full Answer', { confirmButtonText: 'OK' })
 }
 
 onMounted(fetchQueries)

@@ -1,14 +1,18 @@
 <template>
   <div class="admin-container">
-    <header class="admin-header">
-      <img src="../assets/unsw.png" alt="UNSW" class="admin-logo" />
-      <span>Admin Panel</span>
-      <el-button
-        class="logout-btn"
-        type="default"
-        @click="logout"
-      >Logout</el-button>
-    </header>
+    <div class="admin-header-bg">
+      <header class="admin-header">
+        <img src="../assets/unsw.png" alt="UNSW" class="admin-logo" />
+        <div class="admin-title">Admin Panel</div>
+        <div class="admin-header-actions">
+          <el-button
+            class="logout-btn"
+            type="default"
+            @click="logout"
+          >Logout</el-button>
+        </div>
+      </header>
+    </div>
     <main class="admin-main">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="File Management" name="file">
@@ -57,49 +61,55 @@ onMounted(async () => {
 
 
 <style scoped>
-.admin-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: #f7f8fc;
+.admin-header-bg {
+  width: 100%;
+  background: #fbdd4a;
+  border-bottom: 1.5px solid #ececec;
 }
 
 .admin-header {
+  max-width: 1000px;
+  margin: 0 auto;
   min-height: 74px;
-  font-size: 1.18rem;
-  font-weight: bold;
-  background: #fbdd4a;
-  border-bottom: 1.5px solid #ececec;
   display: flex;
   align-items: center;
   padding: 0 32px;
-  position: relative;
-  letter-spacing: -0.01em;
   gap: 18px;
-  margin: 0 auto;
-  width: 100%;
+  background: transparent;
+  border-bottom: none;
+  /* 重点！ */
+  justify-content: space-between;
+  position: relative;
 }
 
 .admin-logo {
   width: 86px;
   margin-right: 16px;
+  flex-shrink: 0;
 }
 
-.admin-header > span {
+/* 居中标题 */
+.admin-title {
+  flex: 1;
+  text-align: center;
   font-size: 1.16rem;
   font-weight: 600;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  letter-spacing: -0.01em;
   white-space: nowrap;
+}
+
+.admin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .logout-btn,
 .export-btn {
-  margin-left: 16px;
   border-radius: 20px;
   min-width: 110px;
   height: 38px;
+  margin-left: 0; /* 防止多余空隙 */
 }
 
 .logout-btn {
@@ -110,10 +120,11 @@ onMounted(async () => {
   background: #22c55e;
   color: #fff;
 }
+
 .admin-main {
   flex: 1;
   width: 100%;
-  max-width: 880px;
+  max-width: 1000px;
   margin: 30px auto 0 auto;
   display: flex;
   flex-direction: column;
