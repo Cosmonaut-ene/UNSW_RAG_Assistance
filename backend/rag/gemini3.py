@@ -575,26 +575,30 @@ def rewrite_query_gemini(original_query: str) -> str:
     - ## Study Details
     - ## Academic Information
     - ## Administrative Information
+    - **Course Code:** (inline metadata)
+    - **Source URL:** (inline metadata)
 
     🎯 Rewrite Instructions:
     - If the user input is vague or general (e.g., "Tell me about COMP9315"), rewrite it to request **all key academic details** from the document.
-    - If the query refers to a course or program code (e.g., COMP9020 or 5546), rephrase it to encourage **complete context retrieval** — include description, structure, outcomes, and study details.
+    - If the query refers to a course or program code (e.g., COMP9020 or 5546), rephrase it to encourage **complete context retrieval** — include description, structure, learning outcomes, academic metadata, and study details.
     - Always include the course or program code explicitly in the rewritten query.
     - ✅ However, if the input is a **greeting or general opener** (e.g., "hi", "hello", "what can you do?"), **DO NOT rewrite** — return it exactly as-is.
+
+    💡 Tip: When unsure what specific information the user wants, assume they want **everything available** to ensure completeness.
 
     ---
 
     ### Example 1
     Input: "Tell me about COMP9020"  
-    Rewritten: "Provide full academic and program information for COMP9020, including description, learning outcomes, structure, and study details"
+    Rewritten: "Provide full academic and course information for COMP9020, including description, academic metadata, learning outcomes, structure, and study details"
 
     ### Example 2
     Input: "What is 5546?"  
-    Rewritten: "Give all available information about program 5546, including description, outcomes, structure, and campus details"
+    Rewritten: "Give all available information about program 5546, including description, outcomes, structure, academic info, and campus details"
 
     ### Example 3  
     Input: "Where is ACTL5105 taught?"  
-    Rewritten: "Provide study details and all other academic information for ACTL5105"
+    Rewritten: "Provide study details and all academic information for ACTL5105"
 
     ### Example 4  
     Input: "hi"  
@@ -660,11 +664,11 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
     hybrid_engine = get_hybrid_search_engine()
     hybrid_results = hybrid_engine.search_hybrid(rewritten_query, rag_results, max_results=5)
     
-    print(f"[Hybrid Search] Found {len(hybrid_results)} combined results")
+    print(f"[Hybrid Search] Found {len(hybrid_results)} results after threshold filtering")
     
     # 如果混合搜索没有结果，使用fallback
     if not hybrid_results:
-        print("[Gemini3] No results from hybrid search, using LLM fallback.")
+        print("[Gemini3] No results from hybrid search after filtering, using LLM fallback.")
         fallback_answer = fallback_llm_answer(question)
         return {
             "answer": fallback_answer,

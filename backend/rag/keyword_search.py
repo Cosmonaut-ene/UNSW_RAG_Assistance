@@ -62,12 +62,28 @@ class SimpleKeywordSearch:
                 score += 100
                 matched_terms.append(f"Course Code: {code}")
         
-        # 检测程序代码 (8543等)
+        # 检测程序代码 (8543等) 和智能课程代码匹配
         program_codes = re.findall(r'\b\d{4}\b', query)
         for code in program_codes:
+            # 直接匹配4位数字
             if code in searchable_text:
                 score += 100  
                 matched_terms.append(f"Program Code: {code}")
+            # 智能匹配：如果查询是4位数字，也搜索COMP+数字格式
+            else:
+                potential_course_code = f"comp{code}"
+                if potential_course_code in searchable_text:
+                    score += 90  # 稍低于完全匹配的分数
+                    matched_terms.append(f"Course Code Match: COMP{code}")
+        
+        # 反向匹配：如果文档包含COMP代码，也匹配查询中的数字
+        doc_course_codes = re.findall(r'\bcomp\d{4}\b', searchable_text)
+        query_numbers = re.findall(r'\b\d{4}\b', query_lower)
+        for doc_code in doc_course_codes:
+            course_number = doc_code[4:]  # 提取COMP后的数字
+            if course_number in query_numbers:
+                score += 90
+                matched_terms.append(f"Reverse Course Match: {doc_code.upper()}")
         
         # 关键词匹配
         query_terms = [term for term in query_lower.split() if len(term) > 2]

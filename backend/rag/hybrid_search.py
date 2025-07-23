@@ -2,11 +2,15 @@ from typing import List, Dict
 from .keyword_search import SimpleKeywordSearch
 
 class HybridSearchEngine:
-    def __init__(self, content_dir: str):
+    def __init__(self, content_dir: str, min_hybrid_score: float = 70.0, min_keyword_score: float = 10.0, min_rag_score: float = 50.0):
         self.keyword_searcher = SimpleKeywordSearch(content_dir)
         # 权重配置
         self.rag_weight = 0.6
         self.keyword_weight = 0.4
+        # 阈值配置
+        self.min_hybrid_score = min_hybrid_score
+        self.min_keyword_score = min_keyword_score
+        self.min_rag_score = min_rag_score
         
     def combine_results(self, rag_results: List[Dict], keyword_results: List[Dict], max_results: int = 5) -> List[Dict]:
         """合并RAG和关键词搜索结果"""
@@ -61,10 +65,40 @@ class HybridSearchEngine:
             hybrid_score = (rag_score * self.rag_weight) + (keyword_score * self.keyword_weight)
             result['metadata']['hybrid_score'] = hybrid_score
         
-        # 按混合分数排序
-        all_results.sort(key=lambda x: x['metadata']['hybrid_score'], reverse=True)
+        # 应用阈值过滤
+        filtered_results = []
+        filtered_count = 0
         
-        return all_results[:max_results]
+        for result in all_results:
+            metadata = result['metadata']
+            hybrid_score = metadata.get('hybrid_score', 0)
+            keyword_score = metadata.get('keyword_score', 0)
+            rag_score = metadata.get('rag_score', 0)
+            
+            # 检查是否满足阈值条件（使用OR逻辑：满足任一条件即可通过）
+            passes_hybrid = hybrid_score >= self.min_hybrid_score
+            passes_rag = rag_score >= self.min_rag_score
+            passes_keyword = keyword_score >= self.min_keyword_score
+            
+            if passes_hybrid:
+                filtered_results.append(result)
+                print(f"[HybridSearch] Accepted result from {metadata.get('source', 'unknown')} - "
+                      f"Hybrid: {hybrid_score:.2f}, Keyword: {keyword_score:.2f}, RAG: {rag_score:.2f} "
+                      f"(Passed: {'Hybrid ' if passes_hybrid else ''}{'RAG ' if passes_rag else ''}{'Keyword' if passes_keyword else ''})")
+            else:
+                filtered_count += 1
+                print(f"[HybridSearch] Filtered out result from {metadata.get('source', 'unknown')} - "
+                      f"Hybrid: {hybrid_score:.2f} (min: {self.min_hybrid_score}), "
+                      f"Keyword: {keyword_score:.2f} (min: {self.min_keyword_score}), "
+                      f"RAG: {rag_score:.2f} (min: {self.min_rag_score})")
+        
+        if filtered_count > 0:
+            print(f"[HybridSearch] Filtered out {filtered_count} low-quality results")
+        
+        # 按混合分数排序
+        filtered_results.sort(key=lambda x: x['metadata']['hybrid_score'], reverse=True)
+        
+        return filtered_results[:max_results]
     
     def search_hybrid(self, query: str, rag_results: List[Dict] = None, max_results: int = 5) -> List[Dict]:
         """执行混合搜索"""
