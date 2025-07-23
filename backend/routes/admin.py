@@ -4,12 +4,13 @@ import sys
 import subprocess
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import cross_origin
-from datetime import datetime
+from datetime import datetime, timedelta
 from services.auth import require_admin, create_admin_token, verify_admin_credentials
 from services.log_store import load_all_chat_logs
 from services.export_chatlog import export_chat_logs
 from werkzeug.utils import secure_filename
 from services.log_store import load_all_chat_logs, update_chat_log_with_admin_response, delete_chat_log_by_id
+
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -147,7 +148,8 @@ def export_chat_log():
 @require_admin
 def get_unanswered():
     logs = load_all_chat_logs()
-    unanswered = [log for log in logs if not log.get("ai_answered")]
+    # 排除统计记录，只显示真实的未回答查询
+    unanswered = [log for log in logs if not log.get("ai_answered") and log.get("type") != "stats_summary"]
     unanswered.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return jsonify({
         "total": len(unanswered),
@@ -158,7 +160,8 @@ def get_unanswered():
 @require_admin
 def get_session_history(session_id):
     logs = load_all_chat_logs()
-    history = [log for log in logs if log.get("session_id") == session_id]
+    # 排除统计记录，只显示真实的对话历史
+    history = [log for log in logs if log.get("session_id") == session_id and log.get("type") != "stats_summary"]
     history.sort(key=lambda x: x.get("timestamp", ""))
     return jsonify({
         "session_id": session_id,
@@ -176,13 +179,15 @@ def export_data():
 @require_admin
 def get_stats():
     logs = load_all_chat_logs()
-    total = len(logs)
-    answered = len([log for log in logs if log.get("ai_answered")])
+    # 排除统计记录，只统计真实查询
+    query_logs = [log for log in logs if log.get("type") != "stats_summary"]
+    total = len(query_logs)
+    answered = len([log for log in query_logs if log.get("ai_answered")])
     unanswered = total - answered
 
-    # Daily breakdown
+    # Daily breakdown (排除统计记录)
     day_counts = {}
-    for log in logs:
+    for log in query_logs:
         ts = log.get("timestamp", "")
         if ts:
             try:
@@ -212,15 +217,17 @@ def get_queries():
         query_type = request.args.get('type', 'all')  # all, unanswered, negative
         
         all_logs = load_all_chat_logs()
+        # 排除统计记录
+        real_logs = [log for log in all_logs if log.get("type") != "stats_summary"]
         filtered_logs = []
         
         if query_type == 'unanswered':
-            filtered_logs = [log for log in all_logs if not log.get("ai_answered")]
+            filtered_logs = [log for log in real_logs if not log.get("ai_answered")]
         elif query_type == 'negative':
-            filtered_logs = [log for log in all_logs if log.get("user_feedback") == "negative"]
+            filtered_logs = [log for log in real_logs if log.get("user_feedback") == "negative"]
         else:  # all
             filtered_logs = [
-                log for log in all_logs 
+                log for log in real_logs 
                 if not log.get("ai_answered") or log.get("user_feedback") == "negative"
             ]
 
