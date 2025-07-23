@@ -1,5 +1,7 @@
 # routes/admin.py
 import os
+import sys
+import subprocess
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import cross_origin
 from datetime import datetime
@@ -640,7 +642,104 @@ def rebuild_vector_store():
     except Exception as e:
         print(f"Error rebuilding vector store: {e}")
         return jsonify({"error": "Failed to rebuild vector store"}), 500
-    
+
+
+# ========== Discovery & Scraping ==========
+@admin_bp.route('/discover', methods=['POST'])
+@require_admin
+def run_discovery():
+    """Run link discovery and return discovered links"""
+    try:
+        # Import here to avoid import errors
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from scrapers.link_discovery import discover_and_save_cse_links
+        from scrapers.config import config
+        
+        # Ensure directories exist
+        config.ensure_directories()
+        
+        print(f"🔍 Starting link discovery...")
+        links = discover_and_save_cse_links()
+        
+        # Prepare response data
+        response_data = {
+            "success": True,
+            "message": "Discovery completed successfully",
+            "links": links,
+            "summary": {
+                "programs": len(links.get('programs', [])),
+                "double_degrees": len(links.get('double_degrees', [])),
+                "specialisations": len(links.get('specialisations', [])),
+                "courses": len(links.get('courses', [])),
+                "total": sum(len(v) for v in links.values())
+            }
+        }
+        
+        print(f"✅ Discovery completed: {response_data['summary']['total']} links found")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        print(f"❌ Discovery failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@admin_bp.route('/scrape', methods=['POST'])
+@require_admin
+def scrape_content():
+    """Run content scraping for discovered links"""
+    try:
+        # Import here to avoid import errors
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from scrapers.monitor import get_new_links, update_scraping_metadata
+        from scrapers.page_scraper import scrape_urls_batch
+        from scrapers.config import config
+        
+        # Ensure directories exist
+        config.ensure_directories()
+        
+        # Get URLs that need scraping
+        new_urls = get_new_links()
+        
+        if not new_urls:
+            return jsonify({
+                "success": True,
+                "message": "No new URLs to scrape. All content is up to date.",
+                "scraped_count": 0,
+                "total_urls": 0
+            }), 200
+        
+        print(f"📋 Found {len(new_urls)} URLs to scrape")
+        
+        # Scrape URLs
+        print(f"🚀 Starting content scraping...")
+        documents = scrape_urls_batch(new_urls, save_content=True)
+        
+        # Get successful URLs
+        successful_urls = [doc.metadata["source"] for doc in documents]
+        
+        # Update metadata
+        update_scraping_metadata(successful_urls)
+        
+        response_data = {
+            "success": True,
+            "message": "Scraping completed successfully",
+            "scraped_count": len(successful_urls),
+            "total_urls": len(new_urls),
+            "failed_count": len(new_urls) - len(successful_urls)
+        }
+        
+        print(f"✅ Scraping completed: {len(successful_urls)}/{len(new_urls)} successful")
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        print(f"❌ Scraping failed: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
 # ========== Error handlers ==========
 @admin_bp.errorhandler(404)
