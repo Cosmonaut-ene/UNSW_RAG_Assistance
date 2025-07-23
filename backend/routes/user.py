@@ -17,7 +17,7 @@ def query():
 
     print(f"\nProcessing question: {question}")
 
-    ai_answer, can_answer, matched_files = process_with_ai(question, session_id)
+    ai_answer, can_answer, matched_files, performance_data = process_with_ai(question, session_id)
 
     # Check if query was safety blocked
     safety_blocked = "violate safety guidelines" in ai_answer.lower()
@@ -25,19 +25,19 @@ def query():
     if safety_blocked:
         status = "safety_blocked"
         user_answer = ai_answer
-        save_to_admin_system(question, ai_answer, True, session_id, [], safety_blocked=True)
+        save_to_admin_system(question, ai_answer, True, session_id, [], safety_blocked=True, performance_data=performance_data)
         print(f"Query blocked by safety filter: {question[:30]}...")
     elif can_answer:
         status = "answered"
         user_answer = ai_answer
-        save_to_admin_system(question, ai_answer, True, session_id, matched_files)
+        save_to_admin_system(question, ai_answer, True, session_id, matched_files, performance_data=performance_data)
         print(f"AI provided answer: {ai_answer[:50]}...")
         if matched_files:
             print(f"Sources: {', '.join(matched_files)}")
     else:
         status = "unanswered"
         user_answer = "Thank you for your question! Our staff will answer it soon."
-        save_to_admin_system(question, None, False, session_id, [])
+        save_to_admin_system(question, None, False, session_id, [], performance_data=performance_data)
         print("Question marked as unanswered")
 
     return jsonify({

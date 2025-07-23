@@ -25,11 +25,11 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
         init_rag_chain()
     return ask_with_hybrid_search(question, qa_chain, conversation_history)
 
-def process_with_rag_only(question: str) -> dict:
+def process_with_rag_only(question: str, conversation_history: list = None) -> dict:
     """
     Process question with RAG only (original method)
     """
     global qa_chain
     if qa_chain is None:
         init_rag_chain()
-    return ask_with_rag_and_fallback(question, qa_chain)
+    return ask_with_rag_and_fallback(question, qa_chain, conversation_history)

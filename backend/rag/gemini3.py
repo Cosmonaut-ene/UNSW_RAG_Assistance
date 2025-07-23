@@ -564,7 +564,26 @@ def is_query_safe_by_gemini(query: str) -> bool:
         return True
     
 # ========= Gemini Query Rewqrite =========
-def rewrite_query_gemini(original_query: str) -> str:
+def rewrite_query_gemini(original_query: str, conversation_history: list = None) -> str:
+    # Format conversation history for context
+    from services.query_processor import format_conversation_history
+    formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    
+    history_context = ""
+    if formatted_history:
+        history_context = f"""
+    
+    == Conversation History ==
+    The user has had the following previous conversation:
+    {formatted_history}
+    
+    🔍 Context-Aware Rewriting:
+    - If the user's current query contains pronouns or vague references (like "it", "this course", "that program", "them", "这个", "那个"), use the conversation history to determine what they're referring to and make the query specific.
+    - If the user is asking a follow-up question about something mentioned earlier, incorporate the specific course/program codes or names from the history.
+    - If the user is comparing things mentioned in history, make sure to include all relevant identifiers.
+    
+    """
+    
     prompt = f"""
     You are a helpful assistant that rewrites user queries to make them more comprehensive and structured, so they retrieve the most complete and relevant academic information.
 
@@ -577,7 +596,7 @@ def rewrite_query_gemini(original_query: str) -> str:
     - ## Administrative Information
     - **Course Code:** (inline metadata)
     - **Source URL:** (inline metadata)
-
+    {history_context}
     🎯 Rewrite Instructions:
     - If the user input is vague or general (e.g., "Tell me about COMP9315"), rewrite it to request **all key academic details** from the document.
     - If the query refers to a course or program code (e.g., COMP9020 or 5546), rephrase it to encourage **complete context retrieval** — include description, structure, learning outcomes, academic metadata, and study details.
@@ -603,6 +622,16 @@ def rewrite_query_gemini(original_query: str) -> str:
     ### Example 4  
     Input: "hi"  
     Rewritten: "hi"
+    
+    ### Example 5 (with history context)
+    History: User asked about COMP9020
+    Input: "What about the prerequisites for it?"
+    Rewritten: "What are the prerequisites and academic requirements for COMP9020?"
+
+    ### Example 6 (with history context)  
+    History: User asked about programs 5546 and 8543
+    Input: "Which one has better job prospects?"
+    Rewritten: "Compare job prospects and career outcomes between program 5546 and program 8543"
 
     ---
 
@@ -620,13 +649,76 @@ def rewrite_query_gemini(original_query: str) -> str:
         return original_query
 
 # ========== Fallback ==========
-def fallback_llm_answer(question: str) -> str:
+def fallback_llm_answer(question: str, conversation_history: list = None) -> str:
     """
-    Directly use Gemini to answer without RAG context.
+    Directly use Gemini to answer without RAG context, but with consistent UNSW CSE Open Day assistant identity.
     """
+    from services.query_processor import format_conversation_history
+    formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-    print("[Gemini3] Using fallback direct Gemini LLM.")
-    return llm.invoke(question).content
+    
+    # Use the same identity and tone as the main RAG chain
+    if formatted_history:
+        prompt_template = PromptTemplate(
+            input_variables=["history", "question"],
+            template=(
+                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                
+                "== Conversation History ==\n"
+                "{history}\n\n"
+                
+                "== Current Query ==\n"
+                "❓ Question:\n{question}\n\n"
+                
+                "== 🧠 Instructions ==\n"
+                "Please answer the question based on the conversation history. "
+                "If the user uses vague references like 'it', 'this course', 'that program', refer to the conversation history to determine what they're referring to.\n\n"
+                
+                "Since I don't have specific context documents available for this query, I'll provide general information about UNSW CSE programs and encourage the user to ask more specific questions or visit official UNSW resources.\n\n"
+                
+                "Use a friendly, conversational tone with emojis where appropriate 😊. "
+                "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
+                "👋 Hi there! I'm your UNSW Open Day Assistant. I can help you with:\n"
+                "- 🧑‍🏫 Program and course info\n"
+                "- 📍 Maps and booth locations\n"
+                "- 🗓️ Event schedules\n"
+                "- 💬 Student societies and FAQs\n"
+                "What would you like to explore today?\n"
+                "(Try asking about a course code like COMP9020 or a program like 3789!)\n\n"
+                
+                "Always encourage follow-up questions and keep responses helpful and engaging."
+            )
+        )
+        formatted_prompt = prompt_template.format(history=formatted_history, question=question)
+    else:
+        prompt_template = PromptTemplate(
+            input_variables=["question"],
+            template=(
+                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                
+                "❓ Question:\n{question}\n\n"
+                
+                "== 🧠 Instructions ==\n"
+                "Since I don't have specific context documents available for this query, I'll provide general information about UNSW CSE programs and encourage the user to ask more specific questions or visit official UNSW resources.\n\n"
+                
+                "Use a friendly, conversational tone with emojis where appropriate 😊. "
+                "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
+                "👋 Hi there! I'm your UNSW Open Day Assistant. I can help you with:\n"
+                "- 🧑‍🏫 Program and course info\n"
+                "- 📍 Maps and booth locations\n"
+                "- 🗓️ Event schedules\n"
+                "- 💬 Student societies and FAQs\n"
+                "What would you like to explore today?\n"
+                "(Try asking about a course code like COMP9020 or a program like 3789!)\n\n"
+                
+                "Always encourage follow-up questions and keep responses helpful and engaging."
+            )
+        )
+        formatted_prompt = prompt_template.format(question=question)
+    
+    print("[Gemini3] Using fallback direct Gemini LLM with UNSW CSE Open Day assistant identity.")
+    return llm.invoke(formatted_prompt).content
 
 # ========= Query Processing Pipeline ============
 def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list = None) -> dict:
@@ -644,8 +736,8 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             "safety_blocked": True
         }
     
-    # 2.Rewrite Query
-    rewritten_query = rewrite_query_gemini(question)
+    # 2.Rewrite Query with conversation history
+    rewritten_query = rewrite_query_gemini(question, conversation_history)
     print(f"[Rewritten Query] {rewritten_query}")
     
     # 3. Get RAG results
@@ -669,7 +761,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
     # If hybrid search has no results, use fallback
     if not hybrid_results:
         print("[Gemini3] No results from hybrid search after filtering, using LLM fallback.")
-        fallback_answer = fallback_llm_answer(question)
+        fallback_answer = fallback_llm_answer(question, conversation_history)
         return {
             "answer": fallback_answer,
             "sources": [],
@@ -795,7 +887,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
         "search_type": "hybrid"
     }
 
-def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
+def ask_with_rag_and_fallback(question: str, qa_chain, conversation_history: list = None) -> dict:
     """
     Try answering via RAG first, fallback to direct LLM if no context found.
     Includes safety check for all queries.
@@ -811,8 +903,8 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
             "safety_blocked": True
         }
     
-    # 2.Rewrite Query
-    rewritten_query = rewrite_query_gemini(question)
+    # 2.Rewrite Query with conversation history
+    rewritten_query = rewrite_query_gemini(question, conversation_history)
     print(f"[Rewritten Query] {rewritten_query}")
     
     result = qa_chain.invoke({"query": rewritten_query})
@@ -820,7 +912,7 @@ def ask_with_rag_and_fallback(question: str, qa_chain) -> dict:
     sources = result.get("source_documents", [])
     if not sources or all(len(doc.page_content.strip()) < 10 for doc in sources):
         print("[Gemini3] No relevant sources found, using LLM fallback.")
-        fallback_answer = fallback_llm_answer(question)
+        fallback_answer = fallback_llm_answer(question, conversation_history)
         return {
             "answer": fallback_answer,
             "sources": [],
