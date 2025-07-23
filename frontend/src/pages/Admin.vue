@@ -26,6 +26,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { checkTokenValidity, handleAuthError } from '@/utils/auth.js'
 
 import FileManagement from '@/components/admin/FileManagement.vue'
 import QueryManagement from '@/components/admin/QueryManagement.vue'
@@ -39,9 +40,18 @@ const logout = () => {
   router.push('/login')
 }
 
-onMounted(() => {
+onMounted(async () => {
   const token = localStorage.getItem('admin_token')
-  if (!token) router.push('/login')
+  if (!token) {
+    router.push('/login')
+    return
+  }
+  
+  // Validate token with backend
+  const isValid = await checkTokenValidity()
+  if (!isValid) {
+    handleAuthError('Session expired, please login again')
+  }
 })
 </script>
 

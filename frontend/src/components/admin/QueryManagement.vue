@@ -76,6 +76,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { isAuthError, handleAuthError } from '@/utils/auth.js'
 
 
 const queries = ref([])
@@ -98,6 +99,12 @@ const fetchQueries = async () => {
     const res = await fetch(`/api/admin/queries?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
+    
+    if (isAuthError(res)) {
+      handleAuthError()
+      return
+    }
+    
     if (!res.ok) throw new Error()
     const data = await res.json()
     queries.value = data.queries
@@ -131,6 +138,12 @@ const saveEdit = async () => {
       },
       body: JSON.stringify({ id: selectedQuery.value.id, answer: editAnswer.value })
     })
+    
+    if (isAuthError(res)) {
+      handleAuthError()
+      return
+    }
+    
     if (!res.ok) throw new Error()
     ElMessage.success('Updated!')
     editDialogVisible.value = false
@@ -143,15 +156,25 @@ const saveEdit = async () => {
 const deleteQuery = (row) => {
   ElMessageBox.confirm('Confirm delete this query?', 'Warning', { type: 'warning' })
     .then(async () => {
-      const res = await fetch(`/api/admin/delete-query/${row.id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
+      try {
+        const res = await fetch(`/api/admin/delete-query/${row.id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+        
+        if (isAuthError(res)) {
+          handleAuthError()
+          return
         }
-      })
-      if (!res.ok) throw new Error()
-      ElMessage.success('Deleted!')
-      fetchQueries()
+        
+        if (!res.ok) throw new Error()
+        ElMessage.success('Deleted!')
+        fetchQueries()
+      } catch (error) {
+        ElMessage.error('Delete failed')
+      }
     })
     .catch(() => {})
 }

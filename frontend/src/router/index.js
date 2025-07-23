@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Admin from '../pages/Admin.vue'
 import Chatbot from '../pages/Chatbot.vue'
 import Login from '../pages/Login.vue'
+import { checkTokenValidity } from '../utils/auth.js'
 
 const routes = [
   {
@@ -27,11 +28,25 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('admin_token')
-  if (to.path.startsWith('/admin') && !token) {
-    return next('/login')
+router.beforeEach(async (to, from, next) => {
+  // Check if accessing admin routes
+  if (to.path.startsWith('/admin')) {
+    const token = localStorage.getItem('admin_token')
+    
+    // No token at all
+    if (!token) {
+      return next('/login')
+    }
+    
+    // Validate token with backend
+    const isValid = await checkTokenValidity()
+    if (!isValid) {
+      // Clear invalid token
+      localStorage.removeItem('admin_token')
+      return next('/login')
+    }
   }
+  
   next()
 })
 
