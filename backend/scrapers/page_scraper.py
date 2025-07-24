@@ -137,13 +137,9 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
         for key, value in obj.items():
             field_name = f"{prefix}_{key}" if prefix else key
             
-            # Skip obviously technical/meaningless fields
-            skip_fields = {
-                'id', 'uuid', 'href', 'links', 'uri', 'url', 'path', 'slug', 
-                'created', 'updated', 'modified', 'timestamp', 'last_modified',
-                'meta', 'metadata', 'seo', 'canonical', 'redirect'
-            }
-            if key.lower() in skip_fields or key.startswith('_') or 'cl_' in key.lower():
+            # Keep all fields - no filtering
+            # Skip only truly empty/meaningless values
+            if not is_meaningful_value(value):
                 continue
             
             if isinstance(value, (dict, list)):
@@ -179,6 +175,156 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
     
     return result
 
+def generate_program_structure_formatted(content: Dict[str, Any]) -> str:
+    cs = content.get("curriculumStructure", {})
+    containers = cs.get("container", [])
+    sections = []
+
+    for container in containers:
+        title = container.get("title", "").strip()
+        description = container.get("description", "").replace("<br />", "\n").strip()
+
+        rels = container.get("relationship", [])
+        specialisations = []
+        for rel in rels:
+            if not rel.get("academic_item_active", False):
+                continue
+
+            code = rel.get("academic_item_code", "")
+            name = rel.get("academic_item_name", "")
+            url = rel.get("academic_item_url", "")
+            uoc = rel.get("academic_item_credit_points", "")
+            specialisations.append(f"- {code} **{name}** – {uoc} UOC – [{url}]({url})")
+
+        section_md = f"### {title}\n\n{description}\n\n" + "\n".join(specialisations)
+        sections.append(section_md)
+
+    return "\n\n---\n\n".join(sections)
+
+def generate_associated_programs_formatted(content: Dict[str, Any]) -> str:
+    """
+    Generate formatted associated programs from `associated_programs` nested JSON.
+    """
+    programs_sections = []
+    associations = content.get("associated_programs", [])
+
+    for assoc in associations:
+        assoc_type = assoc.get("association_type") or assoc.get("association_type", {}).get("label", "")
+        if assoc_type:
+            programs_sections.append(f"### {assoc_type}")
+
+        for program in assoc.get("associated_programs", []):
+            program_info = []
+
+            title = program.get("assoc_title", "")
+            short_title = program.get("assoc_short_title", "")
+            award = program.get("assoc_award_single", "")
+            duration = program.get("assoc_duration_hb_display", "")
+            campus = program.get("assoc_campus", "")
+            credits = program.get("assoc_credit_points", "")
+            url = program.get("assoc_url", "")
+            full_url = f"https://www.handbook.unsw.edu.au{url}" if url else ""
+
+            if short_title:
+                program_info.append(f"**Program:** {short_title}")
+            elif title:
+                program_info.append(f"**Program:** {title}")
+            if award:
+                program_info.append(f"**Award:** {award}")
+            if duration:
+                program_info.append(f"**Duration:** {duration}")
+            if campus:
+                program_info.append(f"**Campus:** {campus}")
+            if credits:
+                program_info.append(f"**Credits:** {credits} UOC")
+            if full_url:
+                program_info.append(f"[🔗 View program]({full_url})")
+
+            if program_info:
+                programs_sections.append("  ".join(program_info))
+
+    return "\n\n".join(programs_sections)
+
+def generate_entry_requirements_formatted(content: Dict[str, Any]) -> str:
+    """
+    Generate formatted entry requirements from any `entry_requirements_*` field.
+    Supports both flat (_domain/_requirements) and structured list formats.
+    """
+    requirements_sections = []
+    entry_req_groups = {}
+
+    for key, value in content.items():
+        if "entry_requirements_" not in key:
+            continue
+        
+        if isinstance(value, list):
+            for block in value:
+                if not isinstance(block, dict):
+                    continue
+                domain = block.get("domain", "").strip()
+                req_list = block.get("requirements", [])
+                if not isinstance(req_list, list):
+                    continue
+                paragraph_parts = []
+                for req in req_list:
+                    if not isinstance(req, dict):
+                        continue
+                    desc = req.get("description", "")
+                    clean_desc = clean_text(desc)
+                    if clean_desc:
+                        paragraph_parts.append(clean_desc)
+                if paragraph_parts:
+                    combined = "\n".join(paragraph_parts)
+                    if domain:
+                        requirements_sections.append(f"### {domain}\n{combined}")
+                    else:
+                        requirements_sections.append(combined)
+
+        elif isinstance(value, str) and is_meaningful_value(value):
+            if key.endswith("_domain"):
+                base = key[:-7]
+                entry_req_groups.setdefault(base, {})["domain"] = clean_text(value)
+            elif key.endswith("_requirements"):
+                base = key[:-13]
+                entry_req_groups.setdefault(base, {})["requirements"] = clean_text(value)
+
+    for base_name, section_data in sorted(entry_req_groups.items()):
+        domain = section_data.get("domain", "")
+        requirements = section_data.get("requirements", "")
+        if domain and requirements:
+            requirements_sections.append(f"### {domain}\n{requirements}")
+        elif requirements:
+            requirements_sections.append(requirements)
+
+    result = "\n\n".join(requirements_sections)
+    return result
+
+def generate_recognition_of_achievements_formatted(content: Dict[str, Any]) -> str:
+    """
+    Convert the 'recognition_of_achievements' dictionary to markdown format.
+    """
+    achievements_sections = []
+    achievements = content.get("recognition_of_achievements", [])
+
+    cardtitle = achievements.get("cardtitle", {}).get("text", "").strip()
+    if cardtitle:
+        achievements_sections.append(f"## {cardtitle}")
+
+    cardsubtitle = achievements.get("cardsubtitle", {}).get("text", "").strip()
+    if cardsubtitle:
+        achievements_sections.append(f"### {cardsubtitle}")
+
+    content_items = achievements.get("content", [])
+    for item in sorted(content_items, key=lambda x: x.get("order", 0)):
+        if "text" in item:
+            achievements_sections.append(item["text"].strip())
+        elif "label" in item and "value" in item:
+            label = item["label"].strip()
+            url = item["value"].strip()
+            achievements_sections.append(f"[{label}]({url})")
+
+    return "\n\n".join(achievements_sections)
+
 
 def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -205,6 +351,26 @@ def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
                 cleaned[clean_field_name] = extracted_value
     
     # Handle special complex fields that need custom processing
+    
+    # Generate formatted program structure
+    program_structure_formatted = generate_program_structure_formatted(content)
+    if program_structure_formatted:
+        cleaned["program_structure_formatted"] = program_structure_formatted
+    
+    # Generate formatted entry requirements from entry_requirements_* fields
+    entry_requirements_formatted = generate_entry_requirements_formatted(content)
+    if entry_requirements_formatted:
+        cleaned["entry_requirements_formatted"] = entry_requirements_formatted
+    
+    # Generate formatted associated programs from associated_programs_* fields
+    associated_programs_formatted = generate_associated_programs_formatted(content)
+    if associated_programs_formatted:
+        cleaned["associated_programs_formatted"] = associated_programs_formatted
+        
+    # Generate formatted recognition of achievement
+    recognition_of_achievements_formatted = generate_recognition_of_achievements_formatted(content)
+    if recognition_of_achievements_formatted:
+        cleaned["recognition_of_achievements_formatted"] = recognition_of_achievements_formatted    
     
     # Learning outcomes - format as strict markdown numbered list
     learning_outcomes = content.get("learning_outcomes", [])
@@ -414,61 +580,59 @@ def scrape_single_page(url: str) -> Optional[Document]:
         for field, label in academic_fields:
             if cleaned_content.get(field):
                 academic_info.append(f"**{label}:** {cleaned_content[field]}")
-        
+                
+        # 1. Academic Information
         if academic_info:
             content_parts.append("## Academic Information")
             content_parts.append(" ".join(academic_info))
         
-        # Description
+        # 2. Overview
         if cleaned_content.get("description"):
-            content_parts.append(f"## Description\n{cleaned_content['description']}")
-        
-        # Structure and curriculum
-        if cleaned_content.get("structure_summary"):
-            content_parts.append(f"## Program Structure\n{cleaned_content['structure_summary']}")
-        
-        if cleaned_content.get("curriculum_structure"):
-            content_parts.append(f"## Curriculum Structure\n{cleaned_content['curriculum_structure']}")
-        
-        # Entry requirements (comprehensive)
-        if cleaned_content.get("entry_requirements"):
-            content_parts.append(f"## Entry Requirements\n{cleaned_content['entry_requirements']}")
-        
-        if cleaned_content.get("entry_requirements_international"):
-            content_parts.append(f"## International Entry Requirements\n{cleaned_content['entry_requirements_international']}")
-        
-        if cleaned_content.get("assumed_knowledge"):
-            content_parts.append(f"## Assumed Knowledge\n{cleaned_content['assumed_knowledge']}")
-        
-        # Prerequisites and academic conditions
-        prereq_info = []
-        if cleaned_content.get("prerequisites"):
-            prereq_info.append(f"**Prerequisites:** {cleaned_content['prerequisites']}")
-        if cleaned_content.get("corequisites"):
-            prereq_info.append(f"**Corequisites:** {cleaned_content['corequisites']}")
-        if cleaned_content.get("exclusions"):
-            prereq_info.append(f"**Exclusions:** {cleaned_content['exclusions']}")
-        
-        if prereq_info:
-            content_parts.append("## Academic Prerequisites")
-            content_parts.append(" ".join(prereq_info))
-        
-        # Course content and assessment
-        if cleaned_content.get("course_outline"):
-            content_parts.append(f"## Course Outline\n{cleaned_content['course_outline']}")
-        
-        if cleaned_content.get("assessment"):
-            content_parts.append(f"## Assessment\n{cleaned_content['assessment']}")
-        
-        if cleaned_content.get("teaching_methods"):
-            content_parts.append(f"## Teaching Methods\n{cleaned_content['teaching_methods']}")
-        
-        # Learning outcomes (formatted as numbered list)
+            content_parts.append(f"## Overview\n{cleaned_content['description']}")
+            
+        # 3. Learning outcomes (formatted as numbered list)
         if cleaned_content.get("learning_outcomes_formatted"):
             content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes_formatted']}")
         elif cleaned_content.get("learning_outcomes"):
             content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes']}")
         
+        # 4.1 Program Structure
+        if cleaned_content.get("structure_summary"):
+            content_parts.append(f"## Program Structure\n{cleaned_content['structure_summary']}\n{cleaned_content['program_structure_formatted']}")
+        
+        # 5. Admission Requirements (comprehensive)
+        if cleaned_content.get("entry_requirements_formatted"):
+            content_parts.append(f"## Admission Requirements\n{cleaned_content['entry_requirements_formatted']}")
+
+        # 6. Program Requirements
+        if cleaned_content.get("additional_progression_requirements_restrictions"):
+            content_parts.append(f"## Program Requirements\n{cleaned_content['additional_progression_requirements_restrictions']}")
+        if cleaned_content.get("assumed_knowledge"):
+            content_parts.append(f"## Assumed Knowledge\n{cleaned_content['assumed_knowledge']}")
+        
+        # 7. Associated Programs
+        if cleaned_content.get("associated_programs_formatted"):
+            content_parts.append(f"## Associated Programs\n{cleaned_content['associated_programs_formatted']}")
+        
+        # 8. Recognition of Achievements
+        if cleaned_content.get("recognition_of_achievements_formatted"):
+            content_parts.append(f"## Recognition of Achievements\n{cleaned_content['recognition_of_achievements_formatted']}")
+        
+        # 9. Program Fees
+        program_fees = """
+            At UNSW fees are generally charged at course level and therefore dependent upon individual enrolment and other factors such as student's residency status. For generic information on fees and additional expenses of UNSW programs, click on one of the following:
+            - [Domestic Students](https://student.unsw.edu.au/fees-domestic-full-fee-paying)
+            - [Commonwealth Supported Students (if applicable)](https://student.unsw.edu.au/fees-student-contribution-rates)
+            - [International Students](https://student.unsw.edu.au/fees-international)
+        """
+        if "Program" in type_label:
+            content_parts.append(f"## Program Fees\n{cleaned_content['assessment']}")
+        if cleaned_content.get("additional_info"):
+            content_parts.append(f"### Additional Info\n{cleaned_content['additional_info']}")
+        
+        if cleaned_content.get("teaching_methods"):
+            content_parts.append(f"## Teaching Methods\n{cleaned_content['teaching_methods']}")        
+      
         # Career and professional information
         if cleaned_content.get("career_opportunities"):
             content_parts.append(f"## Career Opportunities\n{cleaned_content['career_opportunities']}")

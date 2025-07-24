@@ -19,6 +19,7 @@ services:
       - PYTHONUNBUFFERED=1 # Forces Python stdout/stderr to be unbuffered
       - PYTHONDONTWRITEBYTECODE=1 # Prevents .pyc files
     volumes:
+      - ./backend:/app
       - ./backend/logs:/app/logs
       - ./backend/rag/docs:/app/rag/docs
       - ./backend/rag/vector_store:/app/rag/vector_store
