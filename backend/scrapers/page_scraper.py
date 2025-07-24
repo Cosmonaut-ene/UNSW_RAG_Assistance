@@ -41,20 +41,17 @@ def clean_text(text: str) -> str:
     return text
 
 
-def is_meaningful_value(value: Any) -> bool:
-    """Check if a value is meaningful (not empty, None, or useless cl_id)"""
-    if value is None:
+IGNORED_KEYS = {"key", "cl_id", "state", "linking_id", "order", "active", "hbeorder"}
+
+def is_meaningful(val: Any) -> bool:
+    if not val:
         return False
-    
-    str_val = str(value).strip()
-    if not str_val or str_val.lower() == "none":
-        return False
-    
-    # Filter out meaningless cl_id patterns (like cl_12345678)
-    if re.match(r'^cl_\d+$', str_val, re.IGNORECASE):
-        return False
-    
+    if isinstance(val, str):
+        return val.strip().lower() not in ["", "null", "none", "n/a", "undefined"]
     return True
+
+def should_ignore_key(k: str) -> bool:
+    return any(x in k.lower() for x in IGNORED_KEYS)
 
 def extract_key_value(obj: Dict[str, Any], key: str, default: str = "") -> str:
     """Extract value from nested dictionary structures, filtering out meaningless values"""
@@ -65,19 +62,19 @@ def extract_key_value(obj: Dict[str, Any], key: str, default: str = "") -> str:
     
     # Handle different value formats from UNSW API
     if isinstance(value, dict):
-        if "value" in value and is_meaningful_value(value["value"]):
+        if "value" in value and is_meaningful(value["value"]):
             return str(value["value"])
-        elif "label" in value and is_meaningful_value(value["label"]):
+        elif "label" in value and is_meaningful(value["label"]):
             return str(value["label"])
     elif isinstance(value, list) and value:
         # For arrays, take the first meaningful item's value/label
         for item in value:
             if isinstance(item, dict):
-                if "value" in item and is_meaningful_value(item["value"]):
+                if "value" in item and is_meaningful(item["value"]):
                     return str(item["value"])
-                elif "label" in item and is_meaningful_value(item["label"]):
+                elif "label" in item and is_meaningful(item["label"]):
                     return str(item["label"])
-    elif is_meaningful_value(value):
+    elif is_meaningful(value):
         return str(value)
     
     return default
@@ -91,39 +88,183 @@ def extract_list_values(obj: List[Dict[str, Any]], key: str = "value") -> List[s
     values = []
     for item in obj:
         if isinstance(item, dict):
-            if key in item and is_meaningful_value(item[key]):
+            if key in item and is_meaningful(item[key]):
                 values.append(str(item[key]))
-            elif "label" in item and is_meaningful_value(item["label"]):
+            elif "label" in item and is_meaningful(item["label"]):
                 values.append(str(item["label"]))
     
     return values
 
 
-def beautify_field_name(field_name: str) -> str:
-    """Convert technical field names to more readable format"""
-    # Remove common prefixes/suffixes
-    field_name = re.sub(r'(_value|_label|_single)$', '', field_name)
+def beautify_field_name(s: str) -> str:
+    s = s.replace("_", " ")
+    s = re.sub(r"\b0\b", "", s)
+    return s.strip().title()
+
+
+def build_semantic_document(
+    data: Any,
+    path: List[str] = [],
+    source_url: str = ""
+) -> Optional[Document]:
+    """
+    构建语义化的文档块，将嵌套结构转换为有意义的Markdown层次结构
+    """
+    if not is_meaningful(data):
+        return None
     
-    # Handle common field name patterns
-    field_mappings = {
-        'parent_academic_org': 'faculty',
-        'academic_org': 'school', 
-        'full_time_duration': 'duration_fulltime',
-        'part_time_duration': 'duration_parttime',
-        'entry_requirements_onshore': 'entry_requirements_domestic',
-        'entry_requirements_offshore': 'entry_requirements_international',
-        'indicative_fee': 'fee_domestic',
-        'indicative_fee_international': 'fee_international',
-        'uac_code_single': 'uac_code',
-        'credit_points': 'credits'
-    }
+    # 构建完整的markdown内容
+    content_parts = []
     
-    # Apply mappings
-    for old_name, new_name in field_mappings.items():
-        if old_name in field_name:
-            field_name = field_name.replace(old_name, new_name)
+    # 构建层次化标题
+    def build_hierarchical_content(obj: Any, current_path: List[str], level: int = 1) -> List[str]:
+        parts = []
+        
+        if isinstance(obj, dict):
+            # 为当前层级添加标题（如果有路径）
+            if current_path and level <= 6:
+                title = beautify_field_name(current_path[-1])
+                parts.append(f"{'#' * level} {title}")
+                parts.append("")  # 空行
+            
+            # 处理字典中的每个键值对
+            for key, value in obj.items():
+                if should_ignore_key(key):
+                    continue
+                
+                new_path = current_path + [key]
+                
+                if isinstance(value, dict):
+                    # 嵌套字典：递归处理
+                    nested_parts = build_hierarchical_content(value, new_path, level + 1)
+                    parts.extend(nested_parts)
+                elif isinstance(value, list):
+                    # 列表：创建子标题并处理每个元素
+                    if level + 1 <= 6:
+                        list_title = beautify_field_name(key)
+                        parts.append(f"{'#' * (level + 1)} {list_title}")
+                        parts.append("")
+                    
+                    for idx, item in enumerate(value):
+                        if isinstance(item, dict):
+                            # 列表中的字典项
+                            item_parts = build_hierarchical_content(item, new_path + [str(idx)], level + 2)
+                            parts.extend(item_parts)
+                        elif is_meaningful(item):
+                            # 列表中的простой值
+                            parts.append(f"- {clean_text(str(item))}")
+                    parts.append("")  # 空行
+                else:
+                    # 简单值：作为字段显示
+                    if is_meaningful(value):
+                        field_name = beautify_field_name(key)
+                        clean_value = clean_text(str(value))
+                        if level + 1 <= 6:
+                            parts.append(f"{'#' * (level + 1)} {field_name}")
+                            parts.append(clean_value)
+                        else:
+                            parts.append(f"**{field_name}:** {clean_value}")
+                        parts.append("")  # 空行
+        
+        elif isinstance(obj, list):
+            # 处理顶层列表
+            for idx, item in enumerate(obj):
+                if isinstance(item, dict):
+                    item_parts = build_hierarchical_content(item, current_path + [str(idx)], level)
+                    parts.extend(item_parts)
+                elif is_meaningful(item):
+                    parts.append(f"- {clean_text(str(item))}")
+            if obj:  # 如果列表不为空，添加空行
+                parts.append("")
+        
+        else:
+            # 简单值
+            if is_meaningful(obj):
+                clean_value = clean_text(str(obj))
+                parts.append(clean_value)
+                parts.append("")
+        
+        return parts
     
-    return field_name
+    # 生成内容
+    content_parts = build_hierarchical_content(data, path, 1)
+    
+    if not content_parts:
+        return None
+    
+    # 组合最终内容
+    full_content = "\n".join(content_parts).strip()
+    
+    # 构建元数据
+    field_path = " -> ".join(path) if path else "root"
+    
+    return Document(
+        page_content=full_content,
+        metadata={
+            "field": field_path,
+            "source": source_url,
+            "depth": len(path),
+            "field_path": path,
+            "content_type": "semantic_hierarchical"
+        }
+    )
+
+
+def flatten_structure(
+    data: Any,
+    prefix: str = "",
+    chunks: List[Document] = [],
+    source_url: str = "",
+    depth: int = 1,
+    level: int = 1
+) -> None:
+    """
+    语义化递归展开嵌套结构，每个有意义的子结构生成一个完整的语义文档
+    """
+    if isinstance(data, dict):
+        # 为整个字典结构创建一个语义文档
+        path = prefix.split(" -> ") if prefix else []
+        doc = build_semantic_document(data, path, source_url)
+        if doc:
+            chunks.append(doc)
+        
+        # 同时为每个子字段创建独立文档（如果它们足够复杂）
+        for key, value in data.items():
+            if should_ignore_key(key):
+                continue
+            
+            new_prefix = f"{prefix} -> {key}" if prefix else key
+            
+            # 只为复杂结构（dict/list）创建独立文档
+            if isinstance(value, (dict, list)) and value:
+                flatten_structure(value, new_prefix, chunks, source_url, depth + 1, level + 1)
+    
+    elif isinstance(data, list) and data:
+        # 为整个列表创建一个语义文档
+        path = prefix.split(" -> ") if prefix else []
+        doc = build_semantic_document(data, path, source_url)
+        if doc:
+            chunks.append(doc)
+        
+        # 为列表中的复杂元素创建独立文档
+        for idx, item in enumerate(data):
+            if isinstance(item, (dict, list)) and item:
+                new_prefix = f"{prefix} -> {idx}" if prefix else str(idx)
+                flatten_structure(item, new_prefix, chunks, source_url, depth + 1, level)
+    
+    else:
+        # 简单值：创建简单文档
+        if is_meaningful(data):
+            path = prefix.split(" -> ") if prefix else []
+            doc = build_semantic_document(data, path, source_url)
+            if doc:
+                chunks.append(doc)
+
+def chunk_structured_content(content: Dict[str, Any], source_url: str) -> List[Document]:
+    """Convert structured content into individual document chunks"""
+    chunks = []
+    flatten_structure(content, "", chunks, source_url)
+    return chunks
 
 
 def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
@@ -137,9 +278,13 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
         for key, value in obj.items():
             field_name = f"{prefix}_{key}" if prefix else key
             
-            # Keep all fields - no filtering
-            # Skip only truly empty/meaningless values
-            if not is_meaningful_value(value):
+            # Skip obviously technical/meaningless fields
+            skip_fields = {
+                'id', 'uuid', 'href', 'links', 'uri', 'url', 'path', 'slug', 
+                'created', 'updated', 'modified', 'timestamp', 'last_modified',
+                'meta', 'metadata', 'seo', 'canonical', 'redirect'
+            }
+            if should_ignore_key(key) or key.lower() in skip_fields or key.startswith('_'):
                 continue
             
             if isinstance(value, (dict, list)):
@@ -148,7 +293,7 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
                 result.update(nested_fields)
             else:
                 # Extract scalar values
-                if is_meaningful_value(value):
+                if is_meaningful(value):
                     result[field_name] = str(value)
                     
     elif isinstance(obj, list):
@@ -157,173 +302,23 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
         for i, item in enumerate(obj):
             if isinstance(item, dict):
                 # For objects in list, try to extract key meaningful fields
-                if "value" in item and is_meaningful_value(item["value"]):
+                if "value" in item and is_meaningful(item["value"]):
                     meaningful_values.append(str(item["value"]))
-                elif "label" in item and is_meaningful_value(item["label"]):
+                elif "label" in item and is_meaningful(item["label"]):
                     meaningful_values.append(str(item["label"]))
-                elif "description" in item and is_meaningful_value(item["description"]):
+                elif "description" in item and is_meaningful(item["description"]):
                     meaningful_values.append(clean_text(item["description"]))
                 else:
                     # Extract all meaningful fields from object
                     nested_fields = extract_all_meaningful_fields(item, f"{prefix}_{i}" if prefix else str(i))
                     result.update(nested_fields)
-            elif is_meaningful_value(item):
+            elif is_meaningful(item):
                 meaningful_values.append(str(item))
         
         if meaningful_values:
             result[prefix or "values"] = ", ".join(meaningful_values)
     
     return result
-
-def generate_program_structure_formatted(content: Dict[str, Any]) -> str:
-    cs = content.get("curriculumStructure", {})
-    containers = cs.get("container", [])
-    sections = []
-
-    for container in containers:
-        title = container.get("title", "").strip()
-        description = container.get("description", "").replace("<br />", "\n").strip()
-
-        rels = container.get("relationship", [])
-        specialisations = []
-        for rel in rels:
-            if not rel.get("academic_item_active", False):
-                continue
-
-            code = rel.get("academic_item_code", "")
-            name = rel.get("academic_item_name", "")
-            url = rel.get("academic_item_url", "")
-            uoc = rel.get("academic_item_credit_points", "")
-            specialisations.append(f"- {code} **{name}** – {uoc} UOC – [{url}]({url})")
-
-        section_md = f"### {title}\n\n{description}\n\n" + "\n".join(specialisations)
-        sections.append(section_md)
-
-    return "\n\n---\n\n".join(sections)
-
-def generate_associated_programs_formatted(content: Dict[str, Any]) -> str:
-    """
-    Generate formatted associated programs from `associated_programs` nested JSON.
-    """
-    programs_sections = []
-    associations = content.get("associated_programs", [])
-
-    for assoc in associations:
-        assoc_type = assoc.get("association_type") or assoc.get("association_type", {}).get("label", "")
-        if assoc_type:
-            programs_sections.append(f"### {assoc_type}")
-
-        for program in assoc.get("associated_programs", []):
-            program_info = []
-
-            title = program.get("assoc_title", "")
-            short_title = program.get("assoc_short_title", "")
-            award = program.get("assoc_award_single", "")
-            duration = program.get("assoc_duration_hb_display", "")
-            campus = program.get("assoc_campus", "")
-            credits = program.get("assoc_credit_points", "")
-            url = program.get("assoc_url", "")
-            full_url = f"https://www.handbook.unsw.edu.au{url}" if url else ""
-
-            if short_title:
-                program_info.append(f"**Program:** {short_title}")
-            elif title:
-                program_info.append(f"**Program:** {title}")
-            if award:
-                program_info.append(f"**Award:** {award}")
-            if duration:
-                program_info.append(f"**Duration:** {duration}")
-            if campus:
-                program_info.append(f"**Campus:** {campus}")
-            if credits:
-                program_info.append(f"**Credits:** {credits} UOC")
-            if full_url:
-                program_info.append(f"[🔗 View program]({full_url})")
-
-            if program_info:
-                programs_sections.append("  ".join(program_info))
-
-    return "\n\n".join(programs_sections)
-
-def generate_entry_requirements_formatted(content: Dict[str, Any]) -> str:
-    """
-    Generate formatted entry requirements from any `entry_requirements_*` field.
-    Supports both flat (_domain/_requirements) and structured list formats.
-    """
-    requirements_sections = []
-    entry_req_groups = {}
-
-    for key, value in content.items():
-        if "entry_requirements_" not in key:
-            continue
-        
-        if isinstance(value, list):
-            for block in value:
-                if not isinstance(block, dict):
-                    continue
-                domain = block.get("domain", "").strip()
-                req_list = block.get("requirements", [])
-                if not isinstance(req_list, list):
-                    continue
-                paragraph_parts = []
-                for req in req_list:
-                    if not isinstance(req, dict):
-                        continue
-                    desc = req.get("description", "")
-                    clean_desc = clean_text(desc)
-                    if clean_desc:
-                        paragraph_parts.append(clean_desc)
-                if paragraph_parts:
-                    combined = "\n".join(paragraph_parts)
-                    if domain:
-                        requirements_sections.append(f"### {domain}\n{combined}")
-                    else:
-                        requirements_sections.append(combined)
-
-        elif isinstance(value, str) and is_meaningful_value(value):
-            if key.endswith("_domain"):
-                base = key[:-7]
-                entry_req_groups.setdefault(base, {})["domain"] = clean_text(value)
-            elif key.endswith("_requirements"):
-                base = key[:-13]
-                entry_req_groups.setdefault(base, {})["requirements"] = clean_text(value)
-
-    for base_name, section_data in sorted(entry_req_groups.items()):
-        domain = section_data.get("domain", "")
-        requirements = section_data.get("requirements", "")
-        if domain and requirements:
-            requirements_sections.append(f"### {domain}\n{requirements}")
-        elif requirements:
-            requirements_sections.append(requirements)
-
-    result = "\n\n".join(requirements_sections)
-    return result
-
-def generate_recognition_of_achievements_formatted(content: Dict[str, Any]) -> str:
-    """
-    Convert the 'recognition_of_achievements' dictionary to markdown format.
-    """
-    achievements_sections = []
-    achievements = content.get("recognition_of_achievements", [])
-
-    cardtitle = achievements.get("cardtitle", {}).get("text", "").strip()
-    if cardtitle:
-        achievements_sections.append(f"## {cardtitle}")
-
-    cardsubtitle = achievements.get("cardsubtitle", {}).get("text", "").strip()
-    if cardsubtitle:
-        achievements_sections.append(f"### {cardsubtitle}")
-
-    content_items = achievements.get("content", [])
-    for item in sorted(content_items, key=lambda x: x.get("order", 0)):
-        if "text" in item:
-            achievements_sections.append(item["text"].strip())
-        elif "label" in item and "value" in item:
-            label = item["label"].strip()
-            url = item["value"].strip()
-            achievements_sections.append(f"[{label}]({url})")
-
-    return "\n\n".join(achievements_sections)
 
 
 def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
@@ -351,26 +346,6 @@ def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
                 cleaned[clean_field_name] = extracted_value
     
     # Handle special complex fields that need custom processing
-    
-    # Generate formatted program structure
-    program_structure_formatted = generate_program_structure_formatted(content)
-    if program_structure_formatted:
-        cleaned["program_structure_formatted"] = program_structure_formatted
-    
-    # Generate formatted entry requirements from entry_requirements_* fields
-    entry_requirements_formatted = generate_entry_requirements_formatted(content)
-    if entry_requirements_formatted:
-        cleaned["entry_requirements_formatted"] = entry_requirements_formatted
-    
-    # Generate formatted associated programs from associated_programs_* fields
-    associated_programs_formatted = generate_associated_programs_formatted(content)
-    if associated_programs_formatted:
-        cleaned["associated_programs_formatted"] = associated_programs_formatted
-        
-    # Generate formatted recognition of achievement
-    recognition_of_achievements_formatted = generate_recognition_of_achievements_formatted(content)
-    if recognition_of_achievements_formatted:
-        cleaned["recognition_of_achievements_formatted"] = recognition_of_achievements_formatted    
     
     # Learning outcomes - format as strict markdown numbered list
     learning_outcomes = content.get("learning_outcomes", [])
@@ -425,10 +400,46 @@ def clean_academic_content(content: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(req_data, (dict, list)):
                 req_fields = extract_all_meaningful_fields(req_data, req_field)
                 cleaned.update(req_fields)
-            elif is_meaningful_value(req_data):
+            elif is_meaningful(req_data):
                 cleaned[req_field] = clean_text(str(req_data))
     
     return cleaned
+
+
+def format_nested_section(title: str, section_data: Any) -> Optional[str]:
+    """
+    通用嵌套字段格式化器，支持列表对象、dict、段落等自动判断。
+    """
+    if not section_data:
+        return None
+
+    parts = [f"## {title}"]
+
+    if isinstance(section_data, list):
+        for item in section_data:
+            if isinstance(item, dict):
+                block = []
+                for k, v in item.items():
+                    if is_meaningful(v):
+                        clean_k = beautify_field_name(str(k))
+                        clean_v = clean_text(str(v))
+                        block.append(f"- **{clean_k}:** {clean_v}")
+                if block:
+                    parts.append("\n".join(block))
+            elif is_meaningful(item):
+                parts.append(f"- {clean_text(str(item))}")
+    elif isinstance(section_data, dict):
+        for k, v in section_data.items():
+            if is_meaningful(v):
+                clean_k = beautify_field_name(str(k))
+                clean_v = clean_text(str(v))
+                parts.append(f"- **{clean_k}:** {clean_v}")
+    elif isinstance(section_data, str):
+        clean_v = clean_text(section_data)
+        if clean_v:
+            parts.append(clean_v)
+
+    return "\n".join(parts) if len(parts) > 1 else None
 
 
 def get_random_headers() -> Dict[str, str]:
@@ -513,11 +524,85 @@ def parse_description(html_text: str) -> str:
     return clean_text(html_text)
 
 
-def scrape_single_page(url: str) -> Optional[Document]:
+def scrape_single_page_chunked(url: str) -> List[Document]:
+    """
+    使用分块化方法提取页面内容，每个字段生成一个Document
+    """
+    print(f"🔍 Scraping structured page (chunked): {url}")
+
+    # Use robust request function with retries
+    response = make_request_with_retry(url)
+    if not response:
+        return []
+
+    try:
+        soup = BeautifulSoup(response.text, "html.parser")
+        script_tag = soup.find("script", id="__NEXT_DATA__")
+        if not script_tag:
+            raise ValueError("❌ 找不到 __NEXT_DATA__ script 标签")
+    except Exception as e:
+        print(f"❌ HTML 解析失败: {e}")
+        return []
+
+    try:
+        next_data = json.loads(script_tag.string)
+        page_props = next_data.get("props", {}).get("pageProps", {})
+
+        # 合并多个可能包含内容的字段
+        merged_content = {}
+
+        # 1. pageContent
+        pc = page_props.get("pageContent")
+        if isinstance(pc, dict):
+            merged_content.update(pc)
+        elif isinstance(pc, str):
+            print("⚠️ pageContent 是字符串，可能是错误提示：", pc[:100])
+
+        # 2. program (某些页面结构)
+        pg = page_props.get("program")
+        if isinstance(pg, dict):
+            merged_content.update(pg)
+
+        # 3. programData（部分页面）
+        pd = page_props.get("programData")
+        if isinstance(pd, dict):
+            merged_content.update(pd)
+
+        # 4. metadata（补充信息）
+        meta = page_props.get("metadata")
+        if isinstance(meta, dict):
+            merged_content.update(meta)
+
+        if not merged_content:
+            print("⚠️ 没有发现结构化内容")
+            return []
+
+        # 使用分块化方法处理内容
+        chunks = chunk_structured_content(merged_content, url)
+        
+        print(f"✅ Generated {len(chunks)} content chunks")
+        return chunks
+
+    except Exception as e:
+        print(f"❌ 解析 structured JSON 失败: {e}")
+        return []
+
+
+def scrape_single_page(url: str, use_chunking: bool = False):
     """
     使用 __NEXT_DATA__ 脚本提取 UNSW handbook 页面结构化内容。
     适用于 program/specialisation/course 页面。
+    
+    Args:
+        url: 页面URL
+        use_chunking: 是否使用分块化处理（每个字段一个Document）
+        
+    Returns:
+        List[Document] if use_chunking=True, Optional[Document] if use_chunking=False
     """
+    if use_chunking:
+        return scrape_single_page_chunked(url)
+    
     print(f"🔍 Scraping structured page: {url}")
 
     # Use robust request function with retries
@@ -536,178 +621,55 @@ def scrape_single_page(url: str) -> Optional[Document]:
 
     try:
         next_data = json.loads(script_tag.string)
-        page_content = next_data.get("props", {}).get("pageProps", {}).get("pageContent", {})
-        if not page_content:
-            print("⚠️ 无 pageContent 字段")
+        page_props = next_data.get("props", {}).get("pageProps", {})
+
+        # 🧠 合并多个可能包含内容的字段
+        merged_content = {}
+
+        # 1. pageContent
+        pc = page_props.get("pageContent")
+        if isinstance(pc, dict):
+            merged_content.update(pc)
+        elif isinstance(pc, str):
+            print("⚠️ pageContent 是字符串，可能是错误提示：", pc[:100])
+
+        # 2. program (某些页面结构)
+        pg = page_props.get("program")
+        if isinstance(pg, dict):
+            merged_content.update(pg)
+
+        # 3. programData（部分页面）
+        pd = page_props.get("programData")
+        if isinstance(pd, dict):
+            merged_content.update(pd)
+
+        # 4. metadata（补充信息）
+        meta = page_props.get("metadata")
+        if isinstance(meta, dict):
+            merged_content.update(meta)
+
+        # 最终 merged_content 是综合内容
+        if not merged_content:
+            print("⚠️ 没有发现结构化内容")
             return None
 
-        # Clean and extract content using new data cleansing functions
-        cleaned_content = clean_academic_content(page_content)
+        # 使用语义化文档构建器生成内容
+        doc = build_semantic_document(merged_content, [], url)
+        if not doc:
+            print("⚠️ 无法生成语义化文档")
+            return None
         
-        # Build comprehensive structured content text, preserving maximum information
-        content_parts = []
+        full_text = doc.page_content
         
-        # Title and basic info
-        title = cleaned_content.get("title", "").strip()
-        code = cleaned_content.get("code", "").strip()
-        source = url.strip()
-        type_label = (
-            cleaned_content.get("contentTypeLabel") or
-            cleaned_content.get("academic_item_type")
-        )
-        
-        if type_label == "Double Degree":
-            type_label = "Double Degree Program"
-
-        if title:
-            content_parts.append(f"# {title} - {type_label} {code}")
-
-        if code:
-            content_parts.append(f"**{type_label} Code:** {code}")
-            
-        if source:
-            content_parts.append(f"**Source URL:** {source}")
-        
-        # Academic details
-        academic_info = []
-        academic_fields = [
-            ("faculty", "Faculty"), ("school", "School"), ("study_level", "Study Level"),
-            ("credit_points", "Credit Points"), ("duration", "Duration"), 
-            ("part_time_duration", "Part-time Duration"), ("program_type", "Program Type"),
-            ("content_type", "Content Type"), ("type", "Type")
-        ]
-        
-        for field, label in academic_fields:
-            if cleaned_content.get(field):
-                academic_info.append(f"**{label}:** {cleaned_content[field]}")
-                
-        # 1. Academic Information
-        if academic_info:
-            content_parts.append("## Academic Information")
-            content_parts.append(" ".join(academic_info))
-        
-        # 2. Overview
-        if cleaned_content.get("description"):
-            content_parts.append(f"## Overview\n{cleaned_content['description']}")
-            
-        # 3. Learning outcomes (formatted as numbered list)
-        if cleaned_content.get("learning_outcomes_formatted"):
-            content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes_formatted']}")
-        elif cleaned_content.get("learning_outcomes"):
-            content_parts.append(f"## Learning Outcomes\n{cleaned_content['learning_outcomes']}")
-        
-        # 4.1 Program Structure
-        if cleaned_content.get("structure_summary"):
-            content_parts.append(f"## Program Structure\n{cleaned_content['structure_summary']}\n{cleaned_content['program_structure_formatted']}")
-        
-        # 5. Admission Requirements (comprehensive)
-        if cleaned_content.get("entry_requirements_formatted"):
-            content_parts.append(f"## Admission Requirements\n{cleaned_content['entry_requirements_formatted']}")
-
-        # 6. Program Requirements
-        if cleaned_content.get("additional_progression_requirements_restrictions"):
-            content_parts.append(f"## Program Requirements\n{cleaned_content['additional_progression_requirements_restrictions']}")
-        if cleaned_content.get("assumed_knowledge"):
-            content_parts.append(f"## Assumed Knowledge\n{cleaned_content['assumed_knowledge']}")
-        
-        # 7. Associated Programs
-        if cleaned_content.get("associated_programs_formatted"):
-            content_parts.append(f"## Associated Programs\n{cleaned_content['associated_programs_formatted']}")
-        
-        # 8. Recognition of Achievements
-        if cleaned_content.get("recognition_of_achievements_formatted"):
-            content_parts.append(f"## Recognition of Achievements\n{cleaned_content['recognition_of_achievements_formatted']}")
-        
-        # 9. Program Fees
-        program_fees = """
-            At UNSW fees are generally charged at course level and therefore dependent upon individual enrolment and other factors such as student's residency status. For generic information on fees and additional expenses of UNSW programs, click on one of the following:
-            - [Domestic Students](https://student.unsw.edu.au/fees-domestic-full-fee-paying)
-            - [Commonwealth Supported Students (if applicable)](https://student.unsw.edu.au/fees-student-contribution-rates)
-            - [International Students](https://student.unsw.edu.au/fees-international)
-        """
-        if "Program" in type_label:
-            content_parts.append(f"## Program Fees\n{cleaned_content['assessment']}")
-        if cleaned_content.get("additional_info"):
-            content_parts.append(f"### Additional Info\n{cleaned_content['additional_info']}")
-        
-        if cleaned_content.get("teaching_methods"):
-            content_parts.append(f"## Teaching Methods\n{cleaned_content['teaching_methods']}")        
-      
-        # Career and professional information
-        if cleaned_content.get("career_opportunities"):
-            content_parts.append(f"## Career Opportunities\n{cleaned_content['career_opportunities']}")
-        
-        if cleaned_content.get("professional_recognition"):
-            content_parts.append(f"## Professional Recognition\n{cleaned_content['professional_recognition']}")
-        
-        if cleaned_content.get("accreditation"):
-            content_parts.append(f"## Accreditation\n{cleaned_content['accreditation']}")
-        
-        # Specializations and majors
-        if cleaned_content.get("specializations"):
-            content_parts.append(f"## Specializations\n{cleaned_content['specializations']}")
-        
-        if cleaned_content.get("majors"):
-            content_parts.append(f"## Majors\n{cleaned_content['majors']}")
-        
-        # Study details and logistics
-        study_details = []
-        study_fields = [
-            ("study_modes", "Study Modes"), ("intake_periods", "Intake Periods"),
-            ("campus", "Campus"), ("contact_hours", "Contact Hours"),
-            ("workload", "Workload"), ("min_units", "Minimum Units"),
-            ("max_units", "Maximum Units")
-        ]
-        
-        for field, label in study_fields:
-            if cleaned_content.get(field):
-                study_details.append(f"**{label}:** {cleaned_content[field]}")
-        
-        if study_details:
-            content_parts.append("## Study Details")
-            content_parts.append(" ".join(study_details))
-        
-        # Fees and costs
-        fee_info = []
-        if cleaned_content.get("indicative_fee"):
-            fee_info.append(f"**Domestic Fee:** {cleaned_content['indicative_fee']}")
-        if cleaned_content.get("indicative_fee_international"):
-            fee_info.append(f"**International Fee:** {cleaned_content['indicative_fee_international']}")
-        
-        if fee_info:
-            content_parts.append("## Fees")
-            content_parts.append(" ".join(fee_info))
-        
-        # Administrative information
-        admin_info = []
-        admin_fields = [
-            ("cricos_code", "CRICOS Code"), ("uac_code", "UAC Code"), ("atar", "ATAR")
-        ]
-        
-        for field, label in admin_fields:
-            if cleaned_content.get(field):
-                admin_info.append(f"**{label}:** {cleaned_content[field]}")
-        
-        if admin_info:
-            content_parts.append("## Administrative Information")
-            content_parts.append(" ".join(admin_info))
-        
-        # Progression requirements
-        if cleaned_content.get("progression_requirements"):
-            content_parts.append(f"## Progression Requirements\n{cleaned_content['progression_requirements']}")
-
-        # Join all parts with double newline for proper markdown spacing
-        full_text = "\n\n".join(content_parts).strip()
-
-        # Create comprehensive metadata
+        # Create essential metadata only
         metadata = {
             "source": url,
             "scraped_at": datetime.utcnow().isoformat(),
             "content_length": len(full_text),
+            "title": merged_content.get("title", ""),
+            "code": merged_content.get("code", ""),
+            "content_type": merged_content.get("contentTypeLabel", "")
         }
-        
-        # Add all cleaned content fields to metadata
-        metadata.update(cleaned_content)
 
         return Document(page_content=full_text, metadata=metadata)
 
@@ -756,7 +718,7 @@ def load_page_content(filepath: str) -> Optional[Document]:
         return None
 
 
-def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: tuple = (2.0, 5.0)) -> List[Document]:
+def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: tuple = (2.0, 5.0), use_chunking: bool = False) -> List[Document]:
     """
     Batch scrape URLs with anti-blocking measures
     
@@ -764,6 +726,7 @@ def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: t
         urls: List of URLs to scrape
         save_content: Whether to save content to files
         delay_range: (min_delay, max_delay) in seconds between requests
+        use_chunking: Whether to use chunking (each field becomes a Document)
     """
     docs = []
     failed = []
@@ -778,12 +741,21 @@ def scrape_urls_batch(urls: List[str], save_content: bool = True, delay_range: t
         if i > 0:
             add_random_delay(delay_range[0], delay_range[1])
         
-        doc = scrape_single_page(url)
-        if doc:
-            docs.append(doc)
-            if save_content:
-                save_page_content(doc)
-            print(f"✅ Successfully scraped: {doc.metadata.get('title', 'Unknown')}")
+        result = scrape_single_page(url, use_chunking=use_chunking)
+        if result:
+            if use_chunking:
+                # result is List[Document]
+                docs.extend(result)
+                if save_content:
+                    for doc in result:
+                        save_page_content(doc)
+                print(f"✅ Successfully scraped {len(result)} chunks from: {url}")
+            else:
+                # result is Optional[Document]
+                docs.append(result)
+                if save_content:
+                    save_page_content(result)
+                print(f"✅ Successfully scraped: {result.metadata.get('title', 'Unknown')}")
         else:
             failed.append(url)
             print(f"❌ Failed to scrape: {url}")
