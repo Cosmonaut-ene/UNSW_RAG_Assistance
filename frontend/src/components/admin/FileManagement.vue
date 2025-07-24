@@ -23,7 +23,7 @@
         >Upload</el-button>
         <el-button
           class="upload-btn-modern"
-          type="success"
+          type="primary"
           :loading="discoverLoading"
           @click="discoverLinks"
         >{{ discoverLoading ? "Discovering... (may take 2-5 minutes)" : "Discover UNSW CSE" }}</el-button>
@@ -100,7 +100,7 @@
         <div class="dialog-footer">
           <el-button @click="showDiscoveryDialog = false">Cancel</el-button>
           <el-button
-            type="primary"
+            type="success"
             :loading="scrapeLoading"
             @click="confirmScraping"
           >

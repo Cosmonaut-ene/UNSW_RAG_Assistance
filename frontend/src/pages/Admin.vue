@@ -2,12 +2,12 @@
   <div class="admin-container">
     <div class="admin-header-bg">
       <header class="admin-header">
-        <img src="../assets/unsw.png" alt="UNSW" class="admin-logo" />
+        <img src="../assets/logoLight.png" alt="UNSW" class="admin-logo" />
         <div class="admin-title">Admin Panel</div>
         <div class="admin-header-actions">
           <el-button
             class="logout-btn"
-            type="default"
+            type="danger"
             @click="logout"
           >Logout</el-button>
         </div>
@@ -63,7 +63,7 @@ onMounted(async () => {
 <style scoped>
 .admin-header-bg {
   width: 100%;
-  background: #fbdd4a;
+  background: #4a90e2;
   border-bottom: 1.5px solid #ececec;
 }
 
@@ -83,7 +83,7 @@ onMounted(async () => {
 }
 
 .admin-logo {
-  width: 86px;
+  width: 110px;
   margin-right: 16px;
   flex-shrink: 0;
 }
@@ -112,9 +112,6 @@ onMounted(async () => {
   margin-left: 0; /* 防止多余空隙 */
 }
 
-.logout-btn {
-  background: #ff0000;
-}
 
 .export-btn {
   background: #22c55e;

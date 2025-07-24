@@ -1,7 +1,8 @@
 <template>
   <div class="app-container">
     <header class="chat-header">
-      <img src="../assets/unsw.png" alt="UNSW" class="sidebar-logo" />
+      <img v-if="isDark" src="../assets/logoDark.png" alt="UNSW" class="sidebar-logo" />
+      <img v-if="!isDark" src="../assets/logoLight.png" alt="UNSW" class="sidebar-logo" />
       <div class="chat-title">UNSW CSE Open Day Chatbot</div>
       <div class="header-actions">        
         <el-switch v-model="isDark" inline-prompt active-text="🌙" inactive-text="☀️" />
@@ -309,8 +310,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   min-height: 74px;
   font-size: 1.28rem;
   font-weight: bold;
-  background: #fbdd4a;
-  border-bottom: 1.5px solid #ececec;
+  background: #4a90e2;
   display: flex;
   align-items: center;
   padding: 0 32px;
@@ -318,11 +318,19 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   gap: 18px;
   position: relative; 
 }
+.dark .chat-header {
+   background-color: #2a3d53;
+  color: #fff;
+}
+.dark .sidebar-logo {
+  background-color: #2a3d53;
+}
 
 .chat-header .sidebar-logo {
-  width: 90px;
+  width: 110px;
   margin-right: 14px;
 }
+
 
 .chat-title {
   position: absolute;
