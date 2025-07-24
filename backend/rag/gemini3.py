@@ -374,7 +374,15 @@ def build_rag_qa_chain():
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
         template = (
-            "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+            "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
+            
+            "You are friendly, concise, and informative. You can answer questions about:\n"
+            "- Computer Science degrees (undergraduate, postgraduate)\n"
+            "- Course structures, prerequisites, key subjects\n"
+            "- Student societies (e.g., CSESoc)\n"
+            "- Facility locations (e.g., buildings, restrooms)\n"
+            "- Open Day schedules and booth locations\n\n"
+            
             "You answer questions based on structured academic documents written in Markdown format. These documents include the following sections:\n"
             "- ## Description\n"
             "- ## Learning Outcomes\n"
@@ -388,7 +396,7 @@ def build_rag_qa_chain():
             "- Respond in a friendly, conversational tone, using emojis where appropriate 😊\n"
             "- If comparing two or more courses/programs, present the answer in a **Markdown table** comparing key attributes like name, duration, campus, intake, AQF level, etc.\n"
             "- If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), **ignore the context** and respond with:\n"
-            "  👋 Hi there! I'm your UNSW Open Day Assistant. I can help you with:\n"
+            "  👋 Hi there! I'm your UNSW CSE Open Day Assistant. I can help you with:\n"
             "  - 🧑‍🏫 Program and course info\n"
             "  - 📍 Maps and booth locations\n"
             "  - 🗓️ Event schedules\n"
@@ -397,11 +405,19 @@ def build_rag_qa_chain():
             "  (Try asking about a course code like COMP9020 or a program like 3789!)\n"
             
             "- If the context is unrelated or doesn't contain an answer, reply:\n"
-            "  🙁 Sorry, I couldn't find relevant information in our materials. Could you please rephrase or be more specific?\n\n"
+            "  🙁 Sorry, I couldn't find relevant information in our materials. Could you please rephrase or be more specific?\n"
+            "- If a user asks a question unrelated to Computer Science or the Open Day event, kindly reply:\n"
+            "  \"I'm currently focused on UNSW CSE Open Day and Computer Science topics. Please check the main UNSW website for other areas.\"\n"
+            "- If users ask for building locations, directions, restrooms, or booth areas, use the MazeMap search URL pattern:\n"
+            "  For buildings: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM]\n"
+            "  Replace [SEARCH_TERM] with the building code/name (URL encode spaces as %20). This triggers search suggestions.\n"
+            "  Format as: [Building/Location MazeMap Search](URL)\n"
+            "  Example: \"You can search for K17 Building here: [K17 MazeMap Search](https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=K17)\"\n\n"
 
             "✅ Always:\n"
             "- Encourage follow-up questions\n"
             "- Keep responses helpful and engaging\n"
+            "- Prioritize information from *.unsw.edu.au domains when providing links\n"
 
             "------------------------------\n"
             "Context:\n{context}\n\n"
@@ -663,7 +679,7 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
         prompt_template = PromptTemplate(
             input_variables=["history", "question"],
             template=(
-                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
                 
                 "== Conversation History ==\n"
                 "{history}\n\n"
@@ -679,7 +695,7 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
                 
                 "Use a friendly, conversational tone with emojis where appropriate 😊. "
                 "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
-                "👋 Hi there! I'm your UNSW Open Day Assistant. I can help you with:\n"
+                "👋 Hi there! I'm your UNSW CSE Open Day Assistant. I can help you with:\n"
                 "- 🧑‍🏫 Program and course info\n"
                 "- 📍 Maps and booth locations\n"
                 "- 🗓️ Event schedules\n"
@@ -695,7 +711,7 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
         prompt_template = PromptTemplate(
             input_variables=["question"],
             template=(
-                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
                 
                 "❓ Question:\n{question}\n\n"
                 
@@ -704,7 +720,7 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
                 
                 "Use a friendly, conversational tone with emojis where appropriate 😊. "
                 "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
-                "👋 Hi there! I'm your UNSW Open Day Assistant. I can help you with:\n"
+                "👋 Hi there! I'm your UNSW CSE Open Day Assistant. I can help you with:\n"
                 "- 🧑‍🏫 Program and course info\n"
                 "- 📍 Maps and booth locations\n"
                 "- 🗓️ Event schedules\n"
@@ -752,9 +768,47 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
         })
     
-    # 4. Execute hybrid search
+    # 4. Add MazeMap fallback document (always included in context)
+    fallback_doc = {
+        'page_content': """
+UNSW Campus Map Instructions:
+
+When users ask about building locations, directions, or facilities, provide MazeMap search links that will show search suggestions.
+
+## MazeMap Search URL Pattern:
+For buildings: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM]
+
+Replace [SEARCH_TERM] with the building code or name. This will trigger MazeMap's search functionality with suggestions.
+
+## Search Term Examples:
+- For K17: search=K17
+- For Computer Science Building: search=Computer%20Science%20Building
+- For Engineering: search=Engineering
+- For Roundhouse: search=Roundhouse
+- For Library: search=Library
+
+## URL Examples:
+- K17 Building: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=K17
+- Computer Science: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=Computer%20Science
+- General campus map: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2
+
+Always format as: [Building/Location MazeMap Search](URL)
+""",
+        'metadata': {
+            'source': 'mazemap_fallback',
+            'search_type': 'fallback',
+            'rag_score': 0,
+            'keyword_score': 0,
+            'hybrid_score': 0
+        }
+    }
+    
+    # 5. Execute hybrid search
     hybrid_engine = get_hybrid_search_engine()
     hybrid_results = hybrid_engine.search_hybrid(rewritten_query, rag_results, max_results=5)
+    
+    # Always add MazeMap fallback to results
+    hybrid_results.append(fallback_doc)
     
     print(f"[Hybrid Search] Found {len(hybrid_results)} results after threshold filtering")
     
@@ -821,7 +875,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
         prompt_template = PromptTemplate(
             input_variables=["history", "context", "question"],
             template = (
-                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
 
                 "== Conversation History ==\n"
                 "{history}\n\n"
@@ -853,7 +907,7 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
         prompt_template = PromptTemplate(
             input_variables=["context", "question"],
             template=(
-                "You are a friendly and helpful AI assistant for UNSW CSE Open Day. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
                 "The following context was found using hybrid search (combining semantic and keyword matching):\n\n"
                 "Context: {context}\n\n"
                 "Question: {question}\n\n"
