@@ -56,9 +56,10 @@
       @current-change="handlePageChange"
       style="margin-top: 18px"
     />
+    <br/>
     <el-button
       class="export-btn"
-      type="success"
+      type="primary"
       style="margin-bottom:18px"
       @click="exportChatLog"
     >Export Chat Log</el-button>
