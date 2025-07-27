@@ -1,5 +1,5 @@
 # UNSW Handbook Links
-# Updated on 2025-07-23 10:10:16
+# Updated on 2025-07-25 01:00:31
 
 # === PROGRAMS ===
 https://www.handbook.unsw.edu.au/postgraduate/programs/2025/5546
@@ -60,7 +60,6 @@ https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPPS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPQS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPRS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPTS
-https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPUS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPVS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPWS
 https://www.handbook.unsw.edu.au/postgraduate/specialisations/2025/COMPXS

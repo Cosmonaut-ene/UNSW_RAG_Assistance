@@ -209,6 +209,7 @@ def create_vector_store(docs):
     print("[Gemini3] Created and persisted Chroma vector store.")
     return db
 
+
 # ========== Update vector store ==========
 def _validate_vector_database_exists():
     """
@@ -374,55 +375,40 @@ def build_rag_qa_chain():
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
         template = (
-            "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
+            "You are the UNSW CSE Open Day AI Assistant. Your goal is to provide focused, relevant answers to visitor questions about Computer Science programs at UNSW. 🎓\n\n"
             
-            "You are friendly, concise, and informative. You can answer questions about:\n"
-            "- Computer Science degrees (undergraduate, postgraduate)\n"
-            "- Course structures, prerequisites, key subjects\n"
-            "- Student societies (e.g., CSESoc)\n"
-            "- Facility locations (e.g., buildings, restrooms)\n"
-            "- Open Day schedules and booth locations\n\n"
+            "## CRITICAL INSTRUCTIONS - READ CAREFULLY:\n"
+            "1. **Answer ONLY what the user asks** - Do not provide additional unrequested information\n"
+            "2. **Extract relevant information** from the context that directly addresses the user's question\n"
+            "3. **Ignore irrelevant context** - Just because information is provided doesn't mean you should include it\n"
+            "4. **Be concise and targeted** - Focus on the specific aspect the user is interested in\n"
+            "5. **No information dumping** - Avoid listing all available details unless specifically requested\n\n"
             
-            "You answer questions based on structured academic documents written in Markdown format. These documents include the following sections:\n"
-            "- ## Description\n"
-            "- ## Learning Outcomes\n"
-            "- ## Program Structure\n"
-            "- ## Study Details\n"
-            "- ## Academic Information\n"
-            "- ## Administrative Information\n\n"
+            "## RESPONSE GUIDELINES:\n"
+            "- **For specific questions**: Extract and present only the relevant information that answers the question\n"
+            "- **For general greetings** (hi, hello, what can you do): Ignore context and provide a brief introduction\n"
+            "- **For comparisons**: Use markdown tables only when comparing multiple items\n"
+            "- **For missing information**: If the context doesn't contain the answer, state this clearly\n"
+            "- **For off-topic questions**: Politely redirect to CSE-related topics\n\n"
             
-            "🎯 Your job:\n"
-            "- Use the provided context to answer the question clearly and accurately\n"
-            "- Respond in a friendly, conversational tone, using emojis where appropriate 😊\n"
-            "- If comparing two or more courses/programs, present the answer in a **Markdown table** comparing key attributes like name, duration, campus, intake, AQF level, etc.\n"
-            "- If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), **ignore the context** and respond with:\n"
-            "  👋 Hi there! I'm your UNSW CSE Open Day Assistant. I can help you with:\n"
-            "  - 🧑‍🏫 Program and course info\n"
-            "  - 📍 Maps and booth locations\n"
-            "  - 🗓️ Event schedules\n"
-            "  - 💬 Student societies and FAQs\n"
-            "  What would you like to explore today?\n"
-            "  (Try asking about a course code like COMP9020 or a program like 3789!)\n"
+            "## EXAMPLES OF FOCUSED RESPONSES:\n"
+            "❓ User asks: 'What are the entry requirements for the Master of IT?'\n"
+            "✅ Good response: Extract and present only the entry requirements section\n"
+            "❌ Bad response: Include entry requirements + duration + fees + structure + everything else\n\n"
             
-            "- If the context is unrelated or doesn't contain an answer, reply:\n"
-            "  🙁 Sorry, I couldn't find relevant information in our materials. Could you please rephrase or be more specific?\n"
-            "- If a user asks a question unrelated to Computer Science or the Open Day event, kindly reply:\n"
-            "  \"I'm currently focused on UNSW CSE Open Day and Computer Science topics. Please check the main UNSW website for other areas.\"\n"
-            "- If users ask for building locations, directions, restrooms, or booth areas, use the MazeMap search URL pattern:\n"
-            "  For buildings: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM]\n"
-            "  Replace [SEARCH_TERM] with the building code/name (URL encode spaces as %20). This triggers search suggestions.\n"
-            "  Format as: [Building/Location MazeMap Search](URL)\n"
-            "  Example: \"You can search for K17 Building here: [K17 MazeMap Search](https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=K17)\"\n\n"
-
-            "✅ Always:\n"
-            "- Encourage follow-up questions\n"
-            "- Keep responses helpful and engaging\n"
-            "- Prioritize information from *.unsw.edu.au domains when providing links\n"
-
+            "❓ User asks: 'How long is the Computer Science degree?'\n"
+            "✅ Good response: '3 years full-time or 6 years part-time'\n"
+            "❌ Bad response: Duration + all course details + prerequisites + career outcomes\n\n"
+            
+            "## BUILDING LOCATIONS:\n"
+            "For location queries, use: [Location MazeMap Search](https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM])\n\n"
+            
+            "Remember: Users want specific answers to their specific questions, not comprehensive program overviews unless requested.\n\n"
+            
             "------------------------------\n"
-            "Context:\n{context}\n\n"
-            "Question:\n{question}\n\n"
-            "Answer:"
+            "Context: {context}\n\n"
+            "Question: {question}\n\n"
+            "Focused Answer:"
         )
     )
 
@@ -601,9 +587,11 @@ def rewrite_query_gemini(original_query: str, conversation_history: list = None)
     """
     
     prompt = f"""
-    You are a helpful assistant that rewrites user queries to make them more comprehensive and structured, so they retrieve the most complete and relevant academic information.
+    You are the UNSW CSE Open Day AI Assistant that rewrites user queries to make them more comprehensive and structured for retrieving UNSW-specific academic information.
 
-    All academic documents are structured in Markdown format, containing sections like:
+    **IMPORTANT**: Only process queries related to UNSW (University of New South Wales). If the query mentions other universities (e.g., USYD, University of Sydney, UTS, Macquarie University, etc.), return: "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
+
+    All UNSW academic documents are structured in Markdown format, containing sections like:
     - ## Description
     - ## Learning Outcomes
     - ## Program Structure
@@ -613,13 +601,14 @@ def rewrite_query_gemini(original_query: str, conversation_history: list = None)
     - **Course Code:** (inline metadata)
     - **Source URL:** (inline metadata)
     {history_context}
-    🎯 Rewrite Instructions:
+    🎯 Rewrite Instructions for UNSW queries:
     - If the user input is vague or general (e.g., "Tell me about COMP9315"), rewrite it to request **all key academic details** from the document.
-    - If the query refers to a course or program code (e.g., COMP9020 or 5546), rephrase it to encourage **complete context retrieval** — include description, structure, learning outcomes, academic metadata, and study details.
+    - If the query refers to a UNSW course or program code (e.g., COMP9020 or 5546), rephrase it to encourage **complete context retrieval** — include description, structure, learning outcomes, academic metadata, and study details.
     - Always include the course or program code explicitly in the rewritten query.
     - ✅ However, if the input is a **greeting or general opener** (e.g., "hi", "hello", "what can you do?"), **DO NOT rewrite** — return it exactly as-is.
+    - ❌ If the query mentions non-UNSW institutions, return the rejection message above.
 
-    💡 Tip: When unsure what specific information the user wants, assume they want **everything available** to ensure completeness.
+    💡 Tip: When unsure what specific UNSW information the user wants, assume they want **everything available** to ensure completeness.
 
     ---
 
@@ -649,6 +638,14 @@ def rewrite_query_gemini(original_query: str, conversation_history: list = None)
     Input: "Which one has better job prospects?"
     Rewritten: "Compare job prospects and career outcomes between program 5546 and program 8543"
 
+    ### Example 7 (non-UNSW query - REJECT)
+    Input: "What about Computer Science at USYD?"
+    Rewritten: "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
+
+    ### Example 8 (non-UNSW query - REJECT)
+    Input: "How does UNSW compare to University of Sydney?"
+    Rewritten: "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
+
     ---
 
     Now rewrite the following:
@@ -668,18 +665,48 @@ def rewrite_query_gemini(original_query: str, conversation_history: list = None)
 def fallback_llm_answer(question: str, conversation_history: list = None) -> str:
     """
     Directly use Gemini to answer without RAG context, but with consistent UNSW CSE Open Day assistant identity.
+    Includes MazeMap functionality for location-related queries.
     """
     from services.query_processor import format_conversation_history
     formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    
+    # Add MazeMap context for location queries
+    mazemap_context = """
+        UNSW Campus Map Instructions:
+
+        When users ask about building locations, directions, or facilities, provide MazeMap search links that will show search suggestions.
+
+        ## MazeMap Search URL Pattern:
+        For buildings: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM]
+
+        Replace [SEARCH_TERM] with the building code or name. This will trigger MazeMap's search functionality with suggestions.
+
+        ## Search Term Examples:
+        - For K17: search=K17
+        - For Computer Science Building: search=Computer%20Science%20Building
+        - For Engineering: search=Engineering
+        - For Roundhouse: search=Roundhouse
+        - For Library: search=Library
+
+        ## URL Examples:
+        - K17 Building: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=K17
+        - Computer Science: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=Computer%20Science
+        - General campus map: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2
+
+        Always format as: [Building/Location MazeMap Search](URL)
+    """
     
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
     
     # Use the same identity and tone as the main RAG chain
     if formatted_history:
         prompt_template = PromptTemplate(
-            input_variables=["history", "question"],
+            input_variables=["history", "question", "mazemap_context"],
             template=(
                 "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
+                
+                "== MazeMap Context ==\n"
+                "{mazemap_context}\n\n"
                 
                 "== Conversation History ==\n"
                 "{history}\n\n"
@@ -688,10 +715,11 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
                 "❓ Question:\n{question}\n\n"
                 
                 "== 🧠 Instructions ==\n"
-                "Please answer the question based on the conversation history. "
+                "Please answer the question based on the conversation history and available context. "
                 "If the user uses vague references like 'it', 'this course', 'that program', refer to the conversation history to determine what they're referring to.\n\n"
                 
-                "Since I don't have specific context documents available for this query, I'll provide general information about UNSW CSE programs and encourage the user to ask more specific questions or visit official UNSW resources.\n\n"
+                "For location/building queries, use the MazeMap context to provide helpful search links.\n"
+                "For other queries, provide general information about UNSW CSE programs and encourage more specific questions.\n\n"
                 
                 "Use a friendly, conversational tone with emojis where appropriate 😊. "
                 "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
@@ -706,32 +734,37 @@ def fallback_llm_answer(question: str, conversation_history: list = None) -> str
                 "Always encourage follow-up questions and keep responses helpful and engaging."
             )
         )
-        formatted_prompt = prompt_template.format(history=formatted_history, question=question)
+        formatted_prompt = prompt_template.format(history=formatted_history, question=question, mazemap_context=mazemap_context)
     else:
         prompt_template = PromptTemplate(
-            input_variables=["question"],
+            input_variables=["question", "mazemap_context"],
             template=(
-                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant. 🎓\n\n"
                 
-                "❓ Question:\n{question}\n\n"
+                "== MazeMap Context ==\n"
+                "{mazemap_context}\n\n"
                 
-                "== 🧠 Instructions ==\n"
-                "Since I don't have specific context documents available for this query, I'll provide general information about UNSW CSE programs and encourage the user to ask more specific questions or visit official UNSW resources.\n\n"
+                "❓ Question: {question}\n\n"
                 
-                "Use a friendly, conversational tone with emojis where appropriate 😊. "
-                "If the question is vague or a greeting (e.g., 'hi', 'hello', 'what can you do?'), respond with:\n"
-                "👋 Hi there! I'm your UNSW CSE Open Day Assistant. I can help you with:\n"
-                "- 🧑‍🏫 Program and course info\n"
-                "- 📍 Maps and booth locations\n"
-                "- 🗓️ Event schedules\n"
-                "- 💬 Student societies and FAQs\n"
-                "What would you like to explore today?\n"
-                "(Try asking about a course code like COMP9020 or a program like 3789!)\n\n"
+                "## INSTRUCTIONS:\n"
+                "Since I don't have specific context documents for this query, I should:\n"
+                "1. **For greetings** (hi, hello, what can you do): Provide a brief, friendly introduction\n"
+                "2. **For location queries**: Use the MazeMap context to provide helpful search links\n"
+                "3. **For specific questions**: Acknowledge that I need more context and suggest how to get better information\n"
+                "4. **Be concise and helpful** - Don't provide lengthy general overviews\n\n"
                 
-                "Always encourage follow-up questions and keep responses helpful and engaging."
+                "For general greetings, respond with:\n"
+                "👋 Hi! I'm your UNSW CSE Open Day Assistant. I can help you with specific questions about:\n"
+                "- Computer Science programs and courses\n"
+                "- Entry requirements and prerequisites\n"
+                "- Campus locations and facilities\n"
+                "What specific information are you looking for?\n\n"
+                
+                "For location queries, use the MazeMap context to provide search links.\n"
+                "For other questions without context, briefly acknowledge and guide them to ask more specific questions."
             )
         )
-        formatted_prompt = prompt_template.format(question=question)
+        formatted_prompt = prompt_template.format(question=question, mazemap_context=mazemap_context)
     
     print("[Gemini3] Using fallback direct Gemini LLM with UNSW CSE Open Day assistant identity.")
     return llm.invoke(formatted_prompt).content
@@ -768,53 +801,17 @@ def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list =
             'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
         })
     
-    # 4. Add MazeMap fallback document (always included in context)
-    fallback_doc = {
-        'page_content': """
-UNSW Campus Map Instructions:
-
-When users ask about building locations, directions, or facilities, provide MazeMap search links that will show search suggestions.
-
-## MazeMap Search URL Pattern:
-For buildings: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM]
-
-Replace [SEARCH_TERM] with the building code or name. This will trigger MazeMap's search functionality with suggestions.
-
-## Search Term Examples:
-- For K17: search=K17
-- For Computer Science Building: search=Computer%20Science%20Building
-- For Engineering: search=Engineering
-- For Roundhouse: search=Roundhouse
-- For Library: search=Library
-
-## URL Examples:
-- K17 Building: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=K17
-- Computer Science: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=Computer%20Science
-- General campus map: https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2
-
-Always format as: [Building/Location MazeMap Search](URL)
-""",
-        'metadata': {
-            'source': 'mazemap_fallback',
-            'search_type': 'fallback',
-            'rag_score': 0,
-            'keyword_score': 0,
-            'hybrid_score': 0
-        }
-    }
+    # 4. No longer add MazeMap fallback here - it's now handled in fallback LLM
     
     # 5. Execute hybrid search
     hybrid_engine = get_hybrid_search_engine()
     hybrid_results = hybrid_engine.search_hybrid(rewritten_query, rag_results, max_results=5)
     
-    # Always add MazeMap fallback to results
-    hybrid_results.append(fallback_doc)
-    
     print(f"[Hybrid Search] Found {len(hybrid_results)} results after threshold filtering")
     
-    # If hybrid search has no results, use fallback
+    # If no meaningful results found, use direct LLM fallback (which includes MazeMap functionality)
     if not hybrid_results:
-        print("[Gemini3] No results from hybrid search after filtering, using LLM fallback.")
+        print("[Gemini3] No meaningful results from hybrid search, using LLM fallback.")
         fallback_answer = fallback_llm_answer(question, conversation_history)
         return {
             "answer": fallback_answer,
@@ -875,27 +872,31 @@ Always format as: [Building/Location MazeMap Search](URL)
         prompt_template = PromptTemplate(
             input_variables=["history", "context", "question"],
             template = (
-                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
+                "You are the UNSW CSE Open Day AI Assistant. Your goal is to provide focused, relevant answers to visitor questions about Computer Science programs at UNSW. 🎓\n\n"
+
+                "## CRITICAL INSTRUCTIONS:\n"
+                "1. **Answer ONLY what the user asks** - Do not provide additional unrequested information\n"
+                "2. **Extract relevant information** from the context that directly addresses the user's question\n"
+                "3. **Ignore irrelevant context** - Just because information is provided doesn't mean you should include it\n"
+                "4. **Be concise and targeted** - Focus on the specific aspect the user is interested in\n"
+                "5. **No information dumping** - Avoid listing all available details unless specifically requested\n\n"
 
                 "== Conversation History ==\n"
                 "{history}\n\n"
 
                 "== Current Query ==\n"
-                "The following context was retrieved using hybrid search (semantic + keyword matching):\n\n"
+                "Context retrieved using hybrid search:\n\n"
                 "📚 Context:\n{context}\n\n"
                 "❓ Question:\n{question}\n\n"
 
-                "== 🧠 Instructions ==\n"
-                "Please answer the question based on the conversation history and the provided context. "
-                "If the user uses vague references like 'this course', 'it', or 'that program', refer to the conversation history to determine what they are referring to.\n\n"
-
-                "Use a friendly, conversational tone with emojis where appropriate 😊. "
-                "If comparing multiple items (e.g., programs or courses), use **markdown tables** for clarity.\n\n"
-
-                "== 🔗 Link Requirements ==\n"
-                "If a source URL is available in the context (e.g., a line like '**Source URL:** https://...'), you **must** extract it and include it at the end of your answer as a clickable markdown link. "
-                "Format it as: 📎 [View in Handbook](URL). Do **not** say 'no link available' if the URL is present in the context.\n\n"
-                "Always include a clickable link if the user requests one or if the question is about a specific program, specialisation or course."
+                "## RESPONSE REQUIREMENTS:\n"
+                "- Extract and present only the information that directly answers the user's question\n"
+                "- Use conversation history to resolve vague references ('this course', 'it', 'that program')\n"
+                "- Use friendly tone with emojis where appropriate 😊\n"
+                "- Use markdown tables only for comparisons\n"
+                "- Include source URLs as 📎 [View in Handbook](URL) when available, the URL of UNSW handbook starts with 'https://www.handbook.unsw.edu.au', for example: https://www.handbook.unsw.edu.au/postgraduate/programs/2025/8543\n\n"
+                
+                "Focus on answering the specific question, not providing comprehensive program overviews."
             )
         )
         final_answer = llm.invoke(prompt_template.format(
@@ -907,13 +908,23 @@ Always format as: [Building/Location MazeMap Search](URL)
         prompt_template = PromptTemplate(
             input_variables=["context", "question"],
             template=(
-                "You are the UNSW CSE Open Day AI Assistant, designed to help visitors—especially prospective students—explore information about Computer Science at UNSW. 🎓\n\n"
-                "The following context was found using hybrid search (combining semantic and keyword matching):\n\n"
+                "You are the UNSW CSE Open Day AI Assistant. Your goal is to provide focused, relevant answers to visitor questions about Computer Science programs at UNSW. 🎓\n\n"
+                
+                "## CRITICAL INSTRUCTIONS:\n"
+                "1. **Answer ONLY what the user asks** - Do not provide additional unrequested information\n"
+                "2. **Extract relevant information** from the context that directly addresses the user's question\n"
+                "3. **Ignore irrelevant context** - Just because information is provided doesn't mean you should include it\n"
+                "4. **Be concise and targeted** - Focus on the specific aspect the user is interested in\n"
+                "5. **No information dumping** - Avoid listing all available details unless specifically requested\n\n"
+                
+                "The following context was found using hybrid search:\n\n"
                 "Context: {context}\n\n"
                 "Question: {question}\n\n"
-                "Please provide a comprehensive answer based on the context above. "
-                "Use a friendly, conversational tone with emojis where appropriate. "
-                "If comparing multiple items, use markdown tables for clarity."
+                
+                "Extract and present only the information that directly answers the user's question. "
+                "Use a friendly tone with emojis where appropriate. "
+                "For comparisons, use markdown tables. "
+                "If context contains source URLs, include them as 📎 [View in Handbook](URL)."
             )
         )
         final_answer = llm.invoke(prompt_template.format(context=combined_context, question=question))
