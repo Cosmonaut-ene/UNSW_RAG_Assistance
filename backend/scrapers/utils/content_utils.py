@@ -98,6 +98,47 @@ def beautify_field_name(s: str) -> str:
     s = re.sub(r"\b0\b", "", s)
     return s.strip().title()
 
+def is_simple_object(obj: Any) -> tuple:
+    """
+    Check if object is a simple pattern that can be displayed more concisely.
+    Returns (is_simple: bool, format_type: str, display_text: str)
+    """
+    if not isinstance(obj, dict):
+        return False, "", ""
+    
+    # Filter out ignored keys and get meaningful fields
+    meaningful_fields = {}
+    for key, value in obj.items():
+        if not should_ignore_key(key) and is_meaningful(value):
+            meaningful_fields[key] = value
+    
+    # Check for label + value pattern
+    if len(meaningful_fields) == 2 and 'label' in meaningful_fields and 'value' in meaningful_fields:
+        label = clean_text(str(meaningful_fields['label']))
+        value = clean_text(str(meaningful_fields['value']))
+        if label and value:
+            return True, "label_value", f"{label} ({value})"
+    
+    # Check for single value pattern
+    if len(meaningful_fields) == 1 and 'value' in meaningful_fields:
+        value = clean_text(str(meaningful_fields['value']))
+        if value:
+            return True, "value_only", value
+    
+    # Check for single label pattern
+    if len(meaningful_fields) == 1 and 'label' in meaningful_fields:
+        label = clean_text(str(meaningful_fields['label']))
+        if label:
+            return True, "label_only", label
+    
+    # Check for single description pattern
+    if len(meaningful_fields) == 1 and 'description' in meaningful_fields:
+        desc = clean_text(str(meaningful_fields['description']))
+        if desc:
+            return True, "description_only", desc
+    
+    return False, "", ""
+
 def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
     """
     Recursively extract all meaningful fields from a nested object structure.
@@ -182,25 +223,83 @@ def build_semantic_document(
                 new_path = current_path + [key]
                 
                 if isinstance(value, dict):
-                    # Nested dictionary: recursive processing
-                    nested_parts = build_hierarchical_content(value, new_path, level + 1)
-                    parts.extend(nested_parts)
+                    # Skip empty dictionaries
+                    if not value:
+                        continue
+                    
+                    # Check if dictionary has any meaningful content after filtering
+                    has_meaningful_content = False
+                    for dict_key, dict_value in value.items():
+                        if not should_ignore_key(dict_key) and is_meaningful(dict_value):
+                            has_meaningful_content = True
+                            break
+                    
+                    # Skip dictionaries with no meaningful content
+                    if not has_meaningful_content:
+                        continue
+                        
+                    # Check if this dictionary is a simple object that can be displayed inline
+                    is_simple, format_type, display_text = is_simple_object(value)
+                    if is_simple:
+                        # Display simple object inline
+                        field_name = beautify_field_name(key)
+                        if level + 1 <= 6:
+                            parts.append(f"{'#' * (level + 1)} {field_name}")
+                            parts.append(display_text)
+                        else:
+                            parts.append(f"**{field_name}:** {display_text}")
+                        parts.append("")  # Empty line
+                    else:
+                        # Nested dictionary: recursive processing
+                        nested_parts = build_hierarchical_content(value, new_path, level + 1)
+                        # Only add parts if the recursive call generated content
+                        if nested_parts:
+                            parts.extend(nested_parts)
                 elif isinstance(value, list):
-                    # List: create subheading and process each element
-                    if level + 1 <= 6:
-                        list_title = beautify_field_name(key)
-                        parts.append(f"{'#' * (level + 1)} {list_title}")
-                        parts.append("")
+                    # Skip empty lists entirely
+                    if not value:
+                        continue
+                        
+                    # List: check if all items are simple objects that can be displayed concisely
+                    simple_items = []
+                    complex_items = []
                     
                     for idx, item in enumerate(value):
                         if isinstance(item, dict):
-                            # Dictionary items in list
-                            item_parts = build_hierarchical_content(item, new_path + [str(idx)], level + 2)
-                            parts.extend(item_parts)
+                            is_simple, format_type, display_text = is_simple_object(item)
+                            if is_simple:
+                                simple_items.append(display_text)
+                            else:
+                                complex_items.append((idx, item))
                         elif is_meaningful(item):
-                            # Simple values in list
-                            parts.append(f"- {clean_text(str(item))}")
-                    parts.append("")  # Empty line
+                            simple_items.append(clean_text(str(item)))
+                    
+                    # Only create content if we have meaningful items
+                    if simple_items or complex_items:
+                        # Special handling: if list has only one complex item, treat it as direct content
+                        if len(complex_items) == 1 and not simple_items:
+                            # Single complex item: expand directly without extra heading
+                            idx, item = complex_items[0]
+                            item_parts = build_hierarchical_content(item, new_path, level + 1)
+                            parts.extend(item_parts)
+                        else:
+                            # Multiple items or mixed content: create subheading for the list
+                            if level + 1 <= 6:
+                                list_title = beautify_field_name(key)
+                                parts.append(f"{'#' * (level + 1)} {list_title}")
+                                parts.append("")
+                            
+                            # Display simple items as a clean list
+                            if simple_items:
+                                for item_text in simple_items:
+                                    parts.append(f"- {item_text}")
+                                parts.append("")  # Empty line after simple items
+                            
+                            # Display complex items with full hierarchy
+                            if complex_items:
+                                for idx, item in complex_items:
+                                    item_parts = build_hierarchical_content(item, new_path + [str(idx)], level + 1)
+                                    parts.extend(item_parts)
                 else:
                     # Simple value: display as field
                     if is_meaningful(value):
@@ -248,7 +347,7 @@ def build_semantic_document(
     return Document(
         page_content=full_content,
         metadata={
-            "field": field_path,
+            # "field": field_path,
             "source": source_url,
             "depth": len(path),
             "field_path": path,
