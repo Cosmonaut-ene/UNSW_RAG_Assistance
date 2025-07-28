@@ -69,7 +69,18 @@ class UNSWLinkDiscoveryService(BaseScraper):
             logger.error(f"Error clicking Specialisation '{filter_text}': {e}")
     
     def click_next_page_in_container(self, container, driver) -> bool:
-        """Click next page button in container"""
+        """Click next page button in container and wait for content to change"""
+        # Get current page links before clicking
+        current_links = set()
+        try:
+            links = container.find_elements(By.TAG_NAME, "a")
+            for link in links:
+                href = link.get_attribute("href")
+                if is_valid_link(href):
+                    current_links.add(normalize_url(href))
+        except Exception:
+            pass
+        
         for sel in PAGINATION_SELECTORS:
             try:
                 buttons = container.find_elements(By.CSS_SELECTOR, sel)
@@ -78,8 +89,33 @@ class UNSWLinkDiscoveryService(BaseScraper):
                         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", button)
                         time.sleep(0.5)
                         driver.execute_script("arguments[0].click();", button)
-                        time.sleep(config.REQUEST_DELAY)
-                        return True
+                        
+                        # Wait for page content to change (up to 10 seconds)
+                        max_wait_attempts = 20  # 20 * 0.5s = 10s max wait
+                        for attempt in range(max_wait_attempts):
+                            time.sleep(0.5)
+                            
+                            # Check if content has changed
+                            try:
+                                new_links = set()
+                                links = container.find_elements(By.TAG_NAME, "a")
+                                for link in links:
+                                    href = link.get_attribute("href")
+                                    if is_valid_link(href):
+                                        new_links.add(normalize_url(href))
+                                
+                                # If we have different links, page has loaded
+                                if new_links != current_links and len(new_links) > 0:
+                                    logger.info(f"Page content changed after {(attempt + 1) * 0.5:.1f}s")
+                                    return True
+                                    
+                            except Exception as e:
+                                logger.warning(f"Error checking page change: {e}")
+                                continue
+                        
+                        logger.warning("Page content did not change after clicking next page")
+                        return False
+                        
             except Exception as err:
                 logger.warning(f"Failed to click pagination button '{sel}': {err}")
         return False
@@ -167,15 +203,15 @@ class UNSWLinkDiscoveryService(BaseScraper):
         raise NotImplementedError("Discovery service doesn't scrape content")
 
 # Convenience functions for backward compatibility
-def discover_cse_links() -> Dict[str, List[str]]:
+def discover_cse_links(browse_url: str = config.CSE_BROWSE_URLS[0]) -> Dict[str, List[str]]:
     """Discover CSE links using the service"""
     service = UNSWLinkDiscoveryService()
-    root_url = config.CSE_BROWSE_URLS[0]
-    return service.scrape_links(root_url)
+    return service.scrape_links(browse_url)
 
-def discover_and_save_cse_links() -> Dict[str, List[str]]:
+def discover_and_save_cse_links(browse_url: str = config.CSE_BROWSE_URLS[0]) -> Dict[str, List[str]]:
     """Discover links and save them to file"""
-    links = discover_cse_links()
+    service = UNSWLinkDiscoveryService()
+    links = service.scrape_links(browse_url)
     total_links = sum(len(v) for v in links.values())
     if total_links > 0:
         save_links_to_file(links)

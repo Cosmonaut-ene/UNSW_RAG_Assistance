@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scrapers.link_discovery import discover_and_save_cse_links
+from scrapers.services.discovery_service import discover_and_save_cse_links
 from scrapers.config import config
 
 def main():
