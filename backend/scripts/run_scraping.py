@@ -9,8 +9,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from scrapers.monitor import get_new_links, update_scraping_metadata
-from scrapers.page_scraper import scrape_urls_batch
+from scrapers.services.monitoring_service import get_new_links, update_scraping_metadata
+from scrapers.services.scraping_service import scrape_urls_batch
 from scrapers.config import config
 
 def main():
