@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: chatbot-backend
     ports:
-      - "8000:5000"
+      - "3001:5000"
     environment:
       - FLASK_ENV=production
       - FLASK_DEBUG=False

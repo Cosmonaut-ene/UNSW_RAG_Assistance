@@ -3,7 +3,9 @@
 from datetime import datetime
 from difflib import SequenceMatcher
 from services.log_store import load_all_chat_logs, append_chat_log
-from rag import process_with_rag, process_with_rag_detailed
+# Import modules without circular dependencies
+from rag import process_with_rag_detailed, ask_with_hybrid_search  
+from ai import process_query as ai_process_query
 from dateutil import tz
 import time
 import uuid
@@ -132,11 +134,22 @@ def process_with_ai(question, session_id=None):
     try:
         print("[QueryProcessor] Trying RAG...")
         processing_steps.append("rag_processing")
-        # 将历史传递给RAG处理函数
+        # Step 1: Get search results from RAG module
+        formatted_history = format_conversation_history(conversation_history)
         rag_result = process_with_rag_detailed(question, conversation_history=conversation_history)
-        rag_answer = rag_result.get("answer", "")
+        search_results = rag_result.get("search_results", [])
         matched_files = rag_result.get("matched_files", [])
-        safety_blocked = rag_result.get("safety_blocked", False)
+        
+        # Step 2: Process with AI module using search results
+        ai_result = ai_process_query(question, search_results, formatted_history)
+        rag_answer = ai_result.get("answer", "")
+        safety_blocked = ai_result.get("safety_blocked", False)
+        
+        # Update matched files if AI found more
+        ai_matched_files = ai_result.get("matched_files", [])
+        for file in ai_matched_files:
+            if file not in matched_files:
+                matched_files.append(file)
         
         # Handle safety blocked queries
         if safety_blocked:
@@ -152,7 +165,7 @@ def process_with_ai(question, session_id=None):
                 "safety_blocked": True
             }
         
-        if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()):
+        if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()) or not search_results:
             processing_steps.append("rag_fallback")
             print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer.")
         else:

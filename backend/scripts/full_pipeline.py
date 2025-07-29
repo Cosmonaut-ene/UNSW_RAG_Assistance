@@ -14,7 +14,7 @@ from scrapers.link_discovery import discover_and_save_cse_links
 from scrapers.monitor import get_new_links, get_scraping_status, update_scraping_metadata
 from scrapers.page_scraper import scrape_urls_batch
 from scrapers.config import config
-from rag.gemini3 import update_vector_store_with_scraped, get_content_sources_summary
+from rag import update_knowledge_base, get_content_sources_summary
 
 def run_discovery(browse_url):
     """Step 1: Discover links"""

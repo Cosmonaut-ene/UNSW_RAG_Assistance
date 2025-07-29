@@ -67,9 +67,9 @@ def upload_file():
     vector_updated = False
     vector_error = None
     try:
-        from rag.gemini3 import update_vector_store
-        # Use the same directory constant as defined in gemini3.py
-        update_vector_store(DOCS_FOLDER)
+        from rag import update_knowledge_base
+        # Use the same directory constant as defined in rag module
+        update_knowledge_base(include_scraped=True)
         vector_updated = True
         print(f"[UPLOAD] Vector store updated successfully after uploading {filename}")
     except Exception as e:
@@ -116,8 +116,8 @@ def delete_file(filename):
         vector_updated = False
         vector_error = None
         try:
-            from rag.gemini3 import update_vector_store
-            update_vector_store(DOCS_FOLDER)
+            from rag import update_knowledge_base
+            update_knowledge_base(include_scraped=True)
             vector_updated = True
             print(f"[DELETE] Vector store updated successfully after deleting {filename}")
         except Exception as e:
@@ -359,8 +359,8 @@ def health():
 def get_scrapers_status():
     """Get comprehensive status of scrapers and content sources"""
     try:
-        from scrapers.monitor import get_scraping_status
-        from rag.gemini3 import get_content_sources_summary
+        from scrapers.services.monitoring_service import get_scraping_status
+        from rag import get_content_sources_summary
         
         # Get scraping status
         scraping_status = get_scraping_status()
@@ -384,7 +384,7 @@ def get_scrapers_status():
 def get_scraper_links():
     """Get current links list from urls.txt file"""
     try:
-        from scrapers.link_discovery import load_links_from_file
+        from scrapers.utils.file_utils import load_links_from_file
         from scrapers.config import config
         
         links = load_links_from_file()
@@ -418,7 +418,7 @@ def get_scraper_links():
 def update_scraper_links():
     """Update links list in urls.txt file"""
     try:
-        from scrapers.link_discovery import save_links_to_file
+        from scrapers.utils.file_utils import save_links_to_file
         from scrapers.config import config
         
         data = request.get_json()
@@ -464,8 +464,8 @@ def update_scraper_links():
 def discover_links():
     """Discover links and return preview for admin review"""
     try:
-        from scrapers.link_discovery import discover_cse_links_with_preview
-        from scrapers.monitor import load_links_from_file
+        from scrapers.services.discovery_service import discover_cse_links_with_preview
+        from scrapers.utils.file_utils import load_links_from_file
         
         data = request.get_json()
         root_url = data.get("root_url", "https://www.handbook.unsw.edu.au/browse/By%20Area%20of%20Interest/InformationTechnology")
@@ -507,8 +507,8 @@ def discover_links():
 def confirm_and_scrape():
     """Confirm discovered links and start scraping"""
     try:
-        from scrapers.link_discovery import save_links_to_file
-        from scrapers.page_scraper import start_scraping_with_progress
+        from scrapers.utils.file_utils import save_links_to_file
+        from scrapers.services.scraping_service import start_scraping_with_progress
         
         data = request.get_json()
         confirmed_links = data.get("confirmed_links", [])
@@ -550,7 +550,7 @@ def confirm_and_scrape():
 def get_scraping_progress(scraping_id):
     """Get real-time scraping progress"""
     try:
-        from scrapers.page_scraper import get_scraping_progress
+        from scrapers.services.scraping_service import get_scraping_progress
         
         progress = get_scraping_progress(scraping_id)
         
@@ -578,7 +578,7 @@ def get_scraping_progress(scraping_id):
 def cancel_scraping(scraping_id):
     """Cancel ongoing scraping operation"""
     try:
-        from scrapers.page_scraper import cancel_scraping_session
+        from scrapers.services.scraping_service import cancel_scraping_session
         
         result = cancel_scraping_session(scraping_id)
         
@@ -612,7 +612,7 @@ def trigger_scraping():
 def run_monitoring():
     """Run monitoring to check for changes and optionally auto-scrape"""
     try:
-        from scrapers.monitor import monitor_and_scrape
+        from scrapers.services.monitoring_service import monitor_and_scrape
         
         data = request.get_json()
         auto_scrape = data.get("auto_scrape", False)
@@ -634,9 +634,9 @@ def run_monitoring():
 def rebuild_vector_store():
     """Force rebuild of vector store with all content"""
     try:
-        from rag.gemini3 import force_rebuild_vector_store
+        from rag import force_rebuild_knowledge_base
         
-        success = force_rebuild_vector_store()
+        success = force_rebuild_knowledge_base(include_scraped=True)
         
         if success:
             return jsonify({
@@ -660,7 +660,7 @@ def run_discovery():
     try:
         # Import here to avoid import errors
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from scrapers.link_discovery import discover_and_save_cse_links
+        from scrapers.services.discovery_service import discover_and_save_cse_links
         from scrapers.config import config
         
         # Ensure directories exist
@@ -700,8 +700,8 @@ def scrape_content():
     try:
         # Import here to avoid import errors
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from scrapers.monitor import get_new_links, update_scraping_metadata
-        from scrapers.page_scraper import scrape_urls_batch
+        from scrapers.services.monitoring_service import get_new_links, update_scraping_metadata
+        from scrapers.services.scraping_service import scrape_urls_batch
         from scrapers.config import config
         
         # Ensure directories exist

@@ -94,7 +94,7 @@ class ScrapedContentManager:
         """Remove chunks from vector store based on source URLs"""
         try:
             # Import here to avoid circular dependencies
-            from rag.gemini3 import remove_documents_by_source
+            from rag import remove_documents_by_source
             
             removed_count = 0
             for url in urls:
@@ -363,7 +363,7 @@ class ScrapedContentManager:
     def _get_vector_store_status(self) -> Dict:
         """Get vector store status if available"""
         try:
-            from rag.gemini3 import get_vector_store_info
+            from rag import get_vector_store_info
             return get_vector_store_info()
         except ImportError:
             return {"available": False, "error": "Vector store functions not available"}

@@ -283,8 +283,8 @@ def start_scraping_with_progress(urls: List[str], auto_update_vector_store: bool
                 if auto_update_vector_store and session["completed"] > 0:
                     session["status"] = "updating_vector_store"
                     try:
-                        from rag.gemini3 import update_vector_store_with_scraped
-                        update_vector_store_with_scraped()
+                        from rag import update_knowledge_base
+                        update_knowledge_base(include_scraped=True)
                         session["vector_store_updated"] = True
                     except Exception as e:
                         print(f"Vector store update failed: {e}")

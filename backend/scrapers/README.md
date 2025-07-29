@@ -309,7 +309,7 @@ python -c "from scrapers.monitor import get_scraping_status; print(get_scraping_
 python -c "from scrapers.page_scraper import scrape_single_page; doc = scrape_single_page('URL'); print(len(doc.page_content))"
 
 # Check vector store status
-python -c "from rag.gemini3 import get_content_sources_summary; print(get_content_sources_summary())"
+python -c "from rag import get_content_sources_summary; print(get_content_sources_summary())"
 ```
 
 ## 🔄 Updates and Maintenance

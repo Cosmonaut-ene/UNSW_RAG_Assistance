@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rag.gemini3 import update_vector_store_with_scraped, get_content_sources_summary
+from rag import update_knowledge_base, get_content_sources_summary
 
 def main():
     """Update vector store with all content"""
@@ -22,7 +22,6 @@ def main():
         summary = get_content_sources_summary()
         
         print(f"   PDF files: {summary['pdf_sources']['count']}")
-        print(f"   Web sources: {summary['web_sources']['count']}")
         print(f"   Scraped content: {summary['scraped_sources']['count']}")
         print(f"   Total sources: {summary['total_sources']}")
         
@@ -31,13 +30,12 @@ def main():
             return
         
         print(f"\n🚀 Updating vector store...")
-        update_vector_store_with_scraped()
+        update_knowledge_base(include_scraped=True)
         
         print(f"\n✅ Vector store update completed!")
         print(f"📈 The RAG system now includes:")
         print(f"   - {summary['pdf_sources']['count']} PDF documents")
         print(f"   - {summary['scraped_sources']['count']} scraped web pages")
-        print(f"   - {summary['web_sources']['count']} web URLs")
         
         print(f"\n💡 The chatbot is now ready to answer questions using the updated knowledge base.")
         

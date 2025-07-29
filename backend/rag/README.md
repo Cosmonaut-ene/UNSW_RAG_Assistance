@@ -125,7 +125,7 @@ rag/
 
 ### Basic Setup
 ```python
-from rag.gemini3 import build_rag_qa_chain, ask_with_hybrid_search
+from rag import build_rag_qa_chain, ask_with_hybrid_search
 
 # Initialize the system
 qa_chain = build_rag_qa_chain()
@@ -156,8 +156,8 @@ engine = HybridSearchEngine(
 
 ### Vector Store Management
 ```python
-from rag.gemini3 import (
-    force_rebuild_vector_store,
+from rag import (
+    force_rebuild_vector_store, 
     get_content_sources_summary,
     update_vector_store_with_scraped
 )

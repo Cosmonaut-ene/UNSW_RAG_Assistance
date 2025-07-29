@@ -350,7 +350,6 @@ def build_semantic_document(
             # "field": field_path,
             "source": source_url,
             "depth": len(path),
-            "field_path": path,
             "content_type": "semantic_hierarchical"
         }
     )
