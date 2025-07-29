@@ -170,7 +170,7 @@ class UNSWContentScrapingService(BaseScraper, BaseDocumentProcessor):
     
     def process_structured_data(self, data: Dict[str, Any], url: str) -> Optional[Document]:
         """Process structured data into a single document"""
-        doc = build_semantic_document(data, [], url)
+        doc = build_semantic_document(data, [url], url)
         if not doc:
             return None
         

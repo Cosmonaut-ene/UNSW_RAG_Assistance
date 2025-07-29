@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from services.auth import require_admin, create_admin_token, verify_admin_credentials
 from services.log_store import load_all_chat_logs
 from services.export_chatlog import export_chat_logs
+from services.scraped_content_manager import ScrapedContentManager
 from werkzeug.utils import secure_filename
 from services.log_store import load_all_chat_logs, update_chat_log_with_admin_response, delete_chat_log_by_id
 
@@ -745,6 +746,164 @@ def scrape_content():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+
+# ========== Content Management (New ScrapedContentManager Integration) ==========
+@admin_bp.route('/content/status', methods=['GET'])
+@require_admin
+def get_content_status():
+    """Get comprehensive status of scraped content"""
+    try:
+        manager = ScrapedContentManager()
+        status = manager.get_content_status()
+        
+        return jsonify({
+            "success": True,
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting content status: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get content status: {str(e)}"
+        }), 500
+
+@admin_bp.route('/content/links', methods=['POST'])
+@require_admin
+def add_content_links():
+    """Add new links for scraping"""
+    try:
+        data = request.get_json()
+        urls = data.get("urls", [])
+        auto_update_vector_store = data.get("auto_update_vector_store", True)
+        
+        if not urls:
+            return jsonify({
+                "success": False,
+                "error": "No URLs provided"
+            }), 400
+        
+        manager = ScrapedContentManager()
+        result = manager.add_links(urls, auto_update_vector_store)
+        
+        return jsonify({
+            "success": result["success"],
+            "result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200 if result["success"] else 400
+        
+    except Exception as e:
+        print(f"Error adding content links: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to add links: {str(e)}"
+        }), 500
+
+@admin_bp.route('/content/links', methods=['DELETE'])
+@require_admin
+def remove_content_links():
+    """Remove links and their associated content"""
+    try:
+        data = request.get_json()
+        urls = data.get("urls", [])
+        update_vector_store = data.get("update_vector_store", True)
+        
+        if not urls:
+            return jsonify({
+                "success": False,
+                "error": "No URLs provided"
+            }), 400
+        
+        manager = ScrapedContentManager()
+        result = manager.remove_links(urls, update_vector_store)
+        
+        return jsonify({
+            "success": result["success"],
+            "result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error removing content links: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to remove links: {str(e)}"
+        }), 500
+
+@admin_bp.route('/content/links', methods=['PUT'])
+@require_admin
+def update_content_links():
+    """Update/re-scrape existing links"""
+    try:
+        data = request.get_json()
+        urls = data.get("urls")  # None = update all
+        auto_update_vector_store = data.get("auto_update_vector_store", True)
+        
+        manager = ScrapedContentManager()
+        result = manager.update_links(urls, auto_update_vector_store)
+        
+        return jsonify({
+            "success": result["success"],
+            "result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200 if result["success"] else 400
+        
+    except Exception as e:
+        print(f"Error updating content links: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to update links: {str(e)}"
+        }), 500
+
+@admin_bp.route('/content/scraping/<scraping_id>', methods=['GET'])
+@require_admin
+def get_content_scraping_status(scraping_id):
+    """Get status of ongoing scraping operation"""
+    try:
+        manager = ScrapedContentManager()
+        status = manager.get_scraping_status(scraping_id)
+        
+        if status is None:
+            return jsonify({
+                "success": False,
+                "error": "Scraping session not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "status": status,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting scraping status: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to get scraping status: {str(e)}"
+        }), 500
+
+@admin_bp.route('/content/cleanup', methods=['POST'])
+@require_admin
+def cleanup_orphaned_content():
+    """Clean up orphaned content files and vector store entries"""
+    try:
+        manager = ScrapedContentManager()
+        result = manager.cleanup_orphaned_content()
+        
+        return jsonify({
+            "success": result["success"],
+            "result": result,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error cleaning up content: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Failed to cleanup content: {str(e)}"
         }), 500
 
 

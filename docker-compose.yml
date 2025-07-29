@@ -20,11 +20,11 @@ services:
       - PYTHONDONTWRITEBYTECODE=1 # Prevents .pyc files
     volumes:
       - ./backend:/app
-      - ./backend/logs:/app/logs
-      - ./backend/rag/docs:/app/rag/docs
-      - ./backend/rag/vector_store:/app/rag/vector_store
-      - ./backend/rag/scraped_content:/app/rag/scraped_content
-      - ./backend/rag/key.json:/app/rag/key.json
+      # - ./backend/logs:/app/logs
+      # - ./backend/rag/docs:/app/rag/docs
+      # - ./backend/rag/vector_store:/app/rag/vector_store
+      # - ./backend/rag/scraped_content:/app/rag/scraped_content
+      # - ./backend/rag/key.json:/app/rag/key.json
     networks:
       - chatbot-network
     restart: unless-stopped

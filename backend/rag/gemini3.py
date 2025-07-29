@@ -546,6 +546,110 @@ def force_rebuild_vector_store():
         print(f"[Gemini3] Force rebuild failed: {e}")
         return False
 
+def remove_documents_by_source(source_url: str) -> int:
+    """
+    Remove all documents from vector store that match the given source URL.
+    
+    Args:
+        source_url: The source URL to match against document metadata
+    
+    Returns:
+        int: Number of documents removed
+    """
+    try:
+        # Load vector store
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        vectorstore = Chroma(
+            persist_directory=VECTOR_STORE_DIR,
+            embedding_function=embeddings
+        )
+        
+        # Get all documents with metadata
+        collection = vectorstore._collection
+        all_data = collection.get(include=['metadatas', 'documents'])
+        
+        if not all_data['ids']:
+            print(f"[Gemini3] No documents found in vector store")
+            return 0
+        
+        # Find documents with matching source
+        ids_to_delete = []
+        for i, metadata in enumerate(all_data['metadatas']):
+            if metadata and metadata.get('source') == source_url:
+                ids_to_delete.append(all_data['ids'][i])
+        
+        if not ids_to_delete:
+            print(f"[Gemini3] No documents found with source: {source_url}")
+            return 0
+        
+        # Delete documents
+        collection.delete(ids=ids_to_delete)
+        
+        print(f"[Gemini3] Removed {len(ids_to_delete)} documents with source: {source_url}")
+        return len(ids_to_delete)
+        
+    except Exception as e:
+        print(f"[Gemini3] Error removing documents by source: {e}")
+        return 0
+
+def get_vector_store_info() -> Dict:
+    """
+    Get information about the current vector store state.
+    
+    Returns:
+        Dict with vector store statistics and status
+    """
+    try:
+        if not _validate_vector_database_exists():
+            return {
+                "available": False,
+                "error": "Vector store not found or invalid"
+            }
+        
+        # Load vector store
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        vectorstore = Chroma(
+            persist_directory=VECTOR_STORE_DIR,
+            embedding_function=embeddings
+        )
+        
+        # Get collection info
+        collection = vectorstore._collection
+        all_data = collection.get(include=['metadatas'])
+        
+        total_documents = len(all_data['ids']) if all_data['ids'] else 0
+        
+        # Count by content type
+        content_types = {}
+        sources = set()
+        
+        if all_data['metadatas']:
+            for metadata in all_data['metadatas']:
+                if metadata:
+                    # Count content types
+                    content_type = metadata.get('content_type', 'unknown')
+                    content_types[content_type] = content_types.get(content_type, 0) + 1
+                    
+                    # Collect unique sources
+                    source = metadata.get('source')
+                    if source:
+                        sources.add(source)
+        
+        return {
+            "available": True,
+            "total_documents": total_documents,
+            "unique_sources": len(sources),
+            "content_types": content_types,
+            "sources": list(sources),
+            "vector_store_dir": VECTOR_STORE_DIR
+        }
+        
+    except Exception as e:
+        return {
+            "available": False,
+            "error": f"Error accessing vector store: {str(e)}"
+        }
+
 
 # ========== Gemini Safety Check ==========
 def is_query_safe_by_gemini(query: str) -> bool:
