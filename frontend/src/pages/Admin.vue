@@ -21,6 +21,9 @@
         <el-tab-pane label="Query Management" name="query">
           <QueryManagement />
         </el-tab-pane>
+        <el-tab-pane label="Link Management" name="link">
+          <LinkManagement />
+        </el-tab-pane>
       </el-tabs>
     </main>
   </div>
@@ -34,6 +37,7 @@ import { checkTokenValidity, handleAuthError } from '@/utils/auth.js'
 
 import FileManagement from '@/components/admin/FileManagement.vue'
 import QueryManagement from '@/components/admin/QueryManagement.vue'
+import LinkManagement from '../components/admin/LinkManagement.vue'
 
 const router = useRouter()
 const activeTab = ref('file')
