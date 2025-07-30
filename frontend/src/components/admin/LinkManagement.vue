@@ -87,19 +87,43 @@ const rules = {
 }
 const formRef = ref()
 
+// Helper function to extract name from URL
+const extractNameFromUrl = (url) => {
+  try {
+    const urlObj = new URL(url)
+    const pathParts = urlObj.pathname.split('/').filter(p => p)
+    if (pathParts.length > 0) {
+      // Get the last meaningful part and clean it up
+      const lastPart = pathParts[pathParts.length - 1]
+      // Replace hyphens with spaces, but don't add spaces between uppercase letters
+      return lastPart.replace(/-/g, ' ').replace(/_/g, ' ')
+    }
+    return urlObj.hostname
+  } catch {
+    return url.substring(0, 30) + '...'
+  }
+}
+
 // 获取链接
 const fetchLinks = async () => {
   loading.value = true
   try {
     const params = new URLSearchParams({ page: page.value, limit: limit.value })
-    const res = await fetch(`/api/admin/links?${params}`, {
+    const res = await fetch(`/api/admin/scrapers/links?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (isAuthError(res)) return handleAuthError()
     if (!res.ok) throw new Error()
     const data = await res.json()
-    links.value = data.links || []
-    total.value = data.total || 0
+    // Backend returns {links: [...], categorized: {...}, total_count: n}
+    const allLinks = data.links || []
+    // Convert URL strings to objects with id, name, and url
+    links.value = allLinks.map((url, index) => ({
+      id: index + 1,
+      name: extractNameFromUrl(url),
+      url: url
+    }))
+    total.value = data.total_count || 0
   } catch {
     ElMessage.error('Failed to fetch links')
   }
@@ -118,13 +142,15 @@ const addLink = () => {
     if (!valid) return
     adding.value = true
     try {
-      const res = await fetch('/api/admin/links', {
+      const res = await fetch('/api/admin/scrapers/links', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(newLink.value)
+        body: JSON.stringify({
+          links: [newLink.value.url]  // Backend expects array of URLs
+        })
       })
       if (isAuthError(res)) return handleAuthError()
       if (!res.ok) throw new Error()
@@ -140,10 +166,12 @@ const addLink = () => {
 
 // 删除链接
 const deleteLink = async (row) => {
-  if (!row.id) return
+  if (!row.url) return
   deletingId.value = row.id
   try {
-    const res = await fetch(`/api/admin/links/${row.id}`, {
+    // URL encode the URL for safe passing in path parameter
+    const encodedUrl = encodeURIComponent(row.url)
+    const res = await fetch(`/api/admin/scrapers/links/${encodedUrl}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     })
