@@ -176,7 +176,7 @@ def process_with_ai(question, session_id=None):
             })
         
         # Perform hybrid search
-        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=5)
+        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=10)
         print(f"[QueryProcessor] Hybrid search returned {len(hybrid_results)} results")
         
         # Convert hybrid results back to standard format
@@ -195,6 +195,25 @@ def process_with_ai(question, session_id=None):
                 filename = source_file.split('/')[-1] if '/' in source_file else source_file
                 if filename not in matched_files:
                     matched_files.append(filename)
+        
+        # Check if we have any search results, if not, use fallback immediately
+        if not search_results:
+            processing_steps.append("no_search_results_fallback")
+            print(f"[QueryProcessor] No search results found, using direct LLM fallback")
+            
+            from ai.response_generator import generate_fallback_response
+            fallback_answer = generate_fallback_response(rewritten_query, formatted_history)
+            
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + fallback_answer)
+            return fallback_answer, True, [], {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit,
+                "fallback_used": True,
+                "fallback_reason": "no_search_results"
+            }
         
         # Step 4: Process with AI module using hybrid search results
         processing_steps.append("ai_generation")
@@ -224,7 +243,21 @@ def process_with_ai(question, session_id=None):
         
         if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()) or not search_results:
             processing_steps.append("rag_fallback")
-            print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer.")
+            print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer, using direct LLM")
+            
+            # Execute fallback to direct LLM
+            from ai.response_generator import generate_fallback_response
+            fallback_answer = generate_fallback_response(rewritten_query, formatted_history)
+            
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + fallback_answer)
+            return fallback_answer, True, [], {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit,
+                "fallback_used": True
+            }
         else:
             processing_steps.append("rag_success")
             print(f"[QueryProcessor] RAG Answer: {rag_answer[:50]}...")

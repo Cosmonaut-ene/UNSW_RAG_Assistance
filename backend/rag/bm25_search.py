@@ -249,6 +249,21 @@ class BM25SearchEngine:
                     results.append(result)
             
             print(f"[BM25Search] Found {len(results)} results for query: '{query}'")
+            
+            # Log detailed BM25 results
+            for i, result in enumerate(results, 1):
+                metadata = result['metadata']
+                source = metadata.get('source', 'Unknown')
+                content_type = metadata.get('content_type', 'Unknown') 
+                code = metadata.get('code', 'Unknown')
+                title = metadata.get('title', 'Unknown')
+                score = result['bm25_score']
+                content_preview = result['content'][:200].replace('\n', ' ') if result['content'] else 'No content'
+                
+                print(f"[BM25Search] Result {i} (BM25={score:.4f}): {code} - {title}")
+                print(f"[BM25Search]   Source: {source} ({content_type})")
+                print(f"[BM25Search]   Content: {content_preview}...")
+                print(f"[BM25Search]   ---")
             return results
             
         except Exception as e:

@@ -117,10 +117,21 @@ class HybridSearchEngine:
             rag_results = []
         
         # Execute BM25 search
+        print(f"[HybridSearch] Executing BM25 search with query: '{query}'")
         bm25_results = self.bm25_searcher.search(query, top_k=max_results * 2)  # Get more for better selection
+        print(f"[HybridSearch] BM25 search returned {len(bm25_results)} results")
+        
+        # Log input statistics
+        print(f"[HybridSearch] Input: {len(rag_results)} RAG results, {len(bm25_results)} BM25 results")
         
         # Combine results
         combined_results = self.combine_results(rag_results, bm25_results, max_results)
+        
+        # Log combination statistics
+        hybrid_count = sum(1 for r in combined_results if r.get('metadata', {}).get('search_type') == 'hybrid')
+        rag_only_count = sum(1 for r in combined_results if r.get('metadata', {}).get('search_type') == 'rag')  
+        bm25_only_count = sum(1 for r in combined_results if r.get('metadata', {}).get('search_type') == 'bm25')
+        print(f"[HybridSearch] Result composition: {hybrid_count} hybrid, {rag_only_count} RAG-only, {bm25_only_count} BM25-only")
         
         # Log combined chunk details
         print(f"[HybridSearch] Combined {len(combined_results)} results:")
@@ -130,10 +141,18 @@ class HybridSearchEngine:
             content_type = metadata.get('content_type', 'Unknown')
             search_type = metadata.get('search_type', 'Unknown')
             hybrid_score = metadata.get('hybrid_score', 0)
+            rag_score = metadata.get('rag_score', 0)
+            bm25_score = metadata.get('bm25_score', 0)
+            code = metadata.get('code', 'Unknown')
+            title = metadata.get('title', 'Unknown')
             chunk_content = result.get('page_content', result.get('content', ''))
-            chunk_preview = chunk_content[:100].replace('\n', ' ') if chunk_content else 'No content'
+            chunk_preview = chunk_content[:150].replace('\n', ' ') if chunk_content else 'No content'
             
-            print(f"[HybridSearch] Result {i} ({search_type}, score: {hybrid_score:.2f}): {source} ({content_type}) - {chunk_preview}...")
+            print(f"[HybridSearch] Result {i} ({search_type}): {code} - {title}")
+            print(f"[HybridSearch]   Scores: Hybrid={hybrid_score:.2f} (RAG={rag_score:.1f} + BM25={bm25_score:.1f})")
+            print(f"[HybridSearch]   Source: {source} ({content_type})")
+            print(f"[HybridSearch]   Content: {chunk_preview}...")
+            print(f"[HybridSearch]   ---")
         
         return combined_results
     

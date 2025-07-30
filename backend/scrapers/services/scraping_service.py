@@ -170,6 +170,8 @@ class UNSWContentScrapingService(BaseScraper, BaseDocumentProcessor):
     
     def process_structured_data(self, data: Dict[str, Any], url: str) -> Optional[Document]:
         """Process structured data into a single document"""
+        from ..utils.content_utils import rename_top_level_keys
+        data = rename_top_level_keys(data)
         doc = build_semantic_document(data, [], url)
         if not doc:
             return None
@@ -177,11 +179,11 @@ class UNSWContentScrapingService(BaseScraper, BaseDocumentProcessor):
         # Add essential metadata
         doc.metadata.update({
             "source": url,
-            "scraped_at": datetime.utcnow().isoformat(),
-            "content_length": len(doc.page_content),
             "title": data.get("title", ""),
             "code": data.get("code", ""),
-            "content_type": data.get("contentTypeLabel", "")
+            "content_type": data.get("contentTypeLabel", ""),
+            "scraped_at": datetime.utcnow().isoformat(),
+            "content_length": len(doc.page_content),
         })
         
         return doc

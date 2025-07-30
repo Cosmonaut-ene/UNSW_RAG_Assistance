@@ -192,6 +192,30 @@ def extract_all_meaningful_fields(obj: Any, prefix: str = "") -> Dict[str, str]:
     
     return result
 
+def format_learning_outcomes(learning_outcomes_list: List[Dict[str, Any]]) -> List[str]:
+    """Format learning outcomes as numbered list"""
+    if not learning_outcomes_list or not isinstance(learning_outcomes_list, list):
+        return []
+    
+    parts = ["# Learning Outcomes", ""]
+    
+    # Extract and sort outcomes by number
+    outcomes = []
+    for outcome in learning_outcomes_list:
+        if isinstance(outcome, dict):
+            number = outcome.get("number", "")
+            description = outcome.get("description", "")
+            if number and description:
+                outcomes.append((int(number) if str(number).isdigit() else 999, f"{number}. {clean_text(description)}"))
+    
+    # Sort by number and add to parts
+    outcomes.sort(key=lambda x: x[0])
+    for _, formatted_outcome in outcomes:
+        parts.append(formatted_outcome)
+        parts.append("")  # Empty line between outcomes
+    
+    return parts
+
 def build_semantic_document(
     data: Any,
     path: List[str] = [],
@@ -260,6 +284,12 @@ def build_semantic_document(
                 elif isinstance(value, list):
                     # Skip empty lists entirely
                     if not value:
+                        continue
+                    
+                    # Special handling for learning outcomes
+                    if key.lower() == "learning_outcomes":
+                        learning_outcomes_parts = format_learning_outcomes(value)
+                        parts.extend(learning_outcomes_parts)
                         continue
                         
                     # List: check if all items are simple objects that can be displayed concisely
@@ -403,8 +433,31 @@ def flatten_structure(
             if doc:
                 chunks.append(doc)
 
+def rename_top_level_keys(content: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Dynamically rename specified top-level keys in the content dictionary.
+    """
+    # Step 1: Safely extract contentTypeLabel if it exists
+    content_type_label = content.get("contentTypeLabel", "Curriculum")
+
+    # Step 2: Construct dynamic mapping
+    field_rename_map = {
+        "description": "Overview",
+        "curriculumStructure": f"{content_type_label} Structure"
+    }
+
+    # Step 3: Apply mapping
+    renamed = {}
+    for key, value in content.items():
+        new_key = field_rename_map.get(key, key)
+        renamed[new_key] = value
+
+    return renamed
+
 def chunk_structured_content(content: Dict[str, Any], source_url: str) -> List[Document]:
     """Convert structured content into individual document chunks"""
+    content = rename_top_level_keys(content)
+    
     chunks = []
     flatten_structure(content, "", chunks, source_url)
     return chunks

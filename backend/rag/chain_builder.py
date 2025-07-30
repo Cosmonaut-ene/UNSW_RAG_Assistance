@@ -23,7 +23,7 @@ def build_rag_qa_chain():
     
     # Load vector store
     vectorstore = load_vector_store()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
     llm = get_chat_llm("gemini-2.5-flash")
 
     prompt_template = PromptTemplate(

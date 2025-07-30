@@ -49,7 +49,7 @@ def _start_background_rebuild(operation_name: str = "search"):
     rebuild_thread = threading.Thread(target=background_rebuild, daemon=True)
     rebuild_thread.start()
 
-def search_similar_documents(query: str, k: int = 5) -> List[Document]:
+def search_similar_documents(query: str, k: int = 10) -> List[Document]:
     """
     Search for similar documents using vector similarity
     
@@ -90,7 +90,7 @@ def search_similar_documents(query: str, k: int = 5) -> List[Document]:
         print(f"[SearchEngine] Error during similarity search: {e}")
         return []
 
-def search_documents_with_scores(query: str, k: int = 5) -> List[tuple]:
+def search_documents_with_scores(query: str, k: int = 10) -> List[tuple]:
     """
     Search for similar documents with similarity scores
     

@@ -74,7 +74,7 @@ def create_optimized_context(metadata: Dict) -> str:
         metadata: Document metadata dictionary
         
     Returns:
-        str: Compact context header (~80 chars)
+        str: Compact context header with source URL
     """
     parts = []
     
@@ -88,6 +88,10 @@ def create_optimized_context(metadata: Dict) -> str:
     
     if metadata.get('content_type'):
         parts.append(f"**Type:** {metadata['content_type']}")
+    
+    # Add source URL if available
+    if metadata.get('source') and metadata['source'].startswith('https://www.handbook.unsw.edu.au'):
+        parts.append(f"**Source:** {metadata['source']}")
     
     return "\n".join(parts) if parts else ""
 
@@ -256,6 +260,21 @@ def process_h2_sections_with_merging(sections: List[str]) -> List[str]:
             
         section_size = len(section)
         
+        # Special Case: Overview section - always standalone
+        if section.startswith('## Overview'):
+            # First, finish any pending merge group
+            if current_merge_group:
+                merged_chunk = merge_h2_sections(current_merge_group)
+                if merged_chunk:
+                    chunks.append(merged_chunk)
+                current_merge_group = []
+                current_merge_size = 0
+            
+            # Add Overview section as standalone
+            print(f"[TextSplitter] Found Overview section, creating standalone chunk (size: {section_size})")
+            chunks.append(section)
+            continue
+        
         # Case 1: Large section - keep as standalone chunk
         if section_size >= CHUNK_CONFIG['large_section_threshold']:
             # First, finish any pending merge group
@@ -418,6 +437,11 @@ def split_scraped_documents_by_merged_headers(documents: List[Document]) -> List
                         title = line.strip()[2:].strip()
                         if title:
                             section_titles.append(title)
+                
+                # Check if this is an Overview chunk
+                is_overview_chunk = any('Overview' in title for title in section_titles)
+                if is_overview_chunk:
+                    print(f"[TextSplitter] Created Overview chunk: {section_titles[0]} (size: {len(chunk_content)})")
                 
                 # Create enhanced chunk metadata
                 chunk_metadata = doc.metadata.copy()
