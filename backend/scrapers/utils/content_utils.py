@@ -349,7 +349,6 @@ def build_semantic_document(
     return Document(
         page_content=full_content,
         metadata={
-            # "field": field_path,
             "source": source_url,
             "content_type": "semantic_hierarchical"
         }

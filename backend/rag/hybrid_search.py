@@ -1,19 +1,19 @@
-from typing import List, Dict
-from .keyword_search import SimpleKeywordSearch
+from typing import List, Dict, Optional
+from .bm25_search import BM25SearchEngine
 
 class HybridSearchEngine:
-    def __init__(self, content_dir: str, min_hybrid_score: float = 70.0, min_keyword_score: float = 10.0, min_rag_score: float = 50.0):
-        self.keyword_searcher = SimpleKeywordSearch(content_dir)
+    def __init__(self, vector_store=None, min_hybrid_score: float = 50.0, min_bm25_score: float = 5.0, min_rag_score: float = 30.0):
+        self.bm25_searcher = BM25SearchEngine(vector_store)
         # Weight configuration
         self.rag_weight = 0.6
-        self.keyword_weight = 0.4
-        # Threshold configuration
+        self.bm25_weight = 0.4
+        # Threshold configuration  
         self.min_hybrid_score = min_hybrid_score
-        self.min_keyword_score = min_keyword_score
+        self.min_bm25_score = min_bm25_score
         self.min_rag_score = min_rag_score
         
-    def combine_results(self, rag_results: List[Dict], keyword_results: List[Dict], max_results: int = 5) -> List[Dict]:
-        """Combine RAG and keyword search results"""
+    def combine_results(self, rag_results: List[Dict], bm25_results: List[Dict], max_results: int = 5) -> List[Dict]:
+        """Combine RAG and BM25 search results"""
         
         # Standardize RAG result format, add search_type
         for result in rag_results:
@@ -21,48 +21,57 @@ class HybridSearchEngine:
                 result['metadata'] = {}
             result['metadata']['search_type'] = 'rag'
             result['metadata']['rag_score'] = 100  # RAG defaults to full score as top results
-            result['metadata']['keyword_score'] = 0
+            result['metadata']['bm25_score'] = 0
         
-        # Ensure keyword results format is correct
-        for result in keyword_results:
+        # Standardize BM25 results format
+        for result in bm25_results:
             if 'metadata' not in result:
                 result['metadata'] = {}
+            result['metadata']['search_type'] = 'bm25'
             result['metadata']['rag_score'] = 0
-            if 'keyword_score' not in result['metadata']:
-                result['metadata']['keyword_score'] = 50  # Default score
+            # Normalize BM25 score to 0-100 range (BM25 scores are typically 0-15)
+            raw_bm25_score = result.get('bm25_score', 0)
+            normalized_score = min(raw_bm25_score * 10, 100)  # Scale up and cap at 100
+            result['metadata']['bm25_score'] = normalized_score
         
-        # Merge all results
+        # Merge all results by content similarity (since both work on same chunks now)
         all_results = []
-        seen_sources = set()
+        seen_content = set()
         
         # Process RAG results
         for result in rag_results:
-            source = result.get('metadata', {}).get('source', '')
-            if source and source not in seen_sources:
-                seen_sources.add(source)
+            content = result.get('page_content', result.get('content', ''))[:100]  # Use first 100 chars as ID
+            if content and content not in seen_content:
+                seen_content.add(content)
                 all_results.append(result)
         
-        # Process keyword results, avoid duplicates
-        for result in keyword_results:
-            source = result.get('metadata', {}).get('source', '')
-            if source and source not in seen_sources:
-                seen_sources.add(source)
-                all_results.append(result)
-            elif source in seen_sources:
-                # Found duplicate, merge scores
+        # Process BM25 results, avoid duplicates by content
+        for result in bm25_results:
+            content = result.get('content', result.get('page_content', ''))[:100]
+            if content and content not in seen_content:
+                seen_content.add(content)
+                # Convert BM25 result format to standard format
+                standardized_result = {
+                    'page_content': result.get('content', ''),
+                    'metadata': result.get('metadata', {}),
+                    'content': result.get('content', '')
+                }
+                standardized_result['metadata']['bm25_score'] = result['metadata']['bm25_score']
+                all_results.append(standardized_result)
+            elif content in seen_content:
+                # Found duplicate, merge BM25 score with existing result
                 for existing in all_results:
-                    if existing.get('metadata', {}).get('source') == source:
-                        existing['metadata']['keyword_score'] = result['metadata']['keyword_score']
+                    existing_content = existing.get('page_content', existing.get('content', ''))[:100]
+                    if existing_content == content:
+                        existing['metadata']['bm25_score'] = result['metadata']['bm25_score']
                         existing['metadata']['search_type'] = 'hybrid'
-                        if 'matched_terms' in result['metadata']:
-                            existing['metadata']['matched_terms'] = result['metadata']['matched_terms']
                         break
         
         # Calculate hybrid scores
         for result in all_results:
             rag_score = result['metadata'].get('rag_score', 0)
-            keyword_score = result['metadata'].get('keyword_score', 0)
-            hybrid_score = (rag_score * self.rag_weight) + (keyword_score * self.keyword_weight)
+            bm25_score = result['metadata'].get('bm25_score', 0)
+            hybrid_score = (rag_score * self.rag_weight) + (bm25_score * self.bm25_weight)
             result['metadata']['hybrid_score'] = hybrid_score
         
         # Apply threshold filtering
@@ -72,24 +81,24 @@ class HybridSearchEngine:
         for result in all_results:
             metadata = result['metadata']
             hybrid_score = metadata.get('hybrid_score', 0)
-            keyword_score = metadata.get('keyword_score', 0)
+            bm25_score = metadata.get('bm25_score', 0)
             rag_score = metadata.get('rag_score', 0)
             
             # Check if threshold conditions are met (using OR logic: any condition passes)
             passes_hybrid = hybrid_score >= self.min_hybrid_score
             passes_rag = rag_score >= self.min_rag_score
-            passes_keyword = keyword_score >= self.min_keyword_score
+            passes_bm25 = bm25_score >= self.min_bm25_score
             
             if passes_hybrid:
                 filtered_results.append(result)
                 print(f"[HybridSearch] Accepted result from {metadata.get('source', 'unknown')} - "
-                      f"Hybrid: {hybrid_score:.2f}, Keyword: {keyword_score:.2f}, RAG: {rag_score:.2f} "
-                      f"(Passed: {'Hybrid ' if passes_hybrid else ''}{'RAG ' if passes_rag else ''}{'Keyword' if passes_keyword else ''})")
+                      f"Hybrid: {hybrid_score:.2f}, BM25: {bm25_score:.2f}, RAG: {rag_score:.2f} "
+                      f"(Passed: {'Hybrid ' if passes_hybrid else ''}{'RAG ' if passes_rag else ''}{'BM25' if passes_bm25 else ''})")
             else:
                 filtered_count += 1
                 print(f"[HybridSearch] Filtered out result from {metadata.get('source', 'unknown')} - "
                       f"Hybrid: {hybrid_score:.2f} (min: {self.min_hybrid_score}), "
-                      f"Keyword: {keyword_score:.2f} (min: {self.min_keyword_score}), "
+                      f"BM25: {bm25_score:.2f} (min: {self.min_bm25_score}), "
                       f"RAG: {rag_score:.2f} (min: {self.min_rag_score})")
         
         if filtered_count > 0:
@@ -101,17 +110,17 @@ class HybridSearchEngine:
         return filtered_results[:max_results]
     
     def search_hybrid(self, query: str, rag_results: List[Dict] = None, max_results: int = 5) -> List[Dict]:
-        """Execute hybrid search"""
+        """Execute hybrid search with BM25"""
         
         # If no RAG results, use empty list
         if rag_results is None:
             rag_results = []
         
-        # Execute keyword search
-        keyword_results = self.keyword_searcher.search_keywords(query, max_results)
+        # Execute BM25 search
+        bm25_results = self.bm25_searcher.search(query, top_k=max_results * 2)  # Get more for better selection
         
         # Combine results
-        combined_results = self.combine_results(rag_results, keyword_results, max_results)
+        combined_results = self.combine_results(rag_results, bm25_results, max_results)
         
         # Log combined chunk details
         print(f"[HybridSearch] Combined {len(combined_results)} results:")
@@ -127,3 +136,7 @@ class HybridSearchEngine:
             print(f"[HybridSearch] Result {i} ({search_type}, score: {hybrid_score:.2f}): {source} ({content_type}) - {chunk_preview}...")
         
         return combined_results
+    
+    def update_bm25_index(self, vector_store):
+        """Update the BM25 index when vector store changes"""
+        self.bm25_searcher.update_index(vector_store)

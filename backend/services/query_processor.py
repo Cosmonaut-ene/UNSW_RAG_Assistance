@@ -147,19 +147,24 @@ def process_with_ai(question, session_id=None):
         rag_result = process_with_rag_detailed(rewritten_query, conversation_history=conversation_history)
         rag_search_results = rag_result.get("search_results", [])
         
-        # Step 3: Hybrid search (RAG + keyword search combination)
+        # Step 3: Hybrid search (RAG + BM25 search combination)
         processing_steps.append("hybrid_search")
         from rag.hybrid_search import HybridSearchEngine
-        from config.paths import PathConfig
         
-        # Initialize hybrid search engine with correct content directory path
-        import os
-        content_dir = os.path.join(str(PathConfig.SCRAPED_CONTENT_DIR), "content")
+        # Get vector store for BM25 indexing
+        try:
+            from rag import load_vector_store
+            vector_store = load_vector_store()
+        except Exception as e:
+            print(f"[QueryProcessor] Warning: Could not load vector store for BM25: {e}")
+            vector_store = None
+        
+        # Initialize hybrid search engine with vector store
         hybrid_engine = HybridSearchEngine(
-            content_dir,
-            min_hybrid_score=50.0,  # Lower from 70.0
-            min_keyword_score=5.0,  # Lower from 10.0  
-            min_rag_score=30.0      # Lower from 50.0
+            vector_store=vector_store,
+            min_hybrid_score=40.0,  # Lower threshold for better recall
+            min_bm25_score=3.0,     # BM25 minimum score
+            min_rag_score=25.0      # RAG minimum score
         )
         
         # Convert RAG results to hybrid search format

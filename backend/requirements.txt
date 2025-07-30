@@ -135,3 +135,5 @@ selenium==4.33.0
 beautifulsoup4==4.12.2
 lxml==4.9.3
 validators==0.22.0
+rank-bm25==0.2.2
+nltk==3.9.1
