@@ -142,23 +142,26 @@ const addLink = () => {
     if (!valid) return
     adding.value = true
     try {
-      const res = await fetch('/api/admin/scrapers/links', {
+      const res = await fetch('/api/admin/scrapers/links/add', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          links: [newLink.value.url]  // Backend expects array of URLs
+          url: newLink.value.url  // New ADD endpoint expects single URL
         })
       })
       if (isAuthError(res)) return handleAuthError()
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Unknown error')
+      }
       ElMessage.success('Link added!')
       newLink.value = { name: '', url: '' }
       fetchLinks()
-    } catch {
-      ElMessage.error('Add failed')
+    } catch (error) {
+      ElMessage.error(error.message || 'Add failed')
     }
     adding.value = false
   })

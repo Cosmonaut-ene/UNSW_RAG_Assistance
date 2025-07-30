@@ -461,6 +461,55 @@ def delete_scraper_link(url):
         return jsonify({"error": "Failed to delete scraper link"}), 500
 
 
+@admin_bp.route('/scrapers/links/add', methods=['POST'])
+@require_admin
+def add_scraper_link():
+    """Add a new link to urls.txt file"""
+    try:
+        from scrapers.utils.file_utils import load_links_from_file, save_links_to_file
+        
+        data = request.get_json()
+        new_url = data.get("url", "").strip()
+        
+        if not new_url or not new_url.startswith("http"):
+            return jsonify({"error": "Valid URL is required"}), 400
+        
+        # Load current links
+        current_links = load_links_from_file()
+        
+        # Check if link already exists
+        if new_url in current_links:
+            return jsonify({"error": "Link already exists"}), 409
+        
+        # Add new link
+        current_links.append(new_url)
+        
+        # Convert to categorized format for saving
+        categorized_links = {"programs": [], "specialisations": [], "courses": [], "other": []}
+        for link_url in current_links:
+            if "/programs/" in link_url:
+                categorized_links["programs"].append(link_url)
+            elif "/specialisations/" in link_url:
+                categorized_links["specialisations"].append(link_url)
+            elif "/courses/" in link_url:
+                categorized_links["courses"].append(link_url)
+            else:
+                categorized_links["other"].append(link_url)
+        
+        # Save updated links
+        save_links_to_file(categorized_links)
+        
+        return jsonify({
+            "message": "Link added successfully",
+            "added_url": new_url,
+            "total_links": len(current_links)
+        }), 200
+        
+    except Exception as e:
+        print(f"Error adding scraper link: {e}")
+        return jsonify({"error": "Failed to add scraper link"}), 500
+
+
 @admin_bp.route('/scrapers/links', methods=['POST'])
 @require_admin
 def update_scraper_links():
