@@ -209,11 +209,13 @@ def build_semantic_document(
         parts = []
         
         if isinstance(obj, dict):
-            # Add heading for current level (if has path)
+            # Add heading for current level (if has meaningful path)
             if current_path and level <= 6:
                 title = beautify_field_name(current_path[-1])
-                parts.append(f"{'#' * level} {title}")
-                parts.append("")  # Empty line
+                # Skip empty titles and pure numeric indices
+                if title.strip() and not title.strip().isdigit():
+                    parts.append(f"{'#' * level} {title}")
+                    parts.append("")  # Empty line
             
             # Process each key-value pair in dictionary
             for key, value in obj.items():

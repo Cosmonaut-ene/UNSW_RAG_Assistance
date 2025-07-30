@@ -10,12 +10,13 @@ from .text_splitter import split_documents_by_content_type
 from .search_engine import search_similar_documents, search_documents_with_scores
 from .chain_builder import build_rag_qa_chain
 
-# Configuration constants (import dynamically)
-import os
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-VECTOR_STORE_DIR = os.path.join(CURRENT_DIR, "vector_store")
-KNOWLEDGE_BASE_DIR = os.path.join(CURRENT_DIR, "docs")
-SCRAPED_CONTENT_DIR = os.path.join(CURRENT_DIR, "scraped_content")
+# Import centralized path configuration
+from config.paths import PathConfig
+
+# Configuration constants
+VECTOR_STORE_DIR = str(PathConfig.VECTOR_STORE_DIR)
+KNOWLEDGE_BASE_DIR = str(PathConfig.DOCUMENTS_DIR)
+SCRAPED_CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_DIR)
 
 # High-level API functions
 def search_documents(query: str, k: int = 5):
@@ -171,23 +172,31 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
         # Perform document search
         search_results = search_similar_documents(question, k=5)
         
+        print(f"[RAG] Processing {len(search_results)} retrieved chunks for query: {question[:50]}...")
+        
         # Convert to dict format
         result_docs = []
         matched_files = []
         
-        for doc in search_results:
+        for i, doc in enumerate(search_results, 1):
+            # Log individual chunk details
+            metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+            source_file = metadata.get('source', 'Unknown')
+            content_type = metadata.get('content_type', 'Unknown')
+            chunk_preview = doc.page_content[:100].replace('\n', ' ') if hasattr(doc, 'page_content') else 'No content'
+            
+            print(f"[RAG] Chunk {i}: {source_file} ({content_type}) - {chunk_preview}...")
+            
             result_docs.append({
                 'page_content': doc.page_content,
-                'metadata': doc.metadata if hasattr(doc, 'metadata') else {}
+                'metadata': metadata
             })
             
             # Extract file info
-            if hasattr(doc, 'metadata') and doc.metadata:
-                source_file = doc.metadata.get('source', 'Unknown')
-                if source_file != 'Unknown':
-                    filename = source_file.split('/')[-1] if '/' in source_file else source_file
-                    if filename not in matched_files:
-                        matched_files.append(filename)
+            if source_file != 'Unknown':
+                filename = source_file.split('/')[-1] if '/' in source_file else source_file
+                if filename not in matched_files:
+                    matched_files.append(filename)
         
         return {
             "search_results": result_docs,

@@ -74,6 +74,16 @@ def search_similar_documents(query: str, k: int = 5) -> List[Document]:
         documents = retriever.get_relevant_documents(query)
         
         print(f"[SearchEngine] Found {len(documents)} similar documents for query: {query[:50]}...")
+        
+        # Log chunk details
+        for i, doc in enumerate(documents, 1):
+            metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+            source = metadata.get('source', 'Unknown')
+            content_type = metadata.get('content_type', 'Unknown')
+            chunk_preview = doc.page_content[:500] if hasattr(doc, 'page_content') else 'No content'
+            
+            print(f"[SearchEngine] Chunk {i}: {chunk_preview}...")
+        
         return documents
         
     except Exception as e:
@@ -103,6 +113,16 @@ def search_documents_with_scores(query: str, k: int = 5) -> List[tuple]:
         results = vectorstore.similarity_search_with_score(query, k=k)
         
         print(f"[SearchEngine] Found {len(results)} documents with scores for query: {query[:50]}...")
+        
+        # Log chunk details with scores
+        for i, (doc, score) in enumerate(results, 1):
+            metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+            source = metadata.get('source', 'Unknown')
+            content_type = metadata.get('content_type', 'Unknown')
+            chunk_preview = doc.page_content[:100].replace('\n', ' ') if hasattr(doc, 'page_content') else 'No content'
+            
+            print(f"[SearchEngine] Chunk {i} (score: {score:.4f}): {source} ({content_type}) - {chunk_preview}...")
+        
         return results
         
     except Exception as e:

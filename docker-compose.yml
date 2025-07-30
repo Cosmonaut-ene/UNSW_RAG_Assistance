@@ -18,13 +18,11 @@ services:
       - PORT=5000
       - PYTHONUNBUFFERED=1 # Forces Python stdout/stderr to be unbuffered
       - PYTHONDONTWRITEBYTECODE=1 # Prevents .pyc files
+      - KNOWLEDGE_BASE_ROOT=/app/data/knowledge_base  # Set correct data path for container
     volumes:
       - ./backend:/app
-      # - ./backend/logs:/app/logs
-      # - ./backend/rag/docs:/app/rag/docs
-      # - ./backend/rag/vector_store:/app/rag/vector_store
-      # - ./backend/rag/scraped_content:/app/rag/scraped_content
-      # - ./backend/rag/key.json:/app/rag/key.json
+      - ./data:/app/data  # Mount new data directory
+      - ./backend/rag/key.json:/app/rag/key.json  # Keep credentials in original location
     networks:
       - chatbot-network
     restart: unless-stopped

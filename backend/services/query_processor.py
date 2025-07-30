@@ -132,16 +132,68 @@ def process_with_ai(question, session_id=None):
     conversation_history = get_recent_conversation_history(session_id) if session_id else []
     
     try:
-        print("[QueryProcessor] Trying RAG...")
-        processing_steps.append("rag_processing")
-        # Step 1: Get search results from RAG module
+        print("[QueryProcessor] Starting RAG workflow...")
         formatted_history = format_conversation_history(conversation_history)
-        rag_result = process_with_rag_detailed(question, conversation_history=conversation_history)
-        search_results = rag_result.get("search_results", [])
-        matched_files = rag_result.get("matched_files", [])
         
-        # Step 2: Process with AI module using search results
-        ai_result = ai_process_query(question, search_results, formatted_history)
+        # Step 1: Query rewriting
+        processing_steps.append("query_rewriting")
+        from ai.query_processor import rewrite_query_with_context
+        rewritten_query = rewrite_query_with_context(question, conversation_history)
+        print(f"[QueryProcessor] Original query: {question}")
+        print(f"[QueryProcessor] Rewritten query: {rewritten_query}")
+        
+        # Step 2: RAG search using rewritten query
+        processing_steps.append("rag_search")
+        rag_result = process_with_rag_detailed(rewritten_query, conversation_history=conversation_history)
+        rag_search_results = rag_result.get("search_results", [])
+        
+        # Step 3: Hybrid search (RAG + keyword search combination)
+        processing_steps.append("hybrid_search")
+        from rag.hybrid_search import HybridSearchEngine
+        from config.paths import PathConfig
+        
+        # Initialize hybrid search engine with correct content directory path
+        import os
+        content_dir = os.path.join(str(PathConfig.SCRAPED_CONTENT_DIR), "content")
+        hybrid_engine = HybridSearchEngine(
+            content_dir,
+            min_hybrid_score=50.0,  # Lower from 70.0
+            min_keyword_score=5.0,  # Lower from 10.0  
+            min_rag_score=30.0      # Lower from 50.0
+        )
+        
+        # Convert RAG results to hybrid search format
+        hybrid_rag_results = []
+        for doc in rag_search_results:
+            hybrid_rag_results.append({
+                'page_content': doc.get('page_content', ''),
+                'metadata': doc.get('metadata', {})
+            })
+        
+        # Perform hybrid search
+        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=5)
+        print(f"[QueryProcessor] Hybrid search returned {len(hybrid_results)} results")
+        
+        # Convert hybrid results back to standard format
+        search_results = []
+        matched_files = []
+        for result in hybrid_results:
+            search_results.append({
+                'page_content': result.get('page_content', result.get('content', '')),
+                'metadata': result.get('metadata', {})
+            })
+            
+            # Extract file info
+            metadata = result.get('metadata', {})
+            source_file = metadata.get('source', 'Unknown')
+            if source_file != 'Unknown':
+                filename = source_file.split('/')[-1] if '/' in source_file else source_file
+                if filename not in matched_files:
+                    matched_files.append(filename)
+        
+        # Step 4: Process with AI module using hybrid search results
+        processing_steps.append("ai_generation")
+        ai_result = ai_process_query(rewritten_query, search_results, formatted_history)
         rag_answer = ai_result.get("answer", "")
         safety_blocked = ai_result.get("safety_blocked", False)
         

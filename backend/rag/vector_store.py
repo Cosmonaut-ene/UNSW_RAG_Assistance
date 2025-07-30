@@ -12,11 +12,13 @@ from langchain_chroma import Chroma
 # Remove direct import to avoid circular dependency
 # from ai.llm_client import get_embeddings_client
 
+# Import centralized path configuration
+from config.paths import PathConfig
+
 # Vector store configuration
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-VECTOR_STORE_DIR = os.path.join(CURRENT_DIR, "vector_store")
-KNOWLEDGE_BASE_DIR = os.path.join(CURRENT_DIR, "docs")
-SCRAPED_CONTENT_DIR = os.path.join(CURRENT_DIR, "scraped_content")
+VECTOR_STORE_DIR = str(PathConfig.VECTOR_STORE_DIR)
+KNOWLEDGE_BASE_DIR = str(PathConfig.DOCUMENTS_DIR)
+SCRAPED_CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_DIR)
 
 def validate_vector_database_exists() -> bool:
     """

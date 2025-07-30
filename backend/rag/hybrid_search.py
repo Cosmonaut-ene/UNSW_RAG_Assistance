@@ -113,4 +113,17 @@ class HybridSearchEngine:
         # Combine results
         combined_results = self.combine_results(rag_results, keyword_results, max_results)
         
+        # Log combined chunk details
+        print(f"[HybridSearch] Combined {len(combined_results)} results:")
+        for i, result in enumerate(combined_results, 1):
+            metadata = result.get('metadata', {})
+            source = metadata.get('source', 'Unknown')
+            content_type = metadata.get('content_type', 'Unknown')
+            search_type = metadata.get('search_type', 'Unknown')
+            hybrid_score = metadata.get('hybrid_score', 0)
+            chunk_content = result.get('page_content', result.get('content', ''))
+            chunk_preview = chunk_content[:100].replace('\n', ' ') if chunk_content else 'No content'
+            
+            print(f"[HybridSearch] Result {i} ({search_type}, score: {hybrid_score:.2f}): {source} ({content_type}) - {chunk_preview}...")
+        
         return combined_results

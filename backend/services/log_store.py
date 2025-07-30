@@ -5,13 +5,14 @@ import uuid
 from datetime import datetime
 from dateutil import tz
 
-# Base paths
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "logs")
-os.makedirs(DATA_DIR, exist_ok=True)
+# Import centralized path configuration
+from config.paths import PathConfig
+
+# Ensure directories exist
+PathConfig.ensure_directories()
 
 # File
-LOG_FILE = os.path.join(DATA_DIR, "chat_logs.jsonl")
+LOG_FILE = str(PathConfig.LOGS_DIR / "chat_logs.jsonl")
 
 def append_chat_log(entry):
     """

@@ -141,9 +141,17 @@ def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, f
         }
     
     # Build context from search results
+    print(f"[AI Pipeline] Processing {len(search_results)} chunks for response generation:")
     context_parts = []
-    for doc in search_results:
-        context_parts.append(doc.get('page_content', ''))
+    for i, doc in enumerate(search_results, 1):
+        metadata = doc.get('metadata', {})
+        source = metadata.get('source', 'Unknown')
+        content_type = metadata.get('content_type', 'Unknown')
+        chunk_content = doc.get('page_content', '')
+        chunk_preview = chunk_content[:100].replace('\n', ' ') if chunk_content else 'No content'
+        
+        print(f"[AI Pipeline] Chunk {i}: {source} ({content_type}) - {chunk_preview}...")
+        context_parts.append(chunk_content)
     
     combined_context = '\n\n'.join(context_parts)
     

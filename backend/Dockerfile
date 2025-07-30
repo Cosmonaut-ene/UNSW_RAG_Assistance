@@ -27,8 +27,8 @@ RUN python -m spacy download en_core_web_sm
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p logs rag/vector_store
+# Create necessary directories (data directory will be mounted as volume)
+RUN mkdir -p data/knowledge_base/{documents,scraped_content/content,vector_store,logs}
 
 # Set environment variables
 ENV PYTHONPATH=/app

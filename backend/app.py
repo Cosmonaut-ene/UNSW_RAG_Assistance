@@ -1,10 +1,11 @@
 import os
 import threading
-from flask import Flask
+from flask import Flask, send_from_directory, abort
 from flask_cors import CORS
 from routes.user import user_bp
 from routes.admin import admin_bp
 from dotenv import load_dotenv
+from config.paths import PathConfig
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,9 +18,22 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-change-in-product
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
+# Static file serving for documents
+@app.route('/docs/<filename>')
+def serve_document(filename):
+    """Serve PDF documents from the documents directory"""
+    try:
+        return send_from_directory(str(PathConfig.DOCUMENTS_DIR), filename)
+    except FileNotFoundError:
+        abort(404)
+
 def initialize_vector_store():
     """Initialize vector store in background if it doesn't exist"""
     try:
+        # Ensure data directories exist first
+        from config.paths import PathConfig
+        PathConfig.ensure_directories()
+        
         from rag.vector_store import validate_vector_database_exists
         from rag import update_knowledge_base
         

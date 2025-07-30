@@ -10,15 +10,16 @@ from typing import Dict, List
 class ScraperConfig:
     """Central configuration for all scraper components"""
     
-    # Base directories
-    BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    RAG_DIR = os.path.join(BACKEND_DIR, "rag")
-    SCRAPED_CONTENT_DIR = os.path.join(RAG_DIR, "scraped_content")
+    # Import centralized path configuration
+    from config.paths import PathConfig
+    
+    # Directory paths
+    SCRAPED_CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_DIR)
     
     # File paths
-    URLS_FILE = os.path.join(SCRAPED_CONTENT_DIR, "urls.txt")
-    CONTENT_DIR = os.path.join(SCRAPED_CONTENT_DIR, "content")
-    METADATA_FILE = os.path.join(SCRAPED_CONTENT_DIR, "metadata.json")
+    URLS_FILE = str(PathConfig.SCRAPED_URLS_FILE)
+    CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_FILES_DIR)
+    METADATA_FILE = str(PathConfig.SCRAPED_METADATA_FILE)
     
     # Chrome WebDriver settings
     CHROME_OPTIONS = {

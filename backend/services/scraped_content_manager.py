@@ -21,9 +21,9 @@ class ScrapedContentManager:
     def __init__(self, base_path: str = None):
         """Initialize with scraped content base path"""
         if base_path is None:
-            # Default to project's scraped content directory
-            current_dir = Path(__file__).parent.parent
-            base_path = current_dir / "rag" / "scraped_content"
+            # Use centralized path configuration
+            from config.paths import PathConfig
+            base_path = PathConfig.SCRAPED_CONTENT_DIR
         
         self.base_path = Path(base_path)
         self.urls_file = self.base_path / "urls.txt"
