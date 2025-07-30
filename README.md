@@ -41,19 +41,25 @@ This is an AI-powered chatbot system designed for UNSW CSE Open Day, built as a 
 
 #### 2. RAG System (`backend/rag/`)
 
-**Core RAG Engine (`gemini3.py`)**
+**Core Components:**
 
-- Document loading from PDFs and scraped JSON content
-- Intelligent chunking with spaCy sentence splitting
-- Google embeddings (embedding-001) with ChromaDB vector storage
-- Hybrid search combining semantic and keyword matching
-- Safety filtering and query rewriting with Gemini
+- **Document Loader (`document_loader.py`)**: PDF and scraped JSON content processing
+- **Text Splitter (`text_splitter.py`)**: H2 header-based chunking with Overview section handling
+- **Vector Store (`vector_store.py`)**: ChromaDB management with Google embeddings (embedding-001)
+- **Search Engine (`search_engine.py`)**: Vector similarity search with configurable k values
+- **BM25 Search (`bm25_search.py`)**: NLTK-based keyword search with detailed logging
+- **Hybrid Search (`hybrid_search.py`)**: 0.6*RAG + 0.4*BM25 weighted scoring with RRF
+- **Chain Builder (`chain_builder.py`)**: LangChain retrieval chain construction
 
-**Hybrid Search (`hybrid_search.py`)**
+**Advanced Search Features:**
 
-- Combines vector similarity search with keyword pattern matching
-- Course code recognition (COMP, INFS, ZEIT, etc.)
-- Configurable scoring thresholds for quality control
+- **Hybrid Scoring**: Combines vector similarity (60%) with BM25 keyword matching (40%)
+- **Reciprocal Rank Fusion**: Merges results from multiple search methods
+- **Course Code Recognition**: Automatic detection of COMP, INFS, ZEIT, etc.
+- **Overview Chunk Handling**: Standalone chunks for course overview sections
+- **Query Optimization**: Concise keyword-focused query rewriting for better embedding matching
+- **Configurable Thresholds**: Adjustable scoring minimums for quality control
+- **Fallback Mechanisms**: Direct LLM responses when RAG fails
 
 #### 3. Services Layer (`backend/services/`)
 
@@ -64,10 +70,14 @@ This is an AI-powered chatbot system designed for UNSW CSE Open Day, built as a 
 
 #### 4. Web Scraping System (`backend/scrapers/`)
 
-- **Link Discovery (`link_discovery.py`)**: Automatic URL discovery from UNSW handbook
-- **Page Scraper (`page_scraper.py`)**: Selenium-based content extraction
-- **Monitor (`monitor.py`)**: Change detection and incremental updates
-- **Configuration (`config.py`)**: Centralized scraping settings
+**Restructured Modular Architecture:**
+
+- **Services (`services/scraping_service.py`)**: Core scraping orchestration and link management
+- **Utils (`utils/content_utils.py`)**: Content cleaning, validation, and header optimization
+- **Link Discovery**: Automatic URL discovery from UNSW handbook with filtering
+- **Content Processing**: Selenium-based extraction with Markdown formatting
+- **Change Detection**: Incremental updates with hash-based comparison
+- **Source Integration**: Seamless integration with RAG pipeline
 
 #### 5. Frontend (`frontend/`)
 
@@ -93,7 +103,7 @@ This is an AI-powered chatbot system designed for UNSW CSE Open Day, built as a 
 
 ## Data Models & Storage
 
-### Chat Log Schema (JSONL format in `backend/logs/chat_logs.jsonl`)
+### Chat Log Schema (JSONL format in `backend/data/knowledge_base/logs/chat_logs.jsonl`)
 
 ```json
 {
@@ -116,13 +126,13 @@ This is an AI-powered chatbot system designed for UNSW CSE Open Day, built as a 
 ### Vector Store
 
 - **Technology**: ChromaDB with Google embeddings
-- **Location**: `backend/rag/vector_store/`
+- **Location**: `backend/data/knowledge_base/vector_store/`
 - **Content Types**: PDF documents + scraped web content
 - **Metadata**: Source files, content type, update tracking
 
 ### Scraped Content Storage
 
-- **Format**: JSON files in `backend/rag/scraped_content/content/`
+- **Format**: JSON files in `backend/data/knowledge_base/scraped_content/content/`
 - **Naming**: URL-based filenames (sanitized)
 - **Metadata**: URLs, scraping timestamps in `metadata.json`
 
@@ -173,11 +183,14 @@ Change Detection → Incremental Updates
 
 ### AI/ML Capabilities
 
-- **Hybrid Search**: Combines semantic similarity with keyword matching
-- **Safety Filtering**: Gemini-based content moderation
-- **Query Enhancement**: Automatic query rewriting for better retrieval
-- **Conversation Memory**: Multi-turn conversation context
-- **Source Attribution**: Transparent citation of information sources
+- **Advanced Hybrid Search**: 0.6*RAG + 0.4*BM25 scoring with reciprocal rank fusion
+- **Optimized Query Processing**: Concise keyword-focused rewriting for better embedding matching
+- **BM25 Keyword Search**: NLTK-based tokenization with detailed result logging
+- **Overview Chunk Optimization**: Standalone processing for course overview sections
+- **Safety Filtering**: Gemini-based content moderation with fallback mechanisms
+- **Conversation Memory**: Multi-turn conversation context with history rewriting
+- **Source Attribution**: Transparent citation with URL tracking in chunk headers
+- **Dynamic Thresholding**: Configurable quality control for search results
 
 ## Deployment & Infrastructure
 
