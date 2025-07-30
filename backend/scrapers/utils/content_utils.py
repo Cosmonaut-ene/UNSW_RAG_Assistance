@@ -349,7 +349,6 @@ def build_semantic_document(
         metadata={
             # "field": field_path,
             "source": source_url,
-            "depth": len(path),
             "content_type": "semantic_hierarchical"
         }
     )
@@ -359,7 +358,6 @@ def flatten_structure(
     prefix: str = "",
     chunks: List[Document] = [],
     source_url: str = "",
-    depth: int = 1,
     level: int = 1
 ) -> None:
     """
@@ -381,7 +379,7 @@ def flatten_structure(
             
             # Only create independent documents for complex structures (dict/list)
             if isinstance(value, (dict, list)) and value:
-                flatten_structure(value, new_prefix, chunks, source_url, depth + 1, level + 1)
+                flatten_structure(value, new_prefix, chunks, source_url, level + 1)
     
     elif isinstance(data, list) and data:
         # Create semantic document for entire list
@@ -394,7 +392,7 @@ def flatten_structure(
         for idx, item in enumerate(data):
             if isinstance(item, (dict, list)) and item:
                 new_prefix = f"{prefix} -> {idx}" if prefix else str(idx)
-                flatten_structure(item, new_prefix, chunks, source_url, depth + 1, level)
+                flatten_structure(item, new_prefix, chunks, source_url, level)
     
     else:
         # Simple value: create simple document
