@@ -384,16 +384,27 @@ def get_scrapers_status():
 @admin_bp.route('/scrapers/links', methods=['GET'])
 @require_admin  
 def get_scraper_links():
-    """Get current links list from urls.txt file"""
+    """Get current links list from urls.txt file with pagination support"""
     try:
         from scrapers.utils.file_utils import load_links_from_file
         from scrapers.config import config
         
-        links = load_links_from_file()
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
         
-        # Categorize links
+        # Load all links
+        all_links = load_links_from_file()
+        total_count = len(all_links)
+        
+        # Calculate pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_links = all_links[start_index:end_index]
+        
+        # Categorize paginated links
         categorized = {"programs": [], "specialisations": [], "courses": [], "other": []}
-        for url in links:
+        for url in paginated_links:
             if "/programs/" in url:
                 categorized["programs"].append(url)
             elif "/specialisations/" in url:
@@ -404,9 +415,12 @@ def get_scraper_links():
                 categorized["other"].append(url)
         
         return jsonify({
-            "links": links,
+            "links": paginated_links,
             "categorized": categorized,
-            "total_count": len(links),
+            "total_count": total_count,
+            "current_page": page,
+            "page_size": limit,
+            "total_pages": (total_count + limit - 1) // limit if total_count > 0 else 0,
             "urls_file": config.URLS_FILE
         }), 200
         
