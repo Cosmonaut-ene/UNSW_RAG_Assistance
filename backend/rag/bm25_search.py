@@ -201,7 +201,7 @@ class BM25SearchEngine:
         
         self._build_bm25_index()
     
-    def search(self, query: str, top_k: int = 10, min_score: float = 0.0) -> List[Dict]:
+    def search(self, query: str, top_k: int = 20, min_score: float = 0.0) -> List[Dict]:
         """
         Search using BM25 algorithm
         
@@ -271,7 +271,7 @@ class BM25SearchEngine:
             return []
     
     def search_with_filters(self, query: str, content_type: Optional[str] = None, 
-                          course_code: Optional[str] = None, top_k: int = 10) -> List[Dict]:
+                          course_code: Optional[str] = None, top_k: int = 20) -> List[Dict]:
         """
         Search with metadata filters
         

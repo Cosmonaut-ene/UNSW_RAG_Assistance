@@ -176,7 +176,7 @@ def process_with_ai(question, session_id=None):
             })
         
         # Perform hybrid search
-        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=10)
+        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=20)
         print(f"[QueryProcessor] Hybrid search returned {len(hybrid_results)} results")
         
         # Convert hybrid results back to standard format

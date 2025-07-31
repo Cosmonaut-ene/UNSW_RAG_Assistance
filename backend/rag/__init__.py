@@ -19,7 +19,7 @@ KNOWLEDGE_BASE_DIR = str(PathConfig.DOCUMENTS_DIR)
 SCRAPED_CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_DIR)
 
 # High-level API functions
-def search_documents(query: str, k: int = 10):
+def search_documents(query: str, k: int = 20):
     """
     Search for similar documents using vector similarity
     
@@ -170,7 +170,7 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
     """
     try:
         # Perform document search
-        search_results = search_similar_documents(question, k=10)
+        search_results = search_similar_documents(question, k=20)
         
         print(f"[RAG] Processing {len(search_results)} retrieved chunks for query: {question[:50]}...")
         
