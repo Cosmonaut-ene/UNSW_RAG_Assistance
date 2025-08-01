@@ -84,6 +84,7 @@ def load_scraped_documents(scraped_content_dir: str) -> List[Document]:
                 
                 # Add scraping metadata
                 document.metadata["scraped_from_file"] = filename
+                document.metadata["type"] = document.metadata["content_type"]
                 document.metadata["content_type"] = "scraped_web"
                 
                 scraped_docs.append(document)

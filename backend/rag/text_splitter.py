@@ -55,8 +55,8 @@ def create_context_header(metadata: Dict) -> str:
     if metadata.get('title'):
         header_parts.append(f"**Title:** {metadata['title']}")
         
-    if metadata.get('content_type'):
-        header_parts.append(f"**Type:** {metadata['content_type']}")
+    if metadata.get('type'):
+        header_parts.append(f"**Type:** {metadata['type']}")
         
     if metadata.get('source'):
         header_parts.append(f"**Source:** {metadata['source']}")
