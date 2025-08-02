@@ -143,6 +143,13 @@ def get_vectorstore_task_status(task_id):
     else:
         return jsonify({"error": "Task not found"}), 404
 
+@admin_bp.route('/vectorstore/stats', methods=['GET'])
+def get_vectorstore_stats():
+    """Get vector store statistics and document counts"""
+    from rag.incremental_vectorstore import get_vectorstore_stats
+    stats = get_vectorstore_stats()
+    return jsonify(stats), 200
+
 @admin_bp.route('/chatlog', methods=['GET'])
 @require_admin
 def export_chat_log():

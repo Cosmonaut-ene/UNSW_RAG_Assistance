@@ -130,9 +130,16 @@ class AsyncVectorStoreUpdater:
             print("[AsyncVectorStore] Waiting for filesystem sync...")
             time.sleep(3)
             
-            # Execute the vector store update
-            from rag import update_knowledge_base
-            result = update_knowledge_base(include_scraped=update_task['include_scraped'])
+            # Force cleanup of any existing ChromaDB connections
+            print("[AsyncVectorStore] Cleaning up existing connections...")
+            try:
+                import gc
+                gc.collect()  # Force garbage collection to close any lingering connections
+            except:
+                pass
+            
+            # Use incremental updates to avoid ChromaDB rebuild issues
+            result = self._execute_incremental_update(update_task)
             
             update_task['status'] = 'completed'
             update_task['completed_at'] = datetime.now()
@@ -147,17 +154,120 @@ class AsyncVectorStoreUpdater:
             
             print(f"[AsyncVectorStore] Update failed: {update_task['trigger_reason']} - {e}")
             
-            # For readonly database errors, we might want to retry once
-            if "readonly database" in str(e).lower():
-                print("[AsyncVectorStore] Readonly database detected, scheduling retry...")
+            # For readonly database errors, retry only if not already a retry
+            if "readonly database" in str(e).lower() and not update_task['trigger_reason'].startswith('retry_'):
+                print("[AsyncVectorStore] Readonly database detected, scheduling ONE retry...")
                 retry_id = self.schedule_update(f"retry_{update_task['trigger_reason']}", update_task['include_scraped'])
                 update_task['retry_scheduled'] = retry_id
+            else:
+                print("[AsyncVectorStore] Max retries reached or non-retryable error, stopping retries")
         
         finally:
             # Move to history
             self._add_to_history(update_task)
             self.current_update = None
     
+    def _execute_incremental_update(self, update_task: Dict) -> bool:
+        """
+        Execute incremental vector store update based on trigger reason
+        
+        Args:
+            update_task: Task dictionary with trigger reason and metadata
+            
+        Returns:
+            bool: True if successful
+        """
+        trigger_reason = update_task['trigger_reason']
+        
+        try:
+            # Parse the trigger reason to determine operation and file
+            if trigger_reason.startswith('file_uploaded_'):
+                filename = trigger_reason[len('file_uploaded_'):]
+                return self._handle_file_upload(filename)
+                
+            elif trigger_reason.startswith('file_deleted_'):
+                filename = trigger_reason[len('file_deleted_'):]
+                return self._handle_file_deletion(filename)
+                
+            elif trigger_reason.startswith('retry_'):
+                # Handle retry cases
+                original_reason = trigger_reason[len('retry_'):]
+                return self._execute_incremental_update({
+                    'trigger_reason': original_reason,
+                    'include_scraped': update_task['include_scraped']
+                })
+                
+            else:
+                # Fallback to full rebuild for unknown triggers
+                print(f"[AsyncVectorStore] Unknown trigger, falling back to full rebuild: {trigger_reason}")
+                from rag import update_knowledge_base
+                return update_knowledge_base(include_scraped=update_task['include_scraped'])
+                
+        except Exception as e:
+            print(f"[AsyncVectorStore] Incremental update failed: {e}")
+            return False
+    
+    def _handle_file_upload(self, filename: str) -> bool:
+        """Handle file upload with incremental update"""
+        try:
+            from rag.incremental_vectorstore import process_file_operation
+            from config.paths import PathConfig
+            
+            file_path = PathConfig.DOCUMENTS_DIR / filename
+            
+            if not file_path.exists():
+                print(f"[AsyncVectorStore] Uploaded file not found: {file_path}")
+                return False
+            
+            # Check if vector store exists, create if not
+            from rag.vector_store import validate_vector_database_exists
+            if not validate_vector_database_exists():
+                print("[AsyncVectorStore] No vector store exists, creating initial store...")
+                return self._create_initial_vectorstore()
+            
+            # Incremental add
+            success = process_file_operation('added', str(file_path))
+            print(f"[AsyncVectorStore] File upload processed: {filename} - {'Success' if success else 'Failed'}")
+            return success
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error handling file upload: {e}")
+            return False
+    
+    def _handle_file_deletion(self, filename: str) -> bool:
+        """Handle file deletion with incremental update"""
+        try:
+            from rag.incremental_vectorstore import process_file_operation
+            from config.paths import PathConfig
+            
+            file_path = PathConfig.DOCUMENTS_DIR / filename
+            
+            # Check if vector store exists
+            from rag.vector_store import validate_vector_database_exists
+            if not validate_vector_database_exists():
+                print("[AsyncVectorStore] No vector store exists, nothing to delete")
+                return True  # Nothing to delete is considered success
+            
+            # Incremental delete
+            success = process_file_operation('deleted', str(file_path))
+            print(f"[AsyncVectorStore] File deletion processed: {filename} - {'Success' if success else 'Failed'}")
+            return success
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error handling file deletion: {e}")
+            return False
+    
+    def _create_initial_vectorstore(self) -> bool:
+        """Create initial vector store when none exists"""
+        try:
+            print("[AsyncVectorStore] Creating initial vector store...")
+            from rag import update_knowledge_base
+            return update_knowledge_base(include_scraped=True)
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error creating initial vector store: {e}")
+            return False
+
     def _add_to_history(self, update_task: Dict):
         """Add completed update to history"""
         self.update_history.append(update_task)
