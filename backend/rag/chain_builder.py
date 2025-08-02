@@ -55,7 +55,7 @@ def build_rag_qa_chain():
             "❌ Bad response: Duration + all course details + prerequisites + career outcomes\n\n"
             
             "## BUILDING LOCATIONS:\n"
-            "For location queries, use: [Location MazeMap Search](https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=[SEARCH_TERM])\n\n"
+            "For location queries like 'Where is J17?', create specific links: [🔍 Find J17 on Campus Map](https://use.mazemap.com/#v=1&config=unsw&campusid=111&zlevel=1&center=151.231022,-33.917689&zoom=16.2&search=J17)\n\n"
             
             "Remember: Users want specific answers to their specific questions, not comprehensive program overviews unless requested.\n\n"
             
