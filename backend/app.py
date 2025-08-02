@@ -6,6 +6,7 @@ from routes.user import user_bp
 from routes.admin import admin_bp
 from dotenv import load_dotenv
 from config.paths import PathConfig
+from services.async_vectorstore_updater import init_async_vectorstore_updater, shutdown_async_vectorstore_updater
 
 # Load environment variables from .env file
 load_dotenv()
@@ -54,6 +55,10 @@ def initialize_vector_store():
         print(f"[App] Error during vector store initialization: {e}")
         print("[App] Application will continue to run, but search functionality may be limited")
 
+# Initialize async vector store updater
+print("[App] Starting async vector store updater...")
+init_async_vectorstore_updater()
+
 # Initialize vector store in background thread to avoid blocking app startup
 print("[App] Starting vector store initialization check...")
 init_thread = threading.Thread(target=initialize_vector_store, daemon=True)
@@ -63,6 +68,12 @@ if __name__ == '__main__':
     debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     host = os.getenv('HOST', '0.0.0.0')
     port = int(os.getenv('PORT', 5000))
-    app.run(debug=debug, host=host, port=port)
+    
+    try:
+        app.run(debug=debug, host=host, port=port)
+    finally:
+        # Cleanup on shutdown
+        print("[App] Shutting down async vector store updater...")
+        shutdown_async_vectorstore_updater()
 
 

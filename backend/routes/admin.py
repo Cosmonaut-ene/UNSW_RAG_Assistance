@@ -65,27 +65,20 @@ def upload_file():
     file.save(file_path)
     print(f"[UPLOAD] Saved file to: {file_path}")
     
-    # Automatically update vector store after successful upload
-    vector_updated = False
-    vector_error = None
-    try:
-        from rag import update_knowledge_base
-        # Use the same directory constant as defined in rag module
-        update_knowledge_base(include_scraped=True)
-        vector_updated = True
-        print(f"[UPLOAD] Vector store updated successfully after uploading {filename}")
-    except Exception as e:
-        vector_error = str(e)
-        print(f"[UPLOAD] Vector store update failed: {e}")
+    # Schedule asynchronous vector store update
+    from services.async_vectorstore_updater import schedule_vectorstore_update
+    update_task_id = schedule_vectorstore_update(f"file_uploaded_{filename}", include_scraped=True)
+    
+    print(f"[UPLOAD] Scheduled async vector store update after uploading {filename} (Task ID: {update_task_id})")
     
     response_data = {
         "message": "File uploaded successfully",
         "filename": filename,
-        "vector_store_updated": vector_updated
+        "vector_store_update": {
+            "status": "scheduled",
+            "task_id": update_task_id
+        }
     }
-    
-    if vector_error:
-        response_data["vector_store_error"] = vector_error
     
     return jsonify(response_data), 200
 
@@ -114,29 +107,41 @@ def delete_file(filename):
         os.remove(file_path)
         print(f"[DELETE] Removed file: {file_path}")
         
-        # Automatically update vector store after successful deletion
-        vector_updated = False
-        vector_error = None
-        try:
-            from rag import update_knowledge_base
-            update_knowledge_base(include_scraped=True)
-            vector_updated = True
-            print(f"[DELETE] Vector store updated successfully after deleting {filename}")
-        except Exception as e:
-            vector_error = str(e)
-            print(f"[DELETE] Vector store update failed: {e}")
+        # Schedule asynchronous vector store update after deletion
+        from services.async_vectorstore_updater import schedule_vectorstore_update
+        update_task_id = schedule_vectorstore_update(f"file_deleted_{filename}", include_scraped=True)
+        
+        print(f"[DELETE] Scheduled async vector store update after deleting {filename} (Task ID: {update_task_id})")
         
         response_data = {
             "message": f"{filename} deleted",
             "filename": filename,
-            "vector_store_updated": vector_updated
+            "vector_store_update": {
+                "status": "scheduled",
+                "task_id": update_task_id
+            }
         }
-        
-        if vector_error:
-            response_data["vector_store_error"] = vector_error
         
         return jsonify(response_data), 200
     return jsonify({"error": "File not found"}), 404
+
+@admin_bp.route('/vectorstore/status', methods=['GET'])
+def get_vectorstore_status():
+    """Get vector store update queue status"""
+    from services.async_vectorstore_updater import get_vectorstore_queue_status
+    status = get_vectorstore_queue_status()
+    return jsonify(status), 200
+
+@admin_bp.route('/vectorstore/status/<task_id>', methods=['GET'])
+def get_vectorstore_task_status(task_id):
+    """Get status of a specific vector store update task"""
+    from services.async_vectorstore_updater import get_vectorstore_update_status
+    status = get_vectorstore_update_status(task_id)
+    
+    if status:
+        return jsonify(status), 200
+    else:
+        return jsonify({"error": "Task not found"}), 404
 
 @admin_bp.route('/chatlog', methods=['GET'])
 @require_admin

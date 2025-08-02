@@ -27,13 +27,21 @@ RUN python -m spacy download en_core_web_sm
 # Copy application code
 COPY . .
 
-# Create necessary directories (data directory will be mounted as volume)
-RUN mkdir -p data/knowledge_base/{documents,scraped_content/content,vector_store,logs}
+# Create a user with the same UID/GID as the host user (zhang=1000)
+RUN groupadd -g 1000 appuser && \
+    useradd -r -u 1000 -g appuser appuser
+
+# Create necessary directories and set ownership
+RUN mkdir -p data/knowledge_base/{documents,scraped_content/content,vector_store,logs} && \
+    chown -R appuser:appuser /app
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 5000

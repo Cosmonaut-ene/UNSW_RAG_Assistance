@@ -71,13 +71,32 @@ def create_vector_store(documents: List[Document]) -> Chroma:
     from ai.llm_client import get_embeddings_client
     embeddings = get_embeddings_client()
     
-    # Remove existing vector store directory to ensure clean rebuild
+    # Clear existing vector store contents to ensure clean rebuild
     if os.path.exists(VECTOR_STORE_DIR):
-        shutil.rmtree(VECTOR_STORE_DIR)
-        print("[VectorStore] Removed existing vector store directory")
+        # Only remove contents that we have permission to delete
+        for item in os.listdir(VECTOR_STORE_DIR):
+            item_path = os.path.join(VECTOR_STORE_DIR, item)
+            try:
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
+                print(f"[VectorStore] Removed {item}")
+            except (PermissionError, OSError) as e:
+                print(f"[VectorStore] Skipping {item} (permission denied): {e}")
+                continue
+        print("[VectorStore] Cleared accessible vector store contents")
     
-    db = Chroma.from_documents(documents, embeddings, persist_directory=VECTOR_STORE_DIR)
-    print(f"[VectorStore] Created ChromaDB vector store with {len(documents)} documents")
+    # Use fixed collection name for consistency
+    collection_name = "knowledge_base"
+    
+    db = Chroma.from_documents(
+        documents, 
+        embeddings, 
+        persist_directory=VECTOR_STORE_DIR,
+        collection_name=collection_name
+    )
+    print(f"[VectorStore] Created ChromaDB vector store '{collection_name}' with {len(documents)} documents")
     return db
 
 def load_vector_store() -> Chroma:
@@ -97,7 +116,8 @@ def load_vector_store() -> Chroma:
     embeddings = get_embeddings_client()
     vectorstore = Chroma(
         persist_directory=VECTOR_STORE_DIR,
-        embedding_function=embeddings
+        embedding_function=embeddings,
+        collection_name="knowledge_base"
     )
     print("[VectorStore] Loaded existing ChromaDB vector store")
     return vectorstore
@@ -193,6 +213,101 @@ def update_vector_store_with_documents(documents: List[Document], include_scrape
             raise
     else:
         print("[VectorStore] Vector store is up-to-date")
+        return False
+
+def add_documents_incremental(documents: List[Document]) -> bool:
+    """
+    Add documents to existing vector store incrementally.
+    
+    Args:
+        documents: List of new documents to add
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        vectorstore = load_vector_store()
+        
+        # Add documents to existing collection
+        vectorstore.add_documents(documents)
+        
+        print(f"[VectorStore] Added {len(documents)} documents incrementally")
+        return True
+        
+    except Exception as e:
+        print(f"[VectorStore] Error adding documents incrementally: {e}")
+        return False
+
+def remove_documents_by_source_incremental(source_path: str) -> int:
+    """
+    Remove documents by source path incrementally (enhanced version).
+    
+    Args:
+        source_path: Source file path to remove (e.g., "document.pdf")
+        
+    Returns:
+        int: Number of documents removed
+    """
+    try:
+        vectorstore = load_vector_store()
+        collection = vectorstore._collection
+        
+        # Get all documents with metadata
+        all_data = collection.get(include=['metadatas'])
+        
+        if not all_data['ids']:
+            print(f"[VectorStore] No documents found in vector store")
+            return 0
+        
+        # Find documents matching the source path
+        ids_to_delete = []
+        for i, metadata in enumerate(all_data['metadatas']):
+            if metadata and metadata.get('source', '').endswith(source_path):
+                ids_to_delete.append(all_data['ids'][i])
+        
+        if not ids_to_delete:
+            print(f"[VectorStore] No documents found with source ending in: {source_path}")
+            return 0
+        
+        # Delete documents
+        collection.delete(ids=ids_to_delete)
+        
+        print(f"[VectorStore] Removed {len(ids_to_delete)} documents with source: {source_path}")
+        return len(ids_to_delete)
+        
+    except Exception as e:
+        print(f"[VectorStore] Error removing documents by source: {e}")
+        # If incremental delete fails, return 0 but don't crash
+        return 0
+
+def update_documents_incremental(source_path: str, new_documents: List[Document]) -> bool:
+    """
+    Update documents for a specific source incrementally.
+    
+    Args:
+        source_path: Source file path to update
+        new_documents: New document chunks for this source
+        
+    Returns:
+        bool: True if successful
+    """
+    try:
+        # Remove old documents for this source
+        removed_count = remove_documents_by_source_incremental(source_path)
+        print(f"[VectorStore] Removed {removed_count} old documents for {source_path}")
+        
+        # Add new documents
+        success = add_documents_incremental(new_documents)
+        
+        if success:
+            print(f"[VectorStore] Successfully updated {len(new_documents)} documents for {source_path}")
+            return True
+        else:
+            print(f"[VectorStore] Failed to add new documents for {source_path}")
+            return False
+            
+    except Exception as e:
+        print(f"[VectorStore] Error in incremental update for {source_path}: {e}")
         return False
 
 def remove_documents_by_source(source_url: str) -> int:
