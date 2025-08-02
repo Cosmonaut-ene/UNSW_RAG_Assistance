@@ -35,8 +35,14 @@ def add_documents_to_vectorstore(documents: List[Document], source_path: str) ->
             collection_name="knowledge_base"
         )
         
-        # Add new documents
-        vectorstore.add_documents(documents)
+        # Add new documents in batches to avoid ChromaDB limits
+        batch_size = 1000  # Conservative batch size
+        total_docs = len(documents)
+        
+        for i in range(0, total_docs, batch_size):
+            batch = documents[i:i + batch_size]
+            vectorstore.add_documents(batch)
+            print(f"[IncrementalVS] Added batch {i//batch_size + 1}/{(total_docs + batch_size - 1)//batch_size}: {len(batch)} documents")
         
         # Update source tracking
         _update_source_tracking_add(source_path, len(documents))

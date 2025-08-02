@@ -6,9 +6,10 @@ Asynchronous vector store updater for handling ChromaDB operations in background
 import threading
 import time
 import queue
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import traceback
+from langchain.docstore.document import Document
 
 class AsyncVectorStoreUpdater:
     """
@@ -189,6 +190,21 @@ class AsyncVectorStoreUpdater:
                 filename = trigger_reason[len('file_deleted_'):]
                 return self._handle_file_deletion(filename)
                 
+            elif trigger_reason.startswith('scraped_content_added_'):
+                # Handle scraped content addition
+                urls_info = trigger_reason[len('scraped_content_added_'):]
+                return self._handle_scraped_content_added(urls_info)
+                
+            elif trigger_reason.startswith('scraped_content_removed_'):
+                # Handle scraped content removal  
+                urls_info = trigger_reason[len('scraped_content_removed_'):]
+                return self._handle_scraped_content_removed(urls_info)
+                
+            elif trigger_reason.startswith('scraped_content_updated_'):
+                # Handle scraped content update
+                urls_info = trigger_reason[len('scraped_content_updated_'):]
+                return self._handle_scraped_content_updated(urls_info)
+                
             elif trigger_reason.startswith('retry_'):
                 # Handle retry cases
                 original_reason = trigger_reason[len('retry_'):]
@@ -198,10 +214,9 @@ class AsyncVectorStoreUpdater:
                 })
                 
             else:
-                # Fallback to full rebuild for unknown triggers
-                print(f"[AsyncVectorStore] Unknown trigger, falling back to full rebuild: {trigger_reason}")
-                from rag import update_knowledge_base
-                return update_knowledge_base(include_scraped=update_task['include_scraped'])
+                # Fallback to incremental update of all content instead of full rebuild
+                print(f"[AsyncVectorStore] Unknown trigger, attempting incremental update: {trigger_reason}")
+                return self._handle_general_incremental_update()
                 
         except Exception as e:
             print(f"[AsyncVectorStore] Incremental update failed: {e}")
@@ -257,6 +272,166 @@ class AsyncVectorStoreUpdater:
             print(f"[AsyncVectorStore] Error handling file deletion: {e}")
             return False
     
+    def _handle_scraped_content_added(self, urls_info: str) -> bool:
+        """Handle scraped content addition with URL-specific processing"""
+        try:
+            from rag.vector_store import validate_vector_database_exists
+            from rag.text_splitter import split_documents_by_content_type
+            from rag.incremental_vectorstore import add_documents_to_vectorstore
+            
+            # Check if vector store exists, create if not
+            if not validate_vector_database_exists():
+                print("[AsyncVectorStore] No vector store exists, creating initial store...")
+                return self._create_initial_vectorstore()
+            
+            # Parse URL list from trigger
+            if '|' in urls_info:
+                # Multiple URLs separated by |
+                target_urls = [url.strip() for url in urls_info.split('|') if url.strip()]
+            elif urls_info.strip():
+                # Single URL
+                target_urls = [urls_info.strip()]
+            else:
+                print(f"[AsyncVectorStore] Empty URL info in trigger: {urls_info}")
+                return False
+            
+            print(f"[AsyncVectorStore] Processing {len(target_urls)} specific URLs for addition")
+            
+            # Load documents only for these specific URLs
+            target_docs = self._load_documents_by_urls(target_urls)
+            
+            if not target_docs:
+                print("[AsyncVectorStore] No documents found for target URLs")
+                return True
+            
+            # Split documents into chunks
+            chunks = split_documents_by_content_type(target_docs)
+            
+            # Add incrementally to vector store
+            success = add_documents_to_vectorstore(chunks, f"scraped_urls_batch_{len(target_urls)}")
+            
+            print(f"[AsyncVectorStore] Scraped content addition: {'Success' if success else 'Failed'} - Added {len(chunks)} chunks from {len(target_urls)} URLs")
+            return success
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error handling scraped content addition: {e}")
+            return False
+    
+    def _handle_scraped_content_removed(self, urls_info: str) -> bool:
+        """Handle scraped content removal with URL-specific processing"""
+        try:
+            from rag.vector_store import validate_vector_database_exists, remove_documents_by_source
+            
+            if not validate_vector_database_exists():
+                print("[AsyncVectorStore] No vector store exists, nothing to remove")
+                return True
+            
+            # Parse URL list from trigger
+            if '|' in urls_info:
+                # Multiple URLs separated by |
+                target_urls = [url.strip() for url in urls_info.split('|') if url.strip()]
+            elif urls_info.strip():
+                # Single URL
+                target_urls = [urls_info.strip()]
+            else:
+                print(f"[AsyncVectorStore] Empty URL info in trigger: {urls_info}")
+                return False
+            
+            print(f"[AsyncVectorStore] Processing removal of {len(target_urls)} specific URLs")
+            
+            # Remove documents for each specific URL
+            removed_count = 0
+            for url in target_urls:
+                count = remove_documents_by_source(url)
+                removed_count += count
+                print(f"[AsyncVectorStore] Removed {count} documents for URL: {url}")
+            
+            print(f"[AsyncVectorStore] Scraped content removal completed: removed {removed_count} documents from {len(target_urls)} URLs")
+            return True
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error handling scraped content removal: {e}")
+            return False
+    
+    def _handle_scraped_content_updated(self, urls_info: str = None) -> bool:
+        """Handle scraped content update with incremental update"""
+        try:
+            from rag.vector_store import validate_vector_database_exists, remove_documents_by_source
+            from rag.document_loader import load_scraped_documents
+            from rag.text_splitter import split_documents_by_content_type
+            from rag.incremental_vectorstore import add_documents_to_vectorstore
+            from config.paths import PathConfig
+            
+            if not validate_vector_database_exists():
+                print("[AsyncVectorStore] No vector store exists, creating initial store...")
+                return self._create_initial_vectorstore()
+            
+            # Remove all existing scraped content from vector store
+            print("[AsyncVectorStore] Removing existing scraped content...")
+            # Get all scraped documents to find their sources
+            scraped_docs = load_scraped_documents(str(PathConfig.SCRAPED_CONTENT_DIR))
+            
+            removed_count = 0
+            processed_sources = set()
+            for doc in scraped_docs:
+                source = doc.metadata.get('source')
+                if source and source not in processed_sources:
+                    count = remove_documents_by_source(source)
+                    removed_count += count
+                    processed_sources.add(source)
+            
+            print(f"[AsyncVectorStore] Removed {removed_count} existing scraped documents")
+            
+            # Re-add current scraped content
+            if scraped_docs:
+                chunks = split_documents_by_content_type(scraped_docs)
+                success = add_documents_to_vectorstore(chunks, "scraped_content_update")
+                print(f"[AsyncVectorStore] Re-added {len(chunks)} scraped content chunks")
+                return success
+            else:
+                print("[AsyncVectorStore] No scraped content to re-add")
+                return True
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error handling scraped content update: {e}")
+            return False
+    
+    def _handle_general_incremental_update(self) -> bool:
+        """Handle general incremental update without full rebuild"""
+        try:
+            print("[AsyncVectorStore] Performing general incremental update...")
+            # For unknown triggers, just update scraped content incrementally
+            return self._handle_scraped_content_updated()
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error in general incremental update: {e}")
+            return False
+
+    def _load_documents_by_urls(self, target_urls: List[str]) -> List[Document]:
+        """Load scraped documents only for specific URLs"""
+        try:
+            from rag.document_loader import load_scraped_documents
+            from config.paths import PathConfig
+            
+            # Load all scraped documents
+            all_docs = load_scraped_documents(str(PathConfig.SCRAPED_CONTENT_DIR))
+            
+            # Filter out only documents matching target URLs
+            target_docs = []
+            target_urls_set = set(target_urls)
+            
+            for doc in all_docs:
+                source = doc.metadata.get('source')
+                if source in target_urls_set:
+                    target_docs.append(doc)
+            
+            print(f"[AsyncVectorStore] Loaded {len(target_docs)} documents for {len(target_urls)} target URLs")
+            return target_docs
+            
+        except Exception as e:
+            print(f"[AsyncVectorStore] Error loading documents by URLs: {e}")
+            return []
+
     def _create_initial_vectorstore(self) -> bool:
         """Create initial vector store when none exists"""
         try:

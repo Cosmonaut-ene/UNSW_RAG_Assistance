@@ -32,13 +32,11 @@ def _start_background_rebuild(operation_name: str = "search"):
     def background_rebuild():
         global _rebuild_in_progress
         try:
-            from . import update_knowledge_base
-            print(f"[SearchEngine] Background rebuild ({operation_name}): Initializing vector store...")
-            result = update_knowledge_base(include_scraped=True)
-            if result and validate_vector_database_exists():
-                print(f"[SearchEngine] Background rebuild ({operation_name}): Vector store ready for future queries")
-            else:
-                print(f"[SearchEngine] Background rebuild ({operation_name}): Failed or not needed")
+            # Use AsyncVectorStoreUpdater for consistent handling
+            from services.async_vectorstore_updater import schedule_vectorstore_update
+            print(f"[SearchEngine] Background rebuild ({operation_name}): Scheduling async rebuild...")
+            task_id = schedule_vectorstore_update(f"search_triggered_rebuild_{operation_name}", include_scraped=True)
+            print(f"[SearchEngine] Background rebuild ({operation_name}): Scheduled as task {task_id}")
         except Exception as e:
             print(f"[SearchEngine] Background rebuild ({operation_name}) failed: {e}")
         finally:

@@ -444,43 +444,32 @@ def get_scraper_links():
 @admin_bp.route('/scrapers/links/<path:url>', methods=['DELETE'])
 @require_admin
 def delete_scraper_link(url):
-    """Delete a specific link from urls.txt file"""
+    """Delete a specific link and trigger vector store update"""
     try:
-        from scrapers.utils.file_utils import load_links_from_file, save_links_to_file
+        from services.scraped_content_manager import ScrapedContentManager
         from urllib.parse import unquote
         
         # Decode the URL parameter
         decoded_url = unquote(url)
         
-        # Load current links
-        links = load_links_from_file()
+        # Use ScrapedContentManager for consistent vector store updates
+        manager = ScrapedContentManager()
+        result = manager.remove_links([decoded_url], update_vector_store=True)
         
-        # Remove the specific link
-        if decoded_url in links:
-            links.remove(decoded_url)
-            
-            # Convert to categorized format for saving
-            categorized_links = {"programs": [], "specialisations": [], "courses": [], "other": []}
-            for link_url in links:
-                if "/programs/" in link_url:
-                    categorized_links["programs"].append(link_url)
-                elif "/specialisations/" in link_url:
-                    categorized_links["specialisations"].append(link_url)
-                elif "/courses/" in link_url:
-                    categorized_links["courses"].append(link_url)
-                else:
-                    categorized_links["other"].append(link_url)
-            
-            # Save updated links
-            save_links_to_file(categorized_links)
-            
+        if result["success"]:
             return jsonify({
                 "message": f"Link deleted successfully",
                 "deleted_url": decoded_url,
-                "remaining_links": len(links)
+                "remaining_links": result.get("remaining_urls", 0),
+                "vector_store_update": {
+                    "status": "scheduled" if result.get("vector_update_task_id") else "not_needed",
+                    "task_id": result.get("vector_update_task_id")
+                }
             }), 200
         else:
-            return jsonify({"error": "Link not found"}), 404
+            return jsonify({
+                "error": result.get("error", "Failed to delete link")
+            }), 404
             
     except Exception as e:
         print(f"Error deleting scraper link: {e}")
@@ -490,9 +479,9 @@ def delete_scraper_link(url):
 @admin_bp.route('/scrapers/links/add', methods=['POST'])
 @require_admin
 def add_scraper_link():
-    """Add a new link to urls.txt file"""
+    """Add a new link and trigger vector store update"""
     try:
-        from scrapers.utils.file_utils import load_links_from_file, save_links_to_file
+        from services.scraped_content_manager import ScrapedContentManager
         
         data = request.get_json()
         new_url = data.get("url", "").strip()
@@ -500,36 +489,27 @@ def add_scraper_link():
         if not new_url or not new_url.startswith("http"):
             return jsonify({"error": "Valid URL is required"}), 400
         
-        # Load current links
-        current_links = load_links_from_file()
+        # Use ScrapedContentManager for consistent vector store updates
+        manager = ScrapedContentManager()
+        result = manager.add_links([new_url], auto_update_vector_store=True)
         
-        # Check if link already exists
-        if new_url in current_links:
-            return jsonify({"error": "Link already exists"}), 409
-        
-        # Add new link
-        current_links.append(new_url)
-        
-        # Convert to categorized format for saving
-        categorized_links = {"programs": [], "specialisations": [], "courses": [], "other": []}
-        for link_url in current_links:
-            if "/programs/" in link_url:
-                categorized_links["programs"].append(link_url)
-            elif "/specialisations/" in link_url:
-                categorized_links["specialisations"].append(link_url)
-            elif "/courses/" in link_url:
-                categorized_links["courses"].append(link_url)
-            else:
-                categorized_links["other"].append(link_url)
-        
-        # Save updated links
-        save_links_to_file(categorized_links)
-        
-        return jsonify({
-            "message": "Link added successfully",
-            "added_url": new_url,
-            "total_links": len(current_links)
-        }), 200
+        if result["success"]:
+            return jsonify({
+                "message": "Link added successfully", 
+                "added_url": new_url,
+                "total_links": result.get("total_urls", 0),
+                "scraping": {
+                    "status": "started",
+                    "scraping_id": result.get("scraping_id")
+                },
+                "vector_store_update": {
+                    "status": "will_trigger_after_scraping" if result.get("auto_update_vector_store") else "disabled"
+                }
+            }), 200
+        else:
+            return jsonify({
+                "error": result.get("error", "Failed to add link")
+            }), 400
         
     except Exception as e:
         print(f"Error adding scraper link: {e}")
@@ -981,10 +961,52 @@ def update_content_links():
             "error": f"Failed to update links: {str(e)}"
         }), 500
 
+@admin_bp.route('/scrapers/status/<scraping_id>', methods=['GET'])
+@require_admin  
+def get_scraping_and_vector_status(scraping_id):
+    """Get comprehensive status of scraping and vector store updates"""
+    try:
+        from services.scraped_content_manager import ScrapedContentManager
+        from scrapers.services.scraping_service import get_scraping_progress
+        
+        # Get scraping status
+        scraping_status = get_scraping_progress(scraping_id)
+        
+        if scraping_status is None:
+            return jsonify({
+                "success": False,
+                "error": "Scraping session not found"
+            }), 404
+        
+        # Build comprehensive response
+        response = {
+            "success": True,
+            "scraping": scraping_status
+        }
+        
+        # If there's a vector update task, get its status too
+        vector_task_id = scraping_status.get("vector_update_task_id")
+        if vector_task_id:
+            from services.async_vectorstore_updater import get_vectorstore_update_status
+            vector_status = get_vectorstore_update_status(vector_task_id)
+            if vector_status:
+                response["vector_store_update"] = vector_status
+            else:
+                response["vector_store_update"] = {"status": "not_found"}
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        print(f"Error getting comprehensive status: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to get status"
+        }), 500
+
 @admin_bp.route('/content/scraping/<scraping_id>', methods=['GET'])
 @require_admin
 def get_content_scraping_status(scraping_id):
-    """Get status of ongoing scraping operation"""
+    """Get status of ongoing scraping operation (legacy endpoint)"""
     try:
         manager = ScrapedContentManager()
         status = manager.get_scraping_status(scraping_id)

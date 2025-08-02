@@ -90,12 +90,40 @@ def create_vector_store(documents: List[Document]) -> Chroma:
     # Use fixed collection name for consistency
     collection_name = "knowledge_base"
     
-    db = Chroma.from_documents(
-        documents, 
-        embeddings, 
-        persist_directory=VECTOR_STORE_DIR,
-        collection_name=collection_name
-    )
+    # Handle large document collections with batching
+    total_docs = len(documents)
+    batch_size = 1000  # Conservative batch size
+    
+    if total_docs <= batch_size:
+        # Small collection, create directly
+        db = Chroma.from_documents(
+            documents, 
+            embeddings, 
+            persist_directory=VECTOR_STORE_DIR,
+            collection_name=collection_name
+        )
+    else:
+        # Large collection, create with first batch then add remaining
+        print(f"[VectorStore] Creating vector store with {total_docs} documents in batches...")
+        
+        # Create with first batch
+        first_batch = documents[:batch_size]
+        db = Chroma.from_documents(
+            first_batch, 
+            embeddings, 
+            persist_directory=VECTOR_STORE_DIR,
+            collection_name=collection_name
+        )
+        print(f"[VectorStore] Created initial vector store with {len(first_batch)} documents")
+        
+        # Add remaining documents in batches
+        for i in range(batch_size, total_docs, batch_size):
+            batch = documents[i:i + batch_size]
+            db.add_documents(batch)
+            batch_num = (i // batch_size) + 1
+            total_batches = (total_docs + batch_size - 1) // batch_size
+            print(f"[VectorStore] Added batch {batch_num}/{total_batches - 1}: {len(batch)} documents")
+    
     print(f"[VectorStore] Created ChromaDB vector store '{collection_name}' with {len(documents)} documents")
     return db
 
@@ -228,8 +256,20 @@ def add_documents_incremental(documents: List[Document]) -> bool:
     try:
         vectorstore = load_vector_store()
         
-        # Add documents to existing collection
-        vectorstore.add_documents(documents)
+        # Add documents to existing collection in batches
+        batch_size = 1000  # Conservative batch size
+        total_docs = len(documents)
+        
+        if total_docs <= batch_size:
+            vectorstore.add_documents(documents)
+        else:
+            print(f"[VectorStore] Adding {total_docs} documents in batches...")
+            for i in range(0, total_docs, batch_size):
+                batch = documents[i:i + batch_size]
+                vectorstore.add_documents(batch)
+                batch_num = (i // batch_size) + 1
+                total_batches = (total_docs + batch_size - 1) // batch_size
+                print(f"[VectorStore] Added batch {batch_num}/{total_batches}: {len(batch)} documents")
         
         print(f"[VectorStore] Added {len(documents)} documents incrementally")
         return True

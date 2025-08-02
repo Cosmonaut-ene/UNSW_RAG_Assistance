@@ -29,11 +29,12 @@ COPY . .
 
 # Create a user with the same UID/GID as the host user (zhang=1000)
 RUN groupadd -g 1000 appuser && \
-    useradd -r -u 1000 -g appuser appuser
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
 # Create necessary directories and set ownership
 RUN mkdir -p data/knowledge_base/{documents,scraped_content/content,vector_store,logs} && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /home/appuser
 
 # Set environment variables
 ENV PYTHONPATH=/app

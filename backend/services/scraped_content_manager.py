@@ -173,7 +173,7 @@ class ScrapedContentManager:
         updated_urls = current_urls.union(set(new_urls))
         self._save_urls(updated_urls)
         
-        # Start scraping process
+        # Start scraping process with vector store update flag
         scraping_id = start_scraping_with_progress(new_urls, auto_update_vector_store)
         
         return {
@@ -183,6 +183,7 @@ class ScrapedContentManager:
             "existing_urls": existing_urls,
             "invalid_urls": invalid_urls,
             "scraping_id": scraping_id,
+            "auto_update_vector_store": auto_update_vector_store,
             "total_urls": len(updated_urls)
         }
     
@@ -222,10 +223,14 @@ class ScrapedContentManager:
         # Remove JSON files
         removed_files = self._remove_json_files(existing_urls)
         
-        # Remove from vector store
-        vector_result = {"success": True, "removed_chunks": 0}
+        # Schedule async incremental vector store update if requested
+        vector_update_task_id = None
         if update_vector_store:
-            vector_result = self._remove_from_vector_store(existing_urls)
+            from services.async_vectorstore_updater import schedule_vectorstore_update
+            vector_update_task_id = schedule_vectorstore_update(
+                f"scraped_content_removed_{len(existing_urls)}_urls", 
+                include_scraped=True
+            )
         
         # Update metadata
         metadata = self._load_metadata()
@@ -240,7 +245,7 @@ class ScrapedContentManager:
             "removed_urls": existing_urls,
             "non_existing_urls": non_existing_urls,
             "removed_files": removed_files,
-            "vector_store_result": vector_result,
+            "vector_update_task_id": vector_update_task_id,
             "remaining_urls": len(updated_urls)
         }
     
@@ -273,17 +278,16 @@ class ScrapedContentManager:
         
         # Remove existing content for these URLs
         self._remove_json_files(urls_to_update)
-        if auto_update_vector_store:
-            self._remove_from_vector_store(urls_to_update)
         
-        # Start scraping process
+        # Start scraping process with vector store update flag
         scraping_id = start_scraping_with_progress(urls_to_update, auto_update_vector_store)
         
         return {
             "success": True,
             "message": f"Started updating {len(urls_to_update)} URLs",
             "updated_urls": urls_to_update,
-            "scraping_id": scraping_id
+            "scraping_id": scraping_id,
+            "auto_update_vector_store": auto_update_vector_store
         }
     
     def get_content_status(self) -> Dict:
@@ -390,15 +394,19 @@ class ScrapedContentManager:
                 json_path.unlink()
                 removed_files.append(json_filename)
         
-        # Remove orphaned vector store chunks
-        vector_result = {"success": True, "removed_chunks": 0}
+        # Schedule async incremental vector store update to clean up orphaned chunks
+        vector_update_task_id = None
         if orphaned_sources:
-            vector_result = self._remove_from_vector_store(list(orphaned_sources))
+            from services.async_vectorstore_updater import schedule_vectorstore_update
+            vector_update_task_id = schedule_vectorstore_update(
+                f"scraped_content_cleanup_{len(orphaned_sources)}_sources", 
+                include_scraped=True
+            )
         
         return {
             "success": True,
             "removed_files": removed_files,
-            "vector_store_result": vector_result,
+            "vector_update_task_id": vector_update_task_id,
             "message": f"Cleaned up {len(removed_files)} orphaned files"
         }
 

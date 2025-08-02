@@ -285,12 +285,28 @@ def start_scraping_with_progress(urls: List[str], auto_update_vector_store: bool
                 if auto_update_vector_store and session["completed"] > 0:
                     session["status"] = "updating_vector_store"
                     try:
-                        from rag import update_knowledge_base
-                        update_knowledge_base(include_scraped=True)
-                        session["vector_store_updated"] = True
+                        # Get successfully scraped URLs (extract URL strings from dict objects)
+                        completed_url_objects = session.get("completed_urls", [])
+                        successfully_scraped_urls = [item["url"] for item in completed_url_objects if isinstance(item, dict) and "url" in item]
+                        
+                        if successfully_scraped_urls:
+                            from services.async_vectorstore_updater import schedule_vectorstore_update
+                            
+                            # Use specific URL list for targeted update
+                            vector_task_id = schedule_vectorstore_update(
+                                f"scraped_content_added_{'|'.join(successfully_scraped_urls)}",
+                                include_scraped=True
+                            )
+                            session["vector_update_task_id"] = vector_task_id
+                            session["vector_store_updating"] = True
+                            print(f"[Scraping] Scheduled vector store update for {len(successfully_scraped_urls)} URLs: {vector_task_id}")
+                        else:
+                            session["vector_store_updating"] = False
+                            print("[Scraping] No successfully scraped URLs to update in vector store")
+                            
                     except Exception as e:
-                        print(f"Vector store update failed: {e}")
-                        session["vector_store_updated"] = False
+                        print(f"[Scraping] Vector store update scheduling failed: {e}")
+                        session["vector_store_updating"] = False
                 
                 session["status"] = "finished"
                 
