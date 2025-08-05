@@ -140,9 +140,10 @@ def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, f
             "safety_blocked": False
         }
     
-    # Build context from search results
+    # Build context from search results with metadata
     print(f"[AI Pipeline] Processing {len(search_results)} chunks for response generation:")
     context_parts = []
+    source_info = []
     for i, doc in enumerate(search_results, 1):
         metadata = doc.get('metadata', {})
         source = metadata.get('source', 'Unknown')
@@ -152,8 +153,20 @@ def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, f
         
         print(f"[AI Pipeline] Chunk {i}: {source} ({content_type}) - {chunk_preview}...")
         context_parts.append(chunk_content)
+        
+        # Collect source information for AI to use
+        if source != 'Unknown':
+            # Extract document name from path
+            if source.endswith('.pdf'):
+                doc_name = source.split('/')[-1].replace('.pdf', '').replace('_', ' ')
+            else:
+                doc_name = metadata.get('title', source.split('/')[-1])
+            source_info.append(f"Source: {doc_name} -> {source}")
     
+    # Combine content and source information
     combined_context = '\n\n'.join(context_parts)
+    if source_info:
+        combined_context += f"\n\n=== SOURCE METADATA ===\n" + '\n'.join(source_info)
     
     # Generate final answer
     final_answer = generate_response(combined_context, rewritten_query, formatted_history)
