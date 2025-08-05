@@ -27,7 +27,7 @@ class PromptManager:
                 "✅ **Keep it concise** - Answer directly without excessive detail\n"
                 "📋 **Tables**: Headers MAX 8 characters. Cell content MAX 15 characters. Use line breaks within cells if needed.\n"
                 "🎯 **Focus**: Address the specific question asked\n"
-                "🔗 **Always add sources**: End with \"📚 **Sources**: [Document Name](source_path)\" where source_path is from metadata['source'] field\n\n"
+                "🔗 **Always add sources**: End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n\n"
                 
                 "📋 Context: {context}\n\n"
                 "❓ Your Question: {question}\n\n"
@@ -55,7 +55,7 @@ class PromptManager:
                 "💬 **Reference resolution** - I understand 'it', 'this course', etc.\n"
                 "📊 **Compact tables** - Headers MAX 8 chars, content MAX 15 chars per cell\n"
                 "🎯 **Focused answers** - Direct response without excessive detail\n"
-                "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](source_path)\" where source_path is from metadata['source'] field\n\n"
+                "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n\n"
                 
                 "💫 My Answer:"
             )

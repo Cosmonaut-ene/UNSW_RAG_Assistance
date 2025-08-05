@@ -156,12 +156,15 @@ def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, f
         
         # Collect source information for AI to use
         if source != 'Unknown':
-            # Extract document name from path
+            # Extract document name and create web-accessible URL
             if source.endswith('.pdf'):
-                doc_name = source.split('/')[-1].replace('.pdf', '').replace('_', ' ')
+                filename = source.split('/')[-1]
+                doc_name = filename.replace('.pdf', '').replace('_', ' ')
+                web_url = f"/docs/{filename}"
+                source_info.append(f"Source: {doc_name} -> {web_url}")
             else:
                 doc_name = metadata.get('title', source.split('/')[-1])
-            source_info.append(f"Source: {doc_name} -> {source}")
+                source_info.append(f"Source: {doc_name} -> {source}")
     
     # Combine content and source information
     combined_context = '\n\n'.join(context_parts)
