@@ -142,15 +142,19 @@ class PromptManager:
         Input: "Compare COMP9900 and COMP9901"
         Enhanced: "COMP9900 COMP9901 comparison"
         
+        **Navigation/Location Query:**
+        Input: "Where is J17?" or "How to get to the library?" or "Find building J17" or "J17 location"
+        Enhanced: "NAVIGATION_QUERY"
+        
         **Non-UNSW Redirect:**
         Input: "What about CS at University of Sydney?"
-        Enhanced: "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
+        Enhanced: "REDIRECT: I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
 
         ---
 
         🎯 **Your Query to Enhance:** "{original_query}"
         
-        💫 **My Enhanced Version:**
+        💫 **Enhanced Query:** (Return ONLY the enhanced query, nothing else)
         """
         
     @staticmethod

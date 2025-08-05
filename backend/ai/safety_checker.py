@@ -22,7 +22,8 @@ def is_query_safe_by_gemini(query: str) -> bool:
     # Quick local safety patterns for UNSW Open Day context
     unsafe_patterns = [
         'hack', 'cheat', 'illegal', 'bypass', 'fake transcript', 
-        'forged documents', 'academic dishonesty'
+        'forged documents', 'academic dishonesty',
+        'usyd', 'university of sydney', 'sydney university'
     ]
     
     query_lower = query.lower()

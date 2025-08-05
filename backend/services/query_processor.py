@@ -127,7 +127,25 @@ def process_with_ai(question, session_id=None):
 
     question_lower = question.lower().strip()
     
-    # 获取对话历史
+    # Early safety check before any processing
+    processing_steps.append("safety_check")
+    from ai.safety_checker import is_query_safe_by_gemini
+    if not is_query_safe_by_gemini(question):
+        # Return warning immediately without any further processing
+        warning_message = "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
+        processing_steps.append("safety_warning_returned")
+        print(f"[QueryProcessor] Safety check failed, returning warning directly")
+        response_time = int((time.time() - start_time) * 1000)
+        tokens_used = estimate_tokens(question + warning_message)
+        return warning_message, True, [], {
+            "response_time_ms": response_time,
+            "tokens_used": tokens_used,
+            "processing_steps": processing_steps,
+            "cache_hit": cache_hit,
+            "safety_blocked": True
+        }
+    
+    # 获取对话历史 (only after safety check passes)
     processing_steps.append("history_retrieval")
     conversation_history = get_recent_conversation_history(session_id) if session_id else []
     
@@ -135,12 +153,51 @@ def process_with_ai(question, session_id=None):
         print("[QueryProcessor] Starting RAG workflow...")
         formatted_history = format_conversation_history(conversation_history)
         
-        # Step 1: Query rewriting
+        # Step 1: Query rewriting (only if safety check passed)
         processing_steps.append("query_rewriting")
         from ai.query_processor import rewrite_query_with_context
         rewritten_query = rewrite_query_with_context(question, conversation_history)
         print(f"[QueryProcessor] Original query: {question}")
         print(f"[QueryProcessor] Rewritten query: {rewritten_query}")
+        
+        # Check for standardized navigation query
+        if rewritten_query.strip() == "NAVIGATION_QUERY":
+            processing_steps.append("navigation_direct_llm")
+            print(f"[QueryProcessor] Navigation query detected via rewrite, using direct LLM")
+            
+            from ai.response_generator import generate_fallback_response
+            fallback_answer = generate_fallback_response(question, formatted_history)
+            
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + fallback_answer)
+            return fallback_answer, True, [], {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit,
+                "navigation_fallback": True
+            }
+        
+        # Handle redirect warnings (both with and without REDIRECT prefix)
+        if (rewritten_query.startswith("REDIRECT:") or 
+            "can only help with unsw-related questions" in rewritten_query.lower()):
+            
+            if rewritten_query.startswith("REDIRECT:"):
+                warning_message = rewritten_query[9:].strip()
+            else:
+                warning_message = rewritten_query
+                
+            processing_steps.append("warning_returned")
+            print(f"[QueryProcessor] Warning message detected via rewrite, returning directly")
+            response_time = int((time.time() - start_time) * 1000)
+            tokens_used = estimate_tokens(question + warning_message)
+            return warning_message, True, [], {
+                "response_time_ms": response_time,
+                "tokens_used": tokens_used,
+                "processing_steps": processing_steps,
+                "cache_hit": cache_hit,
+                "warning_returned": True
+            }
         
         # Step 2: RAG search using rewritten query
         processing_steps.append("rag_search")
