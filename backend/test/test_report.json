@@ -1,0 +1,90 @@
+{
+  "summary": {
+    "total_tests": 10,
+    "passed": 10,
+    "failed": 0,
+    "success_rate": 100.0,
+    "total_time": 256.02853202819824,
+    "core_functions_passed": 4,
+    "admin_functions_passed": 4
+  },
+  "test_sessions": [
+    "test_session_1_1754370737",
+    "test_session_2_1754370756",
+    "test_session_3_1754370773",
+    "test_session_4_1754370782",
+    "test_session_5_1754370791",
+    "test_session_6_1754370799",
+    "test_session_7_1754370816",
+    "test_session_8_1754370971",
+    "test_session_9_1754370971",
+    "test_session_10_1754370971",
+    "test_session_11_1754370989",
+    "test_session_12_1754370989",
+    "test_session_13_1754370989",
+    "test_session_14_1754370993"
+  ],
+  "results": [
+    {
+      "test": "Basic Chat Functionality",
+      "passed": true,
+      "details": "Greeting normal, specific query found: ['bachelor', 'degree', 'entry', 'requirement']",
+      "timestamp": "2025-08-05T15:12:36.905465"
+    },
+    {
+      "test": "Conversation Memory",
+      "passed": true,
+      "details": "Successfully understood pronoun reference, found: ['bachelor', 'degree', 'requirement', 'aqf']",
+      "timestamp": "2025-08-05T15:12:53.298561"
+    },
+    {
+      "test": "Response Caching",
+      "passed": true,
+      "details": "Performance: 9014ms -> 33ms",
+      "timestamp": "2025-08-05T15:13:02.850372"
+    },
+    {
+      "test": "Performance Monitoring",
+      "passed": true,
+      "details": "Response time: 6929ms, Admin statistics available",
+      "timestamp": "2025-08-05T15:13:09.789334"
+    },
+    {
+      "test": "Admin Authentication",
+      "passed": true,
+      "details": "Token valid, role correct",
+      "timestamp": "2025-08-05T15:13:09.793810"
+    },
+    {
+      "test": "PDF File Management",
+      "passed": true,
+      "details": "Upload successful, list visible, deletion successful",
+      "timestamp": "2025-08-05T15:13:11.854644"
+    },
+    {
+      "test": "Complete Feedback Workflow",
+      "passed": true,
+      "details": "Positive/negative feedback recorded, admin can see negative feedback, answer modified and effective",
+      "timestamp": "2025-08-05T15:13:36.745281"
+    },
+    {
+      "test": "Link Management",
+      "passed": true,
+      "details": "Delete/re-add successful, Discover functionality normal",
+      "timestamp": "2025-08-05T15:16:11.667043"
+    },
+    {
+      "test": "Concurrent Users",
+      "passed": true,
+      "details": "3 users successful, session isolation normal",
+      "timestamp": "2025-08-05T15:16:29.469072"
+    },
+    {
+      "test": "Error Handling",
+      "passed": true,
+      "details": "Correctly handled 4/4 error cases",
+      "timestamp": "2025-08-05T15:16:33.964526"
+    }
+  ],
+  "timestamp": "2025-08-05T15:16:33.964712"
+}
