@@ -164,7 +164,7 @@ def export_chat_log():
 def get_unanswered():
     logs = load_all_chat_logs()
     # 排除统计记录，只显示真实的未回答查询
-    unanswered = [log for log in logs if not log.get("ai_answered") and log.get("type") != "stats_summary"]
+    unanswered = [log for log in logs if not log.get("answered", log.get("ai_answered", False)) and log.get("type") != "stats_summary"]
     unanswered.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return jsonify({
         "total": len(unanswered),
@@ -197,7 +197,7 @@ def get_stats():
     # 排除统计记录，只统计真实查询
     query_logs = [log for log in logs if log.get("type") != "stats_summary"]
     total = len(query_logs)
-    answered = len([log for log in query_logs if log.get("ai_answered")])
+    answered = len([log for log in query_logs if log.get("answered", log.get("ai_answered", False))])
     unanswered = total - answered
 
     # Daily breakdown (排除统计记录)
@@ -224,27 +224,37 @@ def get_stats():
 @require_admin
 def get_queries():
     """
-    Get the queries that need to be processed (unanswered questions + negative feedback)
+    Get all queries with detailed classification (rag_answered, ai_answered, unanswered, negative_feedback, positive_feedback)
     """
     try:
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
-        query_type = request.args.get('type', 'all')  # all, unanswered, negative
+        query_type = request.args.get('type', 'all')  # all, rag_answered, ai_answered, unanswered, negative_feedback, positive_feedback
         
         all_logs = load_all_chat_logs()
         # 排除统计记录
         real_logs = [log for log in all_logs if log.get("type") != "stats_summary"]
         filtered_logs = []
         
-        if query_type == 'unanswered':
-            filtered_logs = [log for log in real_logs if not log.get("ai_answered")]
-        elif query_type == 'negative':
+        if query_type == 'rag_answered':
+            # Use query_type if available, otherwise fallback to old logic for backward compatibility
+            filtered_logs = [log for log in real_logs if 
+                           log.get("query_type") == "rag_answered" or 
+                           (log.get("query_type") is None and log.get("answered") and log.get("matched_files"))]
+        elif query_type == 'ai_answered':
+            filtered_logs = [log for log in real_logs if 
+                           log.get("query_type") == "ai_answered" or
+                           (log.get("query_type") is None and log.get("answered") and not log.get("matched_files"))]
+        elif query_type == 'unanswered':
+            filtered_logs = [log for log in real_logs if 
+                           log.get("query_type") == "unanswered" or
+                           (log.get("query_type") is None and not log.get("answered"))]
+        elif query_type == 'negative_feedback':
             filtered_logs = [log for log in real_logs if log.get("user_feedback") == "negative"]
+        elif query_type == 'positive_feedback':
+            filtered_logs = [log for log in real_logs if log.get("user_feedback") == "positive"]
         else:  # all
-            filtered_logs = [
-                log for log in real_logs 
-                if not log.get("ai_answered") or log.get("user_feedback") == "negative"
-            ]
+            filtered_logs = real_logs
 
         filtered_logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
@@ -255,11 +265,26 @@ def get_queries():
 
         formatted_queries = []
         for log in page_queries:
+            # Handle both new 'answered' field and legacy 'ai_answered' field for backward compatibility
+            answered = log.get("answered", log.get("ai_answered", False))
+            
+            # Determine query_type for display (use stored value or derive from legacy data)
+            query_type = log.get("query_type")
+            if query_type is None:
+                # Legacy data: derive query_type from existing fields
+                if not answered:
+                    query_type = "unanswered"
+                elif log.get("matched_files"):
+                    query_type = "rag_answered"
+                else:
+                    query_type = "ai_answered"
+            
             query_item = {
                 "id": log.get("message_id"),
                 "question": log.get("question"),
                 "answer": log.get("answer"),
-                "answered": log.get("ai_answered", False),
+                "answered": answered,
+                "query_type": query_type,
                 "timestamp": log.get("timestamp"),
                 "session_id": log.get("session_id"),
                 "status": log.get("status"),
@@ -272,7 +297,7 @@ def get_queries():
                 "needs_attention_reason": []
             }
             
-            if not log.get("ai_answered"):
+            if not answered:
                 query_item["needs_attention_reason"].append("unanswered")
             if log.get("user_feedback") == "negative":
                 query_item["needs_attention_reason"].append("negative_feedback")
@@ -319,7 +344,7 @@ def update_query():
             return jsonify({"error": "Message not found"}), 404
 
         action_reasons = []
-        if not original_log.get("ai_answered"):
+        if not original_log.get("answered", original_log.get("ai_answered", False)):
             action_reasons.append("answering unanswered question")
         if original_log.get("user_feedback") == "negative":
             action_reasons.append("updating negative feedback")

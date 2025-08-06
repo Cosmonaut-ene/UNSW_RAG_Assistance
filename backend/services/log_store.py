@@ -17,7 +17,7 @@ LOG_FILE = str(PathConfig.LOGS_DIR / "chat_logs.jsonl")
 def append_chat_log(entry):
     """
     Append a single user interaction to chat_logs.jsonl
-    entry: dict with {timestamp, session_id, question, answer, status, ai_answered}
+    entry: dict with {timestamp, session_id, question, answer, status, answered, query_type}
     Add message_id for subsequent feedback updates
     """
     try:
@@ -196,7 +196,7 @@ def update_chat_log_with_admin_response(message_id, admin_response):
         for log in logs:
             if log.get('message_id') == message_id:
                 log['answer'] = admin_response
-                log['ai_answered'] = True  
+                log['answered'] = True  
                 log['status'] = 'answered'
                 log['admin_answered'] = True  
                 log['admin_response_time'] = datetime.utcnow().isoformat()

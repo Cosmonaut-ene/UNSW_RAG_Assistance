@@ -1,11 +1,23 @@
 <template>
   <section class="query-section">
     <div class="query-actions">
-      <el-select v-model="filterType" @change="handleFilterChange" placeholder="Filter" size="small" style="width: 180px;">
+      <el-select v-model="filterType" @change="handleFilterChange" placeholder="Filter" size="small" style="width: 200px;">
         <el-option label="All" value="all" />
+        <el-option label="RAG Answered" value="rag_answered" />
+        <el-option label="AI Answered" value="ai_answered" />
         <el-option label="Unanswered" value="unanswered" />
-        <el-option label="Negative Feedback" value="negative" />
+        <el-option label="Negative Feedback" value="negative_feedback" />
+        <el-option label="Positive Feedback" value="positive_feedback" />
       </el-select>
+      <el-button 
+        type="primary" 
+        :icon="Refresh" 
+        @click="refreshQueries"
+        :loading="refreshLoading"
+        size="small"
+      >
+        Refresh
+      </el-button>
     </div>
     <el-table :data="queries" class="query-table" border>
       <el-table-column prop="question" label="Question" min-width="180" />
@@ -23,21 +35,47 @@
           <span v-else style="color:#d9534f">N/A</span>
         </template>
       </el-table-column>
+      <el-table-column prop="query_type" label="Response Type" min-width="120">
+        <template #default="scope">
+          <el-tag
+            :type="scope.row.query_type === 'rag_answered' ? 'success' : 
+                  scope.row.query_type === 'ai_answered' ? 'primary' : 'warning'"
+            size="small"
+          >
+            {{ scope.row.query_type === 'rag_answered' ? 'RAG' : 
+               scope.row.query_type === 'ai_answered' ? 'AI' : 'Unanswered' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="user_feedback" label="Feedback" min-width="100">
+        <template #default="scope">
+          <el-tag
+            v-if="scope.row.user_feedback"
+            :type="scope.row.user_feedback === 'positive' ? 'success' : 'danger'"
+            size="small"
+          >
+            {{ scope.row.user_feedback === 'positive' ? '👍 Positive' : '👎 Negative' }}
+          </el-tag>
+          <span v-else style="color: #999;">No feedback</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="timestamp" label="Time" min-width="120">
         <template #default="scope">
           {{ formatTime(scope.row.timestamp) }}
         </template>
       </el-table-column>
-      <el-table-column prop="needs_attention_reason" label="Reason" min-width="110">
+      <el-table-column prop="needs_attention_reason" label="Status" min-width="110">
         <template #default="scope">
           <el-tag
             v-for="reason in scope.row.needs_attention_reason"
             :key="reason"
             :type="reason==='unanswered'?'warning':'danger'"
+            size="small"
             style="margin-right:4px"
           >
-            {{ reason }}
+            {{ reason.replace('_', ' ') }}
           </el-tag>
+          <span v-if="scope.row.needs_attention_reason.length === 0" style="color: #67C23A;">✓ Normal</span>
         </template>
       </el-table-column>
       <el-table-column label="Action" width="180">
@@ -85,6 +123,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { isAuthError, handleAuthError } from '@/utils/auth.js'
 
 
@@ -96,6 +135,7 @@ const filterType = ref('all')
 const editDialogVisible = ref(false)
 const selectedQuery = ref(null)
 const editAnswer = ref('')
+const refreshLoading = ref(false)
 const token = localStorage.getItem('admin_token')
 
 const fetchQueries = async () => {
@@ -131,6 +171,20 @@ const handleFilterChange = () => {
   fetchQueries()
 }
 
+const refreshQueries = async () => {
+  if (refreshLoading.value) return // Prevent multiple concurrent requests
+  
+  refreshLoading.value = true
+  try {
+    await fetchQueries()
+    ElMessage.success('Query list refreshed successfully!')
+  } catch (error) {
+    ElMessage.error('Failed to refresh query list')
+    console.error('Refresh error:', error)
+  } finally {
+    refreshLoading.value = false
+  }
+}
 
 const editQuery = (row) => {
   selectedQuery.value = row
@@ -237,5 +291,7 @@ onMounted(fetchQueries)
   margin-bottom: 12px;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
 }
 </style>

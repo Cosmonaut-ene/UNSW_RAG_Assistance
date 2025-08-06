@@ -28,7 +28,7 @@ def get_recent_conversation_history(session_id, limit=5):
     session_logs = [
         log for log in all_logs 
         if log.get('session_id') == session_id 
-        and log.get('ai_answered', False)
+        and log.get('answered', log.get('ai_answered', False))
         and log.get('question', '').strip()
         and log.get('answer', '').strip()
         and log.get("type") != "stats_summary"
@@ -67,7 +67,7 @@ def format_conversation_history(history_logs):
 
 def find_best_answer(question):
     all_logs = load_all_chat_logs()
-    answered_logs = [log for log in all_logs if log.get("ai_answered") and log.get("type") != "stats_summary"] # 排除统计记录，只检查真实的查询记录
+    answered_logs = [log for log in all_logs if log.get("answered", log.get("ai_answered", False)) and log.get("type") != "stats_summary"] # 排除统计记录，只检查真实的查询记录
     print(f"[QueryProcessor] Checking {len(answered_logs)} answered logs.")
     best_match = None
     best_similarity = 0.0
@@ -407,13 +407,22 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
     Return message_id so that the front end can use it
     """
     sydney_tz = tz.gettz('Australia/Sydney')
+    # Determine query type based on response method
+    if not answered:
+        query_type = "unanswered"
+    elif performance_data and performance_data.get("fallback_used"):
+        query_type = "ai_answered"
+    else:
+        query_type = "rag_answered"
+    
     chat_entry = {
         "timestamp": datetime.now(sydney_tz).isoformat(),
         "session_id": session_id,
         "question": question,
         "answer": answer,
         "status": "safety_blocked" if safety_blocked else ("answered" if answered else "unanswered"),
-        "ai_answered": answered,
+        "answered": answered,
+        "query_type": query_type,
         "matched_files": matched_files or [],
         "safety_blocked": safety_blocked
     }
