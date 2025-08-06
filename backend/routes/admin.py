@@ -280,19 +280,20 @@ def get_queries():
 
         formatted_queries = []
         for log in page_queries:
-            # Handle both new 'answered' field and legacy 'ai_answered' field for backward compatibility
-            answered = log.get("answered", log.get("ai_answered", False))
-            
             # Determine query_type for display (use stored value or derive from legacy data)
             query_type = log.get("query_type")
             if query_type is None:
                 # Legacy data: derive query_type from existing fields
+                answered = log.get("answered", log.get("ai_answered", False))
                 if not answered:
                     query_type = "unanswered"
                 elif log.get("matched_files"):
                     query_type = "rag_answered"
                 else:
                     query_type = "ai_answered"
+            
+            # For status determination, treat unanswered query_type as not answered
+            answered = query_type != "unanswered"
             
             query_item = {
                 "id": log.get("message_id"),

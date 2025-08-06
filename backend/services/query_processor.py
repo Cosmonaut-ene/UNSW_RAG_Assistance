@@ -410,7 +410,13 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
     # Determine query type based on response method
     if not answered:
         query_type = "unanswered"
-    elif performance_data and performance_data.get("fallback_used"):
+    elif safety_blocked or (performance_data and 
+                            (performance_data.get("safety_blocked") or 
+                             performance_data.get("warning_returned"))):
+        query_type = "unanswered"
+    elif (performance_data and 
+          (performance_data.get("fallback_used") or 
+           performance_data.get("navigation_fallback"))):
         query_type = "ai_answered"
     else:
         query_type = "rag_answered"
