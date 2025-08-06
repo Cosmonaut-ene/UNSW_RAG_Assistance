@@ -1,227 +1,384 @@
-[![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-2e0aaae1b6195c2367325f4f02e2d04e9abb55f0b24a779b69b11b9e10269abc.svg)](https://classroom.github.com/online_ide?assignment_repo_id=19704823&assignment_repo_type=AssignmentRepo)
+# UNSW CSE Open Day Chatbot
 
-# UNSW CSE Chatbot Project - Comprehensive Analysis
+A COMP9900 capstone project providing an AI-powered chatbot for UNSW Computer Science & Engineering Open Day visitors. The system uses Retrieval-Augmented Generation (RAG) with Google Gemini 2.5 Flash to provide accurate information about UNSW CSE programs, courses, and campus facilities.
 
-## Project Overview
+## System Overview
 
-This is an AI-powered chatbot system designed for UNSW CSE Open Day, built as a capstone project (COMP9900). The system provides intelligent question answering about UNSW Computer Science and Engineering programs using Retrieval-Augmented Generation (RAG) with Google Gemini AI.
+This chatbot combines:
+- **Google Gemini 2.5 Flash** for natural language generation
+- **ChromaDB** vector database for semantic document search  
+- **BM25** keyword search for improved retrieval accuracy
+- **Web scraping** from UNSW handbook for up-to-date course information
+- **PDF processing** for campus documents and guides
 
-## System Architecture
+## Architecture
 
-### Technology Stack
+### Backend (Python Flask)
+- **Flask** web framework with CORS support
+- **Google Generative AI** (`google-generativeai`) for LLM and embeddings
+- **LangChain** framework for RAG pipeline orchestration
+- **ChromaDB** for vector storage and similarity search
+- **rank-bm25** for keyword-based search
+- **Selenium + BeautifulSoup** for UNSW handbook web scraping
+- **PyMuPDF** for PDF document processing
+- **NLTK** for text preprocessing
 
-- **Backend**: Python Flask with RESTful API design
-- **Frontend**: Vue.js 3 with Element Plus UI components
-- **AI/ML**: Google Gemini AI (gemini-2.5-flash) with LangChain
-- **Vector Database**: ChromaDB for semantic search
-- **Data Storage**: JSONL files for chat logs and feedback
-- **Web Scraping**: Selenium + BeautifulSoup for content collection
-- **Deployment**: Docker containers with nginx
+### Frontend (Vue 3)
+- **Vue 3** with Composition API and `<script setup>` syntax
+- **Element Plus** UI component library
+- **Vite** for fast development and building
+- **Markdown-it** for rendering formatted bot responses
+- **Vue Router** for navigation between pages
 
-### Core Components
+### Data Storage
+- **Documents**: PDF files stored in `data/knowledge_base/documents/`
+- **Scraped Content**: UNSW handbook data in `data/knowledge_base/scraped_content/`
+- **Vector Store**: ChromaDB database in `data/knowledge_base/vector_store/`
+- **Chat Logs**: Conversation logs in `data/knowledge_base/logs/chat_logs.jsonl`
 
-#### 1. Backend API (`backend/`)
-
-**Main Application (`app.py`)**
-
-- Flask application with CORS enabled
-- Two main blueprints: user routes (`/api`) and admin routes (`/api/admin`)
-
-**Route Structure:**
-
-- **User Routes (`routes/user.py`)**:
-  - `POST /api/query` - Main chat endpoint
-  - `POST /api/feedback` - User feedback collection
-- **Admin Routes (`routes/admin.py`)**:
-  - Authentication: `POST /login`, `GET /verify-token`
-  - File Management: `POST /upload`, `GET /files`, `DELETE /delete/<filename>`
-  - Query Management: `GET /queries`, `POST /update-query`, `DELETE /delete-query/<id>`
-  - Scraping Control: `POST /scrapers/discover`, `POST /scrapers/scrape`
-  - Vector Store: `POST /vector-store/rebuild`
-
-#### 2. RAG System (`backend/rag/`)
-
-**Core Components:**
-
-- **Document Loader (`document_loader.py`)**: PDF and scraped JSON content processing
-- **Text Splitter (`text_splitter.py`)**: H2 header-based chunking with Overview section handling
-- **Vector Store (`vector_store.py`)**: ChromaDB management with Google embeddings (embedding-001)
-- **Search Engine (`search_engine.py`)**: Vector similarity search with configurable k values
-- **BM25 Search (`bm25_search.py`)**: NLTK-based keyword search with detailed logging
-- **Hybrid Search (`hybrid_search.py`)**: 0.6*RAG + 0.4*BM25 weighted scoring with RRF
-- **Chain Builder (`chain_builder.py`)**: LangChain retrieval chain construction
-
-**Advanced Search Features:**
-
-- **Hybrid Scoring**: Combines vector similarity (60%) with BM25 keyword matching (40%)
-- **Reciprocal Rank Fusion**: Merges results from multiple search methods
-- **Course Code Recognition**: Automatic detection of COMP, INFS, ZEIT, etc.
-- **Overview Chunk Handling**: Standalone chunks for course overview sections
-- **Query Optimization**: Concise keyword-focused query rewriting for better embedding matching
-- **Configurable Thresholds**: Adjustable scoring minimums for quality control
-- **Fallback Mechanisms**: Direct LLM responses when RAG fails
-
-#### 3. Services Layer (`backend/services/`)
-
-- **Authentication (`auth.py`)**: JWT-based admin authentication
-- **Query Processing (`query_processor.py`)**: Request routing, conversation history, response formatting
-- **Log Store (`log_store.py`)**: JSONL-based chat log persistence with feedback tracking
-- **Export (`export_chatlog.py`)**: Data export functionality
-
-#### 4. Web Scraping System (`backend/scrapers/`)
-
-**Restructured Modular Architecture:**
-
-- **Services (`services/scraping_service.py`)**: Core scraping orchestration and link management
-- **Utils (`utils/content_utils.py`)**: Content cleaning, validation, and header optimization
-- **Link Discovery**: Automatic URL discovery from UNSW handbook with filtering
-- **Content Processing**: Selenium-based extraction with Markdown formatting
-- **Change Detection**: Incremental updates with hash-based comparison
-- **Source Integration**: Seamless integration with RAG pipeline
-
-#### 5. Frontend (`frontend/`)
-
-**Vue.js Application Structure:**
-
-- **Main App (`App.vue`)**: Simple router-view container
-- **Pages**:
-  - `Chatbot.vue` - Main user interface with real-time chat
-  - `Admin.vue` - Administrative dashboard
-  - `Login.vue` - Admin authentication
-- **Components**:
-  - `LoadingSpinner.vue` - Chat loading animation
-  - `admin/FileManagement.vue` - PDF document management
-  - `admin/QueryManagement.vue` - Chat log and feedback management
-
-**Key Frontend Features:**
-
-- Real-time typewriter effect for AI responses
-- Session-based conversation tracking
-- User feedback system (like/dislike/copy)
-- Responsive design with dark mode support
-- Admin authentication with JWT tokens
-
-## Data Models & Storage
-
-### Chat Log Schema (JSONL format in `backend/data/knowledge_base/logs/chat_logs.jsonl`)
-
-```json
-{
-  "message_id": "uuid",
-  "timestamp": "ISO8601",
-  "session_id": "string",
-  "question": "string",
-  "answer": "string",
-  "status": "answered|unanswered|safety_blocked",
-  "ai_answered": boolean,
-  "matched_files": ["array"],
-  "user_feedback": "positive|negative|copy",
-  "feedback_time": "ISO8601",
-  "admin_answered": boolean,
-  "admin_response_time": "ISO8601",
-  "safety_blocked": boolean
-}
-```
-
-### Vector Store
-
-- **Technology**: ChromaDB with Google embeddings
-- **Location**: `backend/data/knowledge_base/vector_store/`
-- **Content Types**: PDF documents + scraped web content
-- **Metadata**: Source files, content type, update tracking
-
-### Scraped Content Storage
-
-- **Format**: JSON files in `backend/data/knowledge_base/scraped_content/content/`
-- **Naming**: URL-based filenames (sanitized)
-- **Metadata**: URLs, scraping timestamps in `metadata.json`
-
-## System Workflow
-
-### 1. User Query Processing Flow
+## Project Structure
 
 ```
-User Input → Safety Check → Query Rewrite → Hybrid Search →
-Context Assembly → Gemini Generation → Response + Sources →
-Feedback Collection → Log Storage
+capstone-project-25t2-9900-f10a-almond/
+├── backend/
+│   ├── ai/                           # AI processing modules
+│   │   ├── llm_client.py            # Google Gemini client management
+│   │   ├── prompt_manager.py        # Prompt templates and engineering
+│   │   ├── query_processor.py       # Query enhancement and rewriting
+│   │   ├── response_generator.py    # AI response generation
+│   │   └── safety_checker.py        # Content safety validation
+│   ├── rag/                         # Retrieval-Augmented Generation
+│   │   ├── vector_store.py          # ChromaDB operations
+│   │   ├── hybrid_search.py         # Combined semantic + keyword search
+│   │   ├── document_loader.py       # PDF and content processing
+│   │   ├── text_splitter.py         # Intelligent text chunking
+│   │   ├── chain_builder.py         # RAG pipeline construction
+│   │   └── incremental_vectorstore.py # Background vector store updates
+│   ├── scrapers/                    # Web content extraction
+│   │   ├── services/                # Scraping service implementations
+│   │   ├── core/                    # Base scraper classes and types
+│   │   └── utils/                   # Scraping utilities
+│   ├── services/                    # Business logic services
+│   │   ├── query_processor.py       # Main query orchestration
+│   │   ├── auth.py                  # Admin authentication
+│   │   ├── log_store.py            # Chat logging and storage
+│   │   └── export_chatlog.py       # Chat log export functionality
+│   ├── routes/                      # Flask API endpoints
+│   │   ├── user.py                 # Public chat endpoints
+│   │   └── admin.py                # Admin management endpoints
+│   ├── config/                      # Configuration management
+│   │   └── paths.py                # Path configuration
+│   ├── scripts/                     # Utility scripts
+│   │   ├── update_vector_store.py  # Vector store management
+│   │   └── full_pipeline.py        # Complete data processing pipeline
+│   ├── test/                        # Testing files
+│   ├── requirements.txt            # Python dependencies
+│   └── app.py                      # Flask application entry point
+├── frontend/
+│   ├── src/
+│   │   ├── components/             # Reusable Vue components
+│   │   │   └── LoadingSpinner.vue # Loading animation component
+│   │   ├── pages/                  # Main application pages
+│   │   │   ├── Chatbot.vue        # Main chat interface
+│   │   │   ├── Admin.vue          # Admin management panel
+│   │   │   └── Login.vue          # Admin login page
+│   │   ├── router/                 # Vue Router configuration
+│   │   ├── utils/                  # Frontend utilities
+│   │   │   └── auth.js            # Authentication helpers
+│   │   └── assets/                 # Static assets
+│   │       ├── logoDark.png       # Dark theme logo
+│   │       └── logoLight.png      # Light theme logo
+│   ├── package.json               # Node.js dependencies
+│   └── vite.config.js             # Vite configuration
+├── data/                           # Application data directory
+│   └── knowledge_base/
+│       ├── documents/              # PDF source documents
+│       │   ├── UNSW_CSE_Labs.pdf
+│       │   ├── Campus_tours___UNSW_College.pdf
+│       │   └── [other PDF files...]
+│       ├── scraped_content/        # Web-scraped UNSW handbook data
+│       │   ├── content/            # JSON files with course information
+│       │   ├── metadata.json      # Scraping metadata
+│       │   └── urls.txt           # Scraped URLs list
+│       ├── vector_store/           # ChromaDB database files
+│       │   ├── chroma.sqlite3     # ChromaDB SQLite database
+│       │   └── source_files.txt   # Source file tracking
+│       └── logs/                   # Chat logs and analytics
+│           └── chat_logs.jsonl    # JSONL format conversation logs
+├── docker-compose.yml              # Docker production configuration
+├── docker-compose.dev.yml          # Docker development configuration
+├── DOCKER_README.md                # Detailed Docker setup guide
+└── README.md                       # This file
 ```
 
-### 2. Admin Content Management Flow
+## Quick Start
 
-```
-PDF Upload → Automatic Vector Store Update →
-Content Discovery → Manual Review → Scraping Approval →
-Vector Store Rebuild → System Ready
+### Option 1: Docker Deployment (Recommended)
+
+1. **Clone and setup**:
+```bash
+git clone <repository-url>
+cd capstone-project-25t2-9900-f10a-almond
 ```
 
-### 3. Knowledge Base Update Flow
-
+2. **Configure environment variables**:
+```bash
+# Copy the Docker environment template (if exists)
+# Or create a .env file manually
+nano .env
 ```
-Scheduled/Manual Discovery → Link Quality Check →
-Content Scraping → JSON Storage → Vector Store Update →
-Change Detection → Incremental Updates
+
+Add these variables to `.env`:
+```env
+GOOGLE_API_KEY=your-google-gemini-api-key
+ADMIN_EMAIL=admin@unsw.edu.au
+ADMIN_PASSWORD=your-secure-password
+SECRET_KEY=your-flask-secret-key
+```
+
+3. **Start the application**:
+```bash
+docker-compose up -d
+```
+
+4. **Access the application**:
+- **Chat Interface**: http://localhost:8080
+- **Admin Panel**: http://localhost:8080/admin
+- **Backend API**: http://localhost:5000
+
+See [DOCKER_README.md](DOCKER_README.md) for comprehensive Docker setup instructions.
+
+### Option 2: Manual Development Setup
+
+#### Backend Setup
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+export GOOGLE_API_KEY="your-google-api-key"
+export ADMIN_EMAIL="admin@unsw.edu.au"
+export ADMIN_PASSWORD="secure-password"
+export SECRET_KEY="your-secret-key"
+
+# Run Flask development server
+python app.py
+```
+
+#### Frontend Setup
+```bash
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Start development server (http://localhost:3000)
+npm run dev
+
+# Build for production
+npm run build
 ```
 
 ## Key Features
 
-### For End Users
+### AI Conversation Engine
+- **Context-Aware Responses**: Maintains conversation history for natural follow-up questions
+- **Query Enhancement**: Automatically rewrites queries for better search results  
+- **Safety Filtering**: Ensures responses focus on UNSW-related content
+- **Fallback Handling**: Uses direct Gemini responses when knowledge base is insufficient
 
-- **Natural Language Chat**: Context-aware conversations about UNSW CSE
-- **Real-time Responses**: Typewriter effect with source attribution
-- **Feedback System**: Like/dislike/copy actions for continuous improvement
-- **Responsive Design**: Works on desktop, tablet, and mobile
-- **Dark Mode**: User preference toggle
+### Hybrid Search Technology
+- **Semantic Search**: ChromaDB with Google embeddings for contextual document retrieval
+- **Keyword Search**: BM25 algorithm for exact term matching
+- **Combined Scoring**: Hybrid approach balances semantic understanding with keyword relevance
+- **Performance Optimization**: Response caching and similarity-based deduplication
 
-### For Administrators
+### Content Management System
+- **Automated Web Scraping**: Extracts course information from UNSW handbook
+- **Document Processing**: Intelligent PDF parsing with metadata extraction
+- **Vector Store Management**: Incremental updates without service interruption
+- **Admin Interface**: Upload documents, manage content, view analytics
 
-- **Content Management**: Upload PDFs, manage knowledge base
-- **Query Analytics**: View unanswered questions and negative feedback
-- **Response Editing**: Update AI responses or provide manual answers
-- **Scraping Control**: Discover new content, manage scraping operations
-- **Export Functions**: Download chat logs and analytics
-- **Vector Store Management**: Force rebuilds, monitor system health
+### User Interface Features
+- **Modern Design**: Clean, responsive interface with dark/light theme toggle
+- **Real-time Interaction**: Typewriter effect for bot responses with loading animations
+- **User Feedback**: Thumbs up/down rating system and message copying
+- **Mobile Optimized**: Responsive design for desktop, tablet, and mobile devices
 
-### AI/ML Capabilities
+## API Endpoints
 
-- **Advanced Hybrid Search**: 0.6*RAG + 0.4*BM25 scoring with reciprocal rank fusion
-- **Optimized Query Processing**: Concise keyword-focused rewriting for better embedding matching
-- **BM25 Keyword Search**: NLTK-based tokenization with detailed result logging
-- **Overview Chunk Optimization**: Standalone processing for course overview sections
-- **Safety Filtering**: Gemini-based content moderation with fallback mechanisms
-- **Conversation Memory**: Multi-turn conversation context with history rewriting
-- **Source Attribution**: Transparent citation with URL tracking in chunk headers
-- **Dynamic Thresholding**: Configurable quality control for search results
+### Public Endpoints
+```
+POST /api/query
+Content-Type: application/json
+Body: {"question": "What is COMP9900?", "session_id": "unique_session_id"}
+```
 
-## Deployment & Infrastructure
+```
+POST /api/feedback
+Content-Type: application/json
+Body: {"session_id": "session_id", "feedback_type": "positive", "timestamp": "2024-01-01T00:00:00"}
+```
 
-### Docker Configuration
+### Admin Endpoints (Requires Authentication Token)
+```
+POST /api/admin/login
+Body: {"email": "admin@unsw.edu.au", "password": "password"}
+Returns: {"token": "jwt_token"}
+```
 
-- **Development**: `docker-compose.dev.yml` with hot reloading
-- **Production**: `docker-compose.yml` with nginx reverse proxy
-- **Backend Container**: Python 3.12 with requirements.txt
-- **Frontend Container**: Node.js build + nginx static serving
+```
+GET /api/admin/health
+Returns: System health status
+```
 
-### Environment Configuration
+```
+GET /api/admin/queries?page=1&limit=20&filter=all
+Returns: Paginated query logs with analytics
+```
 
-- API keys via environment variables (.env file)
-- Configurable admin credentials
-- Flexible directory paths for knowledge base and vector storage
+```
+POST /api/admin/upload
+Content-Type: multipart/form-data
+Body: PDF file upload
+```
 
-### Scalability Considerations
+## Configuration
 
-- ChromaDB can handle ~10,000 documents efficiently
-- Stateless backend design for horizontal scaling
-- Session-based conversation tracking
-- Incremental vector store updates
+### Required Environment Variables
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `GOOGLE_API_KEY` | Google Gemini API key | `AIza...` |
+| `ADMIN_EMAIL` | Admin login email | `admin@unsw.edu.au` |
+| `ADMIN_PASSWORD` | Admin login password | `SecurePass123!` |
+| `SECRET_KEY` | Flask session secret key | `your-secret-key-here` |
 
-## Security Features
+### Optional Environment Variables
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FLASK_DEBUG` | Enable Flask debug mode | `False` |
+| `HOST` | Backend host address | `0.0.0.0` |
+| `PORT` | Backend port number | `5000` |
 
-- JWT-based admin authentication with expiration
-- Input sanitization and safety filtering
-- Secure file upload with type validation
-- Environment variable protection for API keys
-- CORS configuration for cross-origin requests
+### Key Dependencies
+
+**Backend (Python 3.12+)**:
+- Flask 3.1+ - Web framework
+- google-generativeai - Gemini API client
+- langchain 0.3+ - RAG framework
+- chromadb 1.0+ - Vector database
+- rank-bm25 - Keyword search
+- selenium - Web scraping
+- PyMuPDF - PDF processing
+
+**Frontend (Node.js 18+)**:
+- Vue 3.5+ - JavaScript framework
+- Element Plus 2.10+ - UI components
+- Vite 5.4+ - Build tool
+- markdown-it - Markdown rendering
+
+## Development & Testing
+
+### Running Tests
+```bash
+cd backend
+python -m pytest test/ -v
+```
+
+### API Testing Examples
+```bash
+# Test chat functionality
+curl -X POST http://localhost:5000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What are the prerequisites for COMP9900?",
+    "session_id": "test_session_123"
+  }'
+
+# Check system health
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+     http://localhost:5000/api/admin/health
+
+# Admin login
+curl -X POST http://localhost:5000/api/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@unsw.edu.au", "password": "your-password"}'
+```
+
+### Knowledge Base Management
+```bash
+# Update vector store with new documents
+cd backend
+python scripts/update_vector_store.py
+
+# Run complete data processing pipeline
+python scripts/full_pipeline.py
+
+# Manual web scraping
+python scripts/run_scraping.py
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**1. Google API Authentication Error**
+- Verify `GOOGLE_API_KEY` is correctly set
+- Ensure the API key has access to Gemini API
+- Check that `backend/rag/key.json` exists (if using service account)
+
+**2. Vector Store Initialization**
+- First startup may take several minutes to build the vector database
+- Check logs for "Vector store initialization completed"
+- Ensure sufficient disk space (minimum 1GB for full knowledge base)
+
+**3. Port Conflicts**
+- Default ports: Frontend (8080), Backend (5000)
+- Change ports in `docker-compose.yml` if conflicts occur
+- For manual setup, use different ports with `PORT` environment variable
+
+**4. Memory Issues**
+- Vector operations require minimum 2GB available RAM
+- Monitor memory usage during vector store updates
+- Consider increasing Docker memory limits if using containers
+
+### Debug Mode
+```bash
+# Enable detailed logging
+export FLASK_DEBUG=True
+export FLASK_ENV=development
+
+# View real-time logs
+tail -f data/knowledge_base/logs/chat_logs.jsonl
+
+# Check Docker container logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
+
+## Performance & Analytics
+
+The system tracks detailed performance metrics:
+- **Response Times**: Average query processing time
+- **Cache Hit Rates**: Efficiency of response caching
+- **Token Usage**: Google API consumption tracking  
+- **User Feedback**: Positive/negative ratings and interactions
+- **Query Analytics**: Popular topics and search patterns
+
+Access analytics through the admin panel at `/admin` after logging in.
+
+## License
+
+COMP9900 Capstone Project - Academic Use Only  
+University of New South Wales - Computer Science & Engineering
 
 ---
 
-This system represents a sophisticated implementation of modern RAG architecture, combining traditional information retrieval with large language models to provide accurate, contextual responses about academic programs while maintaining administrative oversight and continuous improvement capabilities.
+**Built for UNSW CSE Open Day** - Helping prospective students discover opportunities in computer science and engineering at UNSW Sydney.
