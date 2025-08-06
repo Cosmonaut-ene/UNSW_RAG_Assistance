@@ -298,9 +298,34 @@ def process_with_ai(question, session_id=None):
                 "safety_blocked": True
             }
         
-        if (not rag_answer) or ("i don't have any information" in rag_answer.lower()) or ("i don't know" in rag_answer.lower()) or not search_results:
+        # Check fallback conditions with detailed logging
+        fallback_triggered = False
+        fallback_reason = ""
+        
+        if not rag_answer:
+            fallback_triggered = True
+            fallback_reason = "no_answer"
+        elif "i don't have any information" in rag_answer.lower():
+            fallback_triggered = True
+            fallback_reason = "no_information_phrase"
+        elif "i don't know" in rag_answer.lower():
+            fallback_triggered = True
+            fallback_reason = "dont_know_phrase"
+        elif "INSUFFICIENT_CONTEXT" in rag_answer:
+            fallback_triggered = True
+            fallback_reason = "insufficient_context_marker"
+        elif ("within the current context" in rag_answer.lower() and 
+              ("don't have" in rag_answer.lower() or "please refer" in rag_answer.lower())):
+            fallback_triggered = True
+            fallback_reason = "context_limitation_expressed"
+        elif not search_results:
+            fallback_triggered = True
+            fallback_reason = "no_search_results"
+        
+        if fallback_triggered:
             processing_steps.append("rag_fallback")
-            print(f"[QueryProcessor] RAG fallback triggered: no meaningful answer, using direct LLM")
+            print(f"[QueryProcessor] RAG fallback triggered: {fallback_reason}, using direct LLM")
+            print(f"[QueryProcessor] RAG answer preview: {rag_answer[:100] if rag_answer else 'None'}...")
             
             # Execute fallback to direct LLM
             from ai.response_generator import generate_fallback_response

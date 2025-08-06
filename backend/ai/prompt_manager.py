@@ -27,7 +27,8 @@ class PromptManager:
                 "✅ **Keep it concise** - Answer directly without excessive detail\n"
                 "📋 **Tables**: Headers MAX 8 characters. Cell content MAX 15 characters. Use line breaks within cells if needed.\n"
                 "🎯 **Focus**: Address the specific question asked\n"
-                "🔗 **Always add sources**: End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n\n"
+                "🔗 **Always add sources**: End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n"
+                "⚠️ **CONTEXT EVALUATION**: Only respond with \"INSUFFICIENT_CONTEXT\" if the provided context is completely unrelated to the question or contains absolutely no relevant information. If the context has ANY relevant information (even partial), provide the best answer possible and mention what additional information might be helpful.\n\n"
                 
                 "📋 Context: {context}\n\n"
                 "❓ Your Question: {question}\n\n"
@@ -55,7 +56,8 @@ class PromptManager:
                 "💬 **Reference resolution** - I understand 'it', 'this course', etc.\n"
                 "📊 **Compact tables** - Headers MAX 8 chars, content MAX 15 chars per cell\n"
                 "🎯 **Focused answers** - Direct response without excessive detail\n"
-                "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n\n"
+                "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n"
+                "⚠️ **CONTEXT EVALUATION**: Only respond with \"INSUFFICIENT_CONTEXT\" if the provided context is completely unrelated to the question or contains absolutely no relevant information. If the context has ANY relevant information (even partial), provide the best answer possible and mention what additional information might be helpful.\n\n"
                 
                 "💫 My Answer:"
             )
