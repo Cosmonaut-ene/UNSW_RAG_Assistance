@@ -200,6 +200,17 @@ def get_stats():
     answered = len([log for log in query_logs if log.get("answered", log.get("ai_answered", False))])
     unanswered = total - answered
 
+    # Calculate average response time
+    response_times = [log.get("response_time_ms", 0) for log in query_logs if log.get("response_time_ms")]
+    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+    
+    # Calculate total tokens used
+    total_tokens = sum(log.get("tokens_used", 0) for log in query_logs)
+    
+    # Calculate feedback statistics
+    positive_feedback = len([log for log in query_logs if log.get("user_feedback") == "positive"])
+    negative_feedback = len([log for log in query_logs if log.get("user_feedback") == "negative"])
+
     # Daily breakdown (排除统计记录)
     day_counts = {}
     for log in query_logs:
@@ -213,9 +224,13 @@ def get_stats():
     daily = [{"date": d, "count": c} for d, c in sorted(day_counts.items())]
 
     return jsonify({
-        "total_logs": total,
+        "total_queries": total,
         "answered": answered,
         "unanswered": unanswered,
+        "avg_response_time_ms": round(avg_response_time, 2),
+        "total_tokens": total_tokens,
+        "positive_feedback": positive_feedback,
+        "negative_feedback": negative_feedback,
         "daily_trends": daily
     }), 200
 
