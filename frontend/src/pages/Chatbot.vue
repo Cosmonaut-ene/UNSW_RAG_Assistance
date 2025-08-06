@@ -1,11 +1,26 @@
 <template>
   <div class="app-container">
     <header class="chat-header">
-      <img v-if="isDark" src="../assets/logoDark.png" alt="UNSW" class="sidebar-logo" />
-      <img v-if="!isDark" src="../assets/logoLight.png" alt="UNSW" class="sidebar-logo" />
+      <img
+        v-if="isDark"
+        src="../assets/logoDark.png"
+        alt="UNSW"
+        class="sidebar-logo"
+      />
+      <img
+        v-if="!isDark"
+        src="../assets/logoLight.png"
+        alt="UNSW"
+        class="sidebar-logo"
+      />
       <div class="chat-title">UNSW CSE Open Day Chatbot</div>
-      <div class="header-actions">        
-        <el-switch v-model="isDark" inline-prompt active-text="🌙" inactive-text="☀️" />
+      <div class="header-actions">
+        <el-switch
+          v-model="isDark"
+          inline-prompt
+          active-text="🌙"
+          inactive-text="☀️"
+        />
       </div>
     </header>
     <div class="body-row">
@@ -14,12 +29,26 @@
           <h3>UNSW Links</h3>
         </div>
         <nav class="sidebar-links">
-          <a href="https://www.unsw.edu.au/" target="_blank">UNSW Official Site</a>
+          <a href="https://www.unsw.edu.au/" target="_blank"
+            >UNSW Official Site</a
+          >
           <a href="https://www.unsw.edu.au/study" target="_blank">Study</a>
-          <a href="https://www.unsw.edu.au/newsroom/news/2025/06/unsw-sydney-maintains-top-20-spot-in-qs-world-university-rankings" target="_blank">QS Top 20</a>
-          <a href="https://www.library.unsw.edu.au/" target="_blank">UNSW Library</a>
-          <a href="https://www.handbook.unsw.edu.au/" target="_blank">UNSW Handbook</a>
-          <a href="https://www.unsw.edu.au/engineering/our-schools/computer-science-and-engineering" target="_blank">UNSW CSE</a>
+          <a
+            href="https://www.unsw.edu.au/newsroom/news/2025/06/unsw-sydney-maintains-top-20-spot-in-qs-world-university-rankings"
+            target="_blank"
+            >QS Top 20</a
+          >
+          <a href="https://www.library.unsw.edu.au/" target="_blank"
+            >UNSW Library</a
+          >
+          <a href="https://www.handbook.unsw.edu.au/" target="_blank"
+            >UNSW Handbook</a
+          >
+          <a
+            href="https://www.unsw.edu.au/engineering/our-schools/computer-science-and-engineering"
+            target="_blank"
+            >UNSW CSE</a
+          >
         </nav>
       </aside>
       <div class="chat-container">
@@ -30,19 +59,17 @@
             :key="index"
             :class="msg.sender"
           >
-            <div class="message-content"
-                v-if="msg.sender === 'bot'">
+            <div class="message-content" v-if="msg.sender === 'bot'">
               <LoadingSpinner v-if="msg.rawText === 'Thinking...'" />
               <span v-else v-html="msg.displayText"></span>
             </div>
-            <div class="message-content"
-                v-else>
+            <div class="message-content" v-else>
               {{ msg.text }}
             </div>
             <div v-if="msg.canFeedback" class="msg-actions">
-              <button 
-                class="icon-btn" 
-                @click="likeMsg(index)" 
+              <button
+                class="icon-btn"
+                @click="likeMsg(index)"
                 title="Like"
                 :disabled="hasRating(index)"
                 :style="{ opacity: hasRating(index) ? 0.5 : 1 }"
@@ -50,9 +77,9 @@
               >
                 👍
               </button>
-              <button 
-                class="icon-btn" 
-                @click="dislikeMsg(index)" 
+              <button
+                class="icon-btn"
+                @click="dislikeMsg(index)"
                 title="Dislike"
                 :disabled="hasRating(index)"
                 :style="{ opacity: hasRating(index) ? 0.5 : 1 }"
@@ -60,9 +87,9 @@
               >
                 👎
               </button>
-              <button 
-                class="icon-btn" 
-                @click="copyMsg(msg.displayText, index)" 
+              <button
+                class="icon-btn"
+                @click="copyMsg(msg.displayText, index)"
                 title="Copy"
                 :data-message-index="index"
               >
@@ -86,210 +113,226 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
-import MarkdownIt from 'markdown-it'
-import LoadingSpinner from '../components/LoadingSpinner.vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ElMessage } from "element-plus";
+import MarkdownIt from "markdown-it";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const md = new MarkdownIt({
   breaks: true,
   linkify: true,
   html: false,
-})
+});
 
 const renderMarkdown = (text) => {
-  return md.render(text || '')
-}
+  return md.render(text || "");
+};
 
 const messages = ref([
   {
-    sender: 'bot',
-    rawText: 'Hello! How can I help you today?',
-    displayText: md.render('Hello! How can I help you today?'),
-    canFeedback: false
-  }
-])
-const userInput = ref('')
-const isDark = ref(false)
-const chatMain = ref(null)
-const showSidebar = ref(window.innerWidth > 900)
+    sender: "bot",
+    rawText: "Hello! How can I help you today?",
+    displayText: md.render("Hello! How can I help you today?"),
+    canFeedback: false,
+  },
+]);
+const userInput = ref("");
+const isDark = ref(false);
+const chatMain = ref(null);
+const showSidebar = ref(window.innerWidth > 900);
 
-const sessionId = ref(`session_${Math.random().toString(36).substr(2, 9)}`)
-const botMessages = ref([]) 
-const ratingGiven = ref([]) 
+const sessionId = ref(`session_${Math.random().toString(36).substr(2, 9)}`);
+const botMessages = ref([]);
+const ratingGiven = ref([]);
 
 watch(isDark, (val) => {
-  document.documentElement.classList.toggle('dark', val)
-})
+  document.documentElement.classList.toggle("dark", val);
+});
 
 const scrollToBottom = () => {
   nextTick(() => {
     if (chatMain.value) {
-      chatMain.value.scrollTop = chatMain.value.scrollHeight
+      chatMain.value.scrollTop = chatMain.value.scrollHeight;
     }
-  })
-}
-watch(messages, scrollToBottom, { deep: true })
+  });
+};
+watch(messages, scrollToBottom, { deep: true });
 
 const sendMessage = async () => {
-  if (!userInput.value.trim()) return
-  const question = userInput.value.trim()
-  const questionTime = new Date().toISOString()
-  
-  messages.value.push({ sender: 'user', text: question, canFeedback: false })
-  userInput.value = ''
-  messages.value.push({ sender: 'bot', rawText: 'Thinking...', displayText: 'Thinking...', canFeedback: true })
-  
+  if (!userInput.value.trim()) return;
+  const question = userInput.value.trim();
+  const questionTime = new Date().toISOString();
+
+  messages.value.push({ sender: "user", text: question, canFeedback: false });
+  userInput.value = "";
+  messages.value.push({
+    sender: "bot",
+    rawText: "Thinking...",
+    displayText: "Thinking...",
+    canFeedback: true,
+  });
+
   try {
-    const res = await fetch('/api/query', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        question, 
-        session_id: sessionId.value 
-      })
-    })
-    const data = await res.json()
-    messages.value.pop()
-    messages.value.push({ sender: 'bot', rawText: data.answer, displayText: '', canFeedback: true })
-    const msgIdx = messages.value.length - 1
-    typewriterEffect(msgIdx, data.answer)
-    
-    
+    const res = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        session_id: sessionId.value,
+      }),
+    });
+    const data = await res.json();
+    messages.value.pop();
+    messages.value.push({
+      sender: "bot",
+      rawText: data.answer,
+      displayText: "",
+      canFeedback: true,
+    });
+    const msgIdx = messages.value.length - 1;
+    typewriterEffect(msgIdx, data.answer);
+
     const botMessageInfo = {
       messageIndex: messages.value.length - 1,
       questionText: question,
       questionTime: questionTime,
-      answerText: data.answer
-    }
-    
-    botMessages.value.push(botMessageInfo)
-    ratingGiven.value.push(false)
-    
-  } catch (err) {
-    messages.value.pop()
-    messages.value.push({ sender: 'bot', rawText: 'Sorry, something went wrong.', displayText: md.render('Sorry, something went wrong.'), canFeedback: true })
-    console.error(err)
-  }
-}
+      answerText: data.answer,
+    };
 
+    botMessages.value.push(botMessageInfo);
+    ratingGiven.value.push(false);
+  } catch (err) {
+    messages.value.pop();
+    messages.value.push({
+      sender: "bot",
+      rawText: "Sorry, something went wrong.",
+      displayText: md.render("Sorry, something went wrong."),
+      canFeedback: true,
+    });
+    console.error(err);
+  }
+};
 
 const submitFeedback = async (feedbackType, messageIndex) => {
   try {
-    const botMessageInfo = botMessages.value.find(b => b.messageIndex === messageIndex)
-    
+    const botMessageInfo = botMessages.value.find(
+      (b) => b.messageIndex === messageIndex
+    );
+
     if (!botMessageInfo) {
-      console.error('Cannot find bot message info for index:', messageIndex)
-      return false
+      console.error("Cannot find bot message info for index:", messageIndex);
+      return false;
     }
-    
-    const res = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         session_id: sessionId.value,
         feedback_type: feedbackType,
         timestamp: botMessageInfo.questionTime,
-        question_text: botMessageInfo.questionText 
-      })
-    })
+        question_text: botMessageInfo.questionText,
+      }),
+    });
 
-    const data = await res.json()
-    
+    const data = await res.json();
+
     if (res.ok) {
-      
-      if (feedbackType === 'positive' || feedbackType === 'negative') {
-        const ratingIndex = botMessages.value.findIndex(b => b.messageIndex === messageIndex)
+      if (feedbackType === "positive" || feedbackType === "negative") {
+        const ratingIndex = botMessages.value.findIndex(
+          (b) => b.messageIndex === messageIndex
+        );
         if (ratingIndex !== -1) {
-          ratingGiven.value[ratingIndex] = true
+          ratingGiven.value[ratingIndex] = true;
         }
       }
-      return true
+      return true;
     } else {
-      console.error('Feedback submission failed:', data.error)
-      return false
+      console.error("Feedback submission failed:", data.error);
+      return false;
     }
   } catch (err) {
-    console.error('Feedback request failed:', err)
-    return false
+    console.error("Feedback request failed:", err);
+    return false;
   }
-}
-
+};
 
 const hasRating = (messageIndex) => {
-  const ratingIndex = botMessages.value.findIndex(b => b.messageIndex === messageIndex)
-  return ratingIndex !== -1 ? ratingGiven.value[ratingIndex] : false
-}
-
+  const ratingIndex = botMessages.value.findIndex(
+    (b) => b.messageIndex === messageIndex
+  );
+  return ratingIndex !== -1 ? ratingGiven.value[ratingIndex] : false;
+};
 
 const likeMsg = async (idx) => {
   if (hasRating(idx)) {
-    ElMessage.info('You have already rated this message')
-    return
+    ElMessage.info("You have already rated this message");
+    return;
   }
 
-  const success = await submitFeedback('positive', idx)
+  const success = await submitFeedback("positive", idx);
   if (success) {
-    ElMessage.success('Thank you for your feedback!')
+    ElMessage.success("Thank you for your feedback!");
   } else {
-    ElMessage.error('Failed to submit feedback')
+    ElMessage.error("Failed to submit feedback");
   }
-}
-
+};
 
 const dislikeMsg = async (idx) => {
   if (hasRating(idx)) {
-    ElMessage.info('You have already rated this message')
-    return
+    ElMessage.info("You have already rated this message");
+    return;
   }
 
-  const success = await submitFeedback('negative', idx)
+  const success = await submitFeedback("negative", idx);
   if (success) {
-    ElMessage.success('We appreciate your feedback!')
+    ElMessage.success("We appreciate your feedback!");
   } else {
-    ElMessage.error('Failed to submit feedback')
+    ElMessage.error("Failed to submit feedback");
   }
-}
+};
 
 const copyMsg = async (text, idx = null) => {
   try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('Copied!')
-    
+    await navigator.clipboard.writeText(text);
+    ElMessage.success("Copied!");
+
     if (idx !== null) {
-      await submitFeedback('copy', idx)
+      await submitFeedback("copy", idx);
     }
   } catch {
-    ElMessage.error('Copy failed')
+    ElMessage.error("Copy failed");
   }
-}
+};
 
 const handleResize = () => {
-  showSidebar.value = window.innerWidth > 900
-}
+  showSidebar.value = window.innerWidth > 900;
+};
 
 function typewriterEffect(messageIndex, rawMarkdown, speed = 18, step = 2) {
-  let i = 0
+  let i = 0;
 
   function type() {
-    i += Math.floor(Math.random() * (step - 1 + 1)) + 1
-    if (i > rawMarkdown.length) i = rawMarkdown.length
-    messages.value[messageIndex].displayText = md.render(rawMarkdown.slice(0, i))
+    i += Math.floor(Math.random() * (step - 1 + 1)) + 1;
+    if (i > rawMarkdown.length) i = rawMarkdown.length;
+    messages.value[messageIndex].displayText = md.render(
+      rawMarkdown.slice(0, i)
+    );
     if (i < rawMarkdown.length) {
-      setTimeout(type, speed)
+      setTimeout(type, speed);
     } else {
-      messages.value[messageIndex].displayText = md.render(rawMarkdown)
+      messages.value[messageIndex].displayText = md.render(rawMarkdown);
     }
   }
-  type()
+  type();
 }
-onMounted(() => window.addEventListener('resize', handleResize))
-onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
+onMounted(() => window.addEventListener("resize", handleResize));
+onBeforeUnmount(() => window.removeEventListener("resize", handleResize));
 </script>
 
 <style scoped>
 :root {
-  --chat-font-family: 'Inter', 'Segoe UI', system-ui, Arial, sans-serif;
+  --chat-font-family: "Inter", "Segoe UI", system-ui, Arial, sans-serif;
   --chat-font-size: 1.22rem;
   --chat-line-height: 1.95;
   --chat-letter-spacing: 0.015em;
@@ -316,10 +359,10 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   padding: 0 32px;
   letter-spacing: -0.01em;
   gap: 18px;
-  position: relative; 
+  position: relative;
 }
 .dark .chat-header {
-   background-color: #2a3d53;
+  background-color: #2a3d53;
   color: #fff;
 }
 .dark .sidebar-logo {
@@ -331,12 +374,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   margin-right: 14px;
 }
 
-
 .chat-title {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  white-space: nowrap; 
+  white-space: nowrap;
 }
 
 .header-actions {
@@ -400,7 +442,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  max-width: 880px;
+  max-width: 1080px;
   margin: 0 auto;
   background: #fff;
   overflow: hidden;
@@ -419,8 +461,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
 }
 
 /* Message Styles */
-.chat-message { display: flex; flex-direction: column; width: 72%; }
-.bot { align-self: flex-start; }
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  width: 72%;
+}
+.bot {
+  align-self: flex-start;
+}
 .bot .message-content {
   background-color: #f4f5f6;
   border-radius: 18px 18px 18px 6px;
@@ -428,7 +476,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   margin-left: 0;
   margin-right: 0;
 }
-.user { align-self: flex-end; }
+.user {
+  align-self: flex-end;
+}
 .user .message-content {
   background-color: #cfe9ff;
   border-radius: 18px 18px 6px 18px;
@@ -436,7 +486,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   margin-right: 0;
   margin-left: auto;
 }
-.msg-actions { display: flex; gap: 8px; margin-top: 8px; }
+.msg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
 .icon-btn {
   background: none;
   border: none;
@@ -446,9 +500,15 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   padding: 2px 5px;
   border-radius: 5px;
 }
-.icon-btn:hover:not(:disabled) { background: #f0f0f0; }
-.icon-btn:disabled { cursor: not-allowed; }
-.dark .icon-btn:hover:not(:disabled) { background: #2c2f36; }
+.icon-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+.icon-btn:disabled {
+  cursor: not-allowed;
+}
+.dark .icon-btn:hover:not(:disabled) {
+  background: #2c2f36;
+}
 
 .message-content,
 .input-modern {
@@ -479,7 +539,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   background: #f8fafc;
   border-radius: 44px;
   border: 1.8px solid #e0e7ef;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
   padding: 20px 26px 20px 30px;
   outline: none;
   resize: none;
@@ -515,38 +575,91 @@ onBeforeUnmount(() => window.removeEventListener('resize', handleResize))
   background: #343541;
   color: #fff;
   border-color: #22232c;
-  box-shadow: 0 2px 16px rgba(30,32,54,0.20);
+  box-shadow: 0 2px 16px rgba(30, 32, 54, 0.2);
 }
-.dark .sidebar { background: #212534; border-color: #23293b; }
-.dark .sidebar-links a { color: #b1cfff; }
-.dark .sidebar-links a:hover { background: #2e3753; color: #f2e883; }
-.dark .sidebar-header { background: #212534; color: #fff; border-color: #22232c; }
-.dark .chat-container { background: #23232b; }
-.dark .chat-main { background-color: #343541; }
-.dark .app-container { background-color: #343541; }
-.dark .bot .message-content { background-color: #40414f; }
-.dark .user .message-content { background-color: #0b4a8b; }
+.dark .sidebar {
+  background: #212534;
+  border-color: #23293b;
+}
+.dark .sidebar-links a {
+  color: #b1cfff;
+}
+.dark .sidebar-links a:hover {
+  background: #2e3753;
+  color: #f2e883;
+}
+.dark .sidebar-header {
+  background: #212534;
+  color: #fff;
+  border-color: #22232c;
+}
+.dark .chat-container {
+  background: #23232b;
+}
+.dark .chat-main {
+  background-color: #343541;
+}
+.dark .app-container {
+  background-color: #343541;
+}
+.dark .bot .message-content {
+  background-color: #40414f;
+}
+.dark .user .message-content {
+  background-color: #0b4a8b;
+}
 
 /* Responsive */
 @media (max-width: 1200px) {
-  .chat-container { max-width: 98vw; }
+  .chat-container {
+    max-width: 98vw;
+  }
 }
 @media (max-width: 900px) {
-  .sidebar { display: none !important; }
-  .chat-container { max-width: 100vw; border-radius: 0; box-shadow: none; }
-  .chat-footer { padding: 16px 4vw 20px 4vw; gap: 10px; }
+  .sidebar {
+    display: none !important;
+  }
+  .chat-container {
+    max-width: 100vw;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .chat-footer {
+    padding: 16px 4vw 20px 4vw;
+    gap: 10px;
+  }
 }
 @media (max-width: 600px) {
-  .chat-header { min-height: 60px; font-size: 1rem; padding: 0 14px; }
-  .chat-title { font-size: 0.95rem; }
+  .chat-header {
+    min-height: 60px;
+    font-size: 1rem;
+    padding: 0 14px;
+  }
+  .chat-title {
+    font-size: 0.95rem;
+  }
   .chat-header .sidebar-logo {
     width: 60px;
     margin-right: 8px;
   }
-  .sidebar { min-width: 0; }
-  .chat-container { max-width: 100vw; }
-  .chat-main { padding: 14px 5px 8px 5px; }
-  .chat-footer { padding: 8px 1vw 12px 1vw; gap: 8px; min-height: 60px; }
-  .input-modern { min-height: 40px; font-size: 0.98rem; padding: 11px 12px 11px 12px; }
+  .sidebar {
+    min-width: 0;
+  }
+  .chat-container {
+    max-width: 100vw;
+  }
+  .chat-main {
+    padding: 14px 5px 8px 5px;
+  }
+  .chat-footer {
+    padding: 8px 1vw 12px 1vw;
+    gap: 8px;
+    min-height: 60px;
+  }
+  .input-modern {
+    min-height: 40px;
+    font-size: 0.98rem;
+    padding: 11px 12px 11px 12px;
+  }
 }
 </style>
