@@ -77,6 +77,15 @@
       >
         Refresh
       </el-button>
+      <el-button
+        type="danger"
+        :icon="Delete"
+        @click="confirmClearAllLogs"
+        :loading="clearLogsLoading"
+        size="small"
+      >
+        Clear All Logs
+      </el-button>
     </div>
 
     <el-table :data="queries" class="query-table" border>
@@ -219,7 +228,7 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Refresh } from "@element-plus/icons-vue";
+import { Refresh, Delete } from "@element-plus/icons-vue";
 import { isAuthError, handleAuthError } from "@/utils/auth.js";
 
 const queries = ref([]);
@@ -231,6 +240,7 @@ const editDialogVisible = ref(false);
 const selectedQuery = ref(null);
 const editAnswer = ref("");
 const refreshLoading = ref(false);
+const clearLogsLoading = ref(false);
 const stats = ref({
   total_queries: 0,
   answered: 0,
@@ -409,6 +419,48 @@ const exportChatLog = async () => {
 
 const showFullAnswer = (answer) => {
   ElMessageBox.alert(answer, "Full Answer", { confirmButtonText: "OK" });
+};
+
+const confirmClearAllLogs = () => {
+  ElMessageBox.confirm(
+    'This will permanently delete ALL query logs and statistics. This action cannot be undone!',
+    'DANGER: Clear All Logs',
+    {
+      confirmButtonText: 'Yes, Delete All',
+      cancelButtonText: 'Cancel',
+      type: 'error'
+    }
+  ).then(() => {
+    clearAllLogs();
+  }).catch(() => {
+    // User cancelled
+  });
+};
+
+const clearAllLogs = async () => {
+  clearLogsLoading.value = true;
+  try {
+    const res = await fetch('/api/admin/clear-all-logs', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (isAuthError(res)) {
+      handleAuthError();
+      return;
+    }
+    
+    if (!res.ok) throw new Error();
+    ElMessage.success('All logs cleared successfully!');
+    
+    // Refresh data to show empty state
+    await Promise.all([fetchQueries(), fetchStats()]);
+  } catch (error) {
+    ElMessage.error('Failed to clear logs');
+    console.error('Clear logs error:', error);
+  } finally {
+    clearLogsLoading.value = false;
+  }
 };
 
 onMounted(() => {

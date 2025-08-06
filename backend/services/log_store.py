@@ -247,3 +247,18 @@ def delete_chat_log_by_id(message_id):
     except Exception as e:
         print(f"[AdminStore] Failed to delete message: {e}")
         return False
+
+def clear_all_chat_logs():
+    """
+    Clear all chat logs by truncating the log file
+    Returns: bool - success status
+    """
+    try:
+        # Clear file contents but keep the file
+        with open(LOG_FILE, "w", encoding='utf-8') as f:
+            pass  # Write empty content
+        print("[AdminStore] All chat logs cleared successfully")
+        return True
+    except Exception as e:
+        print(f"[AdminStore] Failed to clear chat logs: {e}")
+        return False

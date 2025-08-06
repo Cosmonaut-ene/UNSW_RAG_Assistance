@@ -10,7 +10,7 @@ from services.log_store import load_all_chat_logs
 from services.export_chatlog import export_chat_logs
 from services.scraped_content_manager import ScrapedContentManager
 from werkzeug.utils import secure_filename
-from services.log_store import load_all_chat_logs, update_chat_log_with_admin_response, delete_chat_log_by_id
+from services.log_store import load_all_chat_logs, update_chat_log_with_admin_response, delete_chat_log_by_id, clear_all_chat_logs
 
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
 
@@ -397,7 +397,27 @@ def delete_query(message_id):
         print(f"Error deleting query: {str(e)}")
         return jsonify({"error": "Failed to delete query"}), 500
     
+
+@admin_bp.route('/clear-all-logs', methods=['DELETE'])
+@require_admin
+def clear_all_logs():
+    """Clear all chat logs - DANGEROUS OPERATION"""
+    try:
+        success = clear_all_chat_logs()
+        
+        if success:
+            return jsonify({
+                "message": "All chat logs cleared successfully",
+                "timestamp": datetime.utcnow().isoformat()
+            }), 200
+        else:
+            return jsonify({"error": "Failed to clear chat logs"}), 500
+            
+    except Exception as e:
+        print(f"Error clearing all logs: {str(e)}")
+        return jsonify({"error": f"Failed to clear logs: {str(e)}"}), 500
     
+
 @admin_bp.route('/health', methods=['GET'])
 def health():
     return jsonify({
