@@ -60,7 +60,7 @@ class PromptManager:
                 "📊 **Tables for comparisons only** - Only when directly comparing multiple items\n"
                 "🎯 **Focused answers** - Direct response without excessive detail\n"
                 "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n"
-                "⚠️ **CONTEXT EVALUATION**: Only respond with \"INSUFFICIENT_CONTEXT\" if the provided context is completely unrelated to the question or contains no information sufficient to generate a meaningful, relevant, and grounded response. If the context contains any information — even partially relevant — that can support a meaningful reply (not just a vague or generic one), you must attempt to answer based on available context. In such cases, clearly state what additional information would improve accuracy or completeness. “Meaningful” here refers to a response that is informative, context-aware, and substantially helpful in addressing the intent of the question — not merely a speculative or placeholder answer.\n\n"
+                "⚠️ **CONTEXT EVALUATION POLICY**: Return `INSUFFICIENT_CONTEXT` only when the provided context lacks any sufficient basis for generating a meaningful, context-grounded, and defensible response—this should act as a trigger for fallback to the model’s own general knowledge, which must then be used to construct a helpful and well-reasoned answer, clearly distinguishing between contextual and non-contextual content\n"
                 
                 "💫 My Answer:"
             )
