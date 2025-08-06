@@ -8,17 +8,20 @@ const routes = [
   {
     path: '/',
     name: 'Chatbot',
-    component: Chatbot
+    component: Chatbot,
+    meta: { title:"UNSW CSE Open Day Chatbot"}
   },
   {
     path: '/admin',
     name: 'Admin',
     component: Admin,
+    meta: { title:"Chatbot Admin Panel"}
   },
   {
     path: '/login',
     name: 'Login',
-    component: Login
+    component: Login,
+    meta: { title:"Chatbot Admin Login"}
   },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

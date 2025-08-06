@@ -7,6 +7,7 @@
           :model="form"
           class="login-form"
           @submit.prevent="handleLogin"
+          @@keyup.enter="handleLogin"
           label-position="top"
         >
           <el-form-item label="Email">
