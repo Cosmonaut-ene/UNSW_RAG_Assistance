@@ -219,7 +219,7 @@ def process_with_ai(question, session_id=None):
         # Initialize hybrid search engine with vector store
         hybrid_engine = HybridSearchEngine(
             vector_store=vector_store,
-            min_hybrid_score=40.0,  # Lower threshold for better recall
+            min_hybrid_score=70.0,  # Higher threshold for better precision
             min_bm25_score=3.0,     # BM25 minimum score
             min_rag_score=25.0      # RAG minimum score
         )
