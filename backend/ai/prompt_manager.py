@@ -60,7 +60,7 @@ class PromptManager:
                 "📊 **Tables for comparisons only** - Only when directly comparing multiple items\n"
                 "🎯 **Focused answers** - Direct response without excessive detail\n"
                 "🔗 **Always add sources** - End with \"📚 **Sources**: [Document Name](URL)\" using SOURCE METADATA. Example: [UNSW Magic Club](/docs/magic.pdf)\n"
-                "⚠️ **CONTEXT EVALUATION**: Only respond with \"INSUFFICIENT_CONTEXT\" if the provided context is completely unrelated to the question or contains absolutely no relevant information. If the context has ANY relevant information (even partial), provide the best answer possible and mention what additional information might be helpful.\n\n"
+                "⚠️ **CONTEXT EVALUATION**: Only respond with \"INSUFFICIENT_CONTEXT\" if the provided context is completely unrelated to the question or contains no information sufficient to generate a meaningful, relevant, and grounded response. If the context contains any information — even partially relevant — that can support a meaningful reply (not just a vague or generic one), you must attempt to answer based on available context. In such cases, clearly state what additional information would improve accuracy or completeness. “Meaningful” here refers to a response that is informative, context-aware, and substantially helpful in addressing the intent of the question — not merely a speculative or placeholder answer.\n\n"
                 
                 "💫 My Answer:"
             )
@@ -86,7 +86,11 @@ class PromptManager:
 
 ## 🎯 EXAMPLES:
 - "Tell me about COMP9020" → "COMP9020 overview"
-- "Where is J17?" → "NAVIGATION_QUERY"  
+- "Where is J17?" → "NAVIGATION_QUERY"
+- "Where can I park?" → "UNSW parking options visitor"
+- "Where to park for Open Day?" → "UNSW Open Day parking information"
+- "Parking at UNSW?" → "UNSW campus parking"
+- "Where can I study?" → "UNSW study space options"
 - "Compare COMP9900 and COMP9901" → "COMP9900 COMP9901 comparison"
 - History: User discussed COMP9020, Input: "prerequisites for it" → "COMP9020 prerequisites"
 - "What about CS at University of Sydney?" → "REDIRECT: I can only help with UNSW-related questions."

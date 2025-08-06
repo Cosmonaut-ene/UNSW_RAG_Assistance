@@ -74,7 +74,7 @@ def find_best_answer(question):
     for log in answered_logs:
         log_question = log.get("question", "")
         sim_score = similarity(question, log_question)
-        if sim_score > 0.9 and sim_score > best_similarity:
+        if sim_score > 0.95 and sim_score > best_similarity:
             best_match = log
             best_similarity = sim_score
             print(f"[QueryProcessor] Found match: {log_question[:30]}... (similarity: {sim_score:.2f})")
