@@ -180,7 +180,7 @@ def save_feedback(session_id, feedback_type, timestamp_hint=None, question_text=
 #     return stats
 def update_chat_log_with_admin_response(message_id, admin_response):
     """
-    Update the answer
+    Update the answer in chat log and also update the cache
     """
     try:
         logs = []
@@ -193,6 +193,7 @@ def update_chat_log_with_admin_response(message_id, admin_response):
                         continue
         
         updated = False
+        updated_log = None
         for log in logs:
             if log.get('message_id') == message_id:
                 log['answer'] = admin_response
@@ -201,6 +202,7 @@ def update_chat_log_with_admin_response(message_id, admin_response):
                 log['admin_answered'] = True  
                 log['admin_response_time'] = datetime.utcnow().isoformat()
                 updated = True
+                updated_log = log
                 print(f"[AdminStore] Updated message {message_id} with admin response")
                 break
         
@@ -208,6 +210,20 @@ def update_chat_log_with_admin_response(message_id, admin_response):
             print(f"[AdminStore] Message {message_id} not found for admin response")
             return False
         
+        # Update cache if question_hash exists
+        question_hash = updated_log.get('question_hash')
+        if question_hash:
+            try:
+                from services.cache_store import update_cached_answer
+                cache_updated = update_cached_answer(question_hash, admin_response, "admin_answered")
+                if cache_updated:
+                    print(f"[AdminStore] Also updated cache for question_hash: {question_hash}")
+                else:
+                    print(f"[AdminStore] Warning: Failed to update cache for question_hash: {question_hash}")
+            except Exception as cache_error:
+                print(f"[AdminStore] Warning: Cache update failed: {cache_error}")
+        
+        # Save updated chat logs
         with open(LOG_FILE, "w", encoding='utf-8') as f:
             for log in logs:
                 f.write(json.dumps(log, ensure_ascii=False) + "\n")
