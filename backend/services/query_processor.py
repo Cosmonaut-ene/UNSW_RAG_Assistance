@@ -60,8 +60,8 @@ def format_conversation_history(history_logs):
             if len(answer) > 200:
                 answer = answer[:200] + "..."
             
-            formatted_lines.append(f"用户: {question}")
-            formatted_lines.append(f"助手: {answer}")
+            formatted_lines.append(f"User: {question}")
+            formatted_lines.append(f"Assistant: {answer}")
             formatted_lines.append("")  # 空行分隔
     
     return "\n".join(formatted_lines).strip()
@@ -152,7 +152,7 @@ def process_with_ai(question, session_id=None):
         
         # Step 1: Query rewriting (only if safety check passed)
         processing_steps.append("query_rewriting")
-        from ai.query_processor import rewrite_query_with_context
+        from ai.query_enhancer import rewrite_query_with_context
         rewritten_query = rewrite_query_with_context(question, conversation_history)
         print(f"[QueryProcessor] Original query: {question}")
         print(f"[QueryProcessor] Rewritten query: {rewritten_query}")

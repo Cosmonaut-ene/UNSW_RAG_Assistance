@@ -239,86 +239,74 @@ def get_stats():
 @require_admin
 def get_queries():
     """
-    Get all queries with detailed classification (rag_answered, ai_answered, unanswered, negative_feedback, positive_feedback)
+    Get all queries from cached queries (deduplicated by question_hash)
+    Falls back to chat logs for legacy data
     """
     try:
+        from services.cache_store import get_cache_entries_with_pagination
+        
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
         query_type = request.args.get('type', 'all')  # all, rag_answered, ai_answered, unanswered, negative_feedback, positive_feedback
         
-        all_logs = load_all_chat_logs()
-        # 排除统计记录
-        real_logs = [log for log in all_logs if log.get("type") != "stats_summary"]
-        filtered_logs = []
+        # Map query_type for filtering
+        cache_query_type = None
+        cache_user_feedback = None
         
-        if query_type == 'rag_answered':
-            # Use query_type if available, otherwise fallback to old logic for backward compatibility
-            filtered_logs = [log for log in real_logs if 
-                           log.get("query_type") == "rag_answered" or 
-                           (log.get("query_type") is None and log.get("answered") and log.get("matched_files"))]
-        elif query_type == 'ai_answered':
-            filtered_logs = [log for log in real_logs if 
-                           log.get("query_type") == "ai_answered" or
-                           (log.get("query_type") is None and log.get("answered") and not log.get("matched_files"))]
-        elif query_type == 'unanswered':
-            filtered_logs = [log for log in real_logs if 
-                           log.get("query_type") == "unanswered" or
-                           (log.get("query_type") is None and not log.get("answered"))]
-        elif query_type == 'negative_feedback':
-            filtered_logs = [log for log in real_logs if log.get("user_feedback") == "negative"]
-        elif query_type == 'positive_feedback':
-            filtered_logs = [log for log in real_logs if log.get("user_feedback") == "positive"]
-        else:  # all
-            filtered_logs = real_logs
-
-        filtered_logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        if query_type in ['rag_answered', 'ai_answered', 'unanswered']:
+            cache_query_type = query_type
+        elif query_type in ['negative_feedback', 'positive_feedback']:
+            cache_user_feedback = query_type
         
-        total = len(filtered_logs)
-        start = (page - 1) * limit
-        end = start + limit
-        page_queries = filtered_logs[start:end]
-
+        # Get cached queries with pagination and filtering
+        cached_entries, total = get_cache_entries_with_pagination(
+            page=page, 
+            limit=limit, 
+            query_type=cache_query_type,
+            user_feedback=cache_user_feedback
+        )
+        
         formatted_queries = []
-        for log in page_queries:
-            # Determine query_type for display (use stored value or derive from legacy data)
-            query_type = log.get("query_type")
-            if query_type is None:
-                # Legacy data: derive query_type from existing fields
-                answered = log.get("answered", log.get("ai_answered", False))
-                if not answered:
-                    query_type = "unanswered"
-                elif log.get("matched_files"):
-                    query_type = "rag_answered"
+        for entry in cached_entries:
+            # Determine query_type for display (handle legacy data)
+            query_type_val = entry.get("query_type")
+            if query_type_val is None:
+                # Legacy data: derive query_type from answer_quality
+                answer_quality = entry.get("answer_quality", "")
+                if answer_quality in ["rag_answered", "admin_answered"]:
+                    query_type_val = "rag_answered" if entry.get("matched_files") else "ai_answered"
+                elif answer_quality == "ai_answered":
+                    query_type_val = "ai_answered"
                 else:
-                    query_type = "ai_answered"
+                    query_type_val = "unanswered"
             
-            # For status determination, treat unanswered query_type as not answered
-            answered = query_type != "unanswered"
+            answered = query_type_val != "unanswered"
             
             query_item = {
-                "id": log.get("message_id"),
-                "question": log.get("question"),
-                "answer": log.get("answer"),
+                "id": entry.get("question_hash"),  # Use question_hash as ID for cache-based queries
+                "question": entry.get("question"),
+                "answer": entry.get("answer"),
                 "answered": answered,
-                "query_type": query_type,
-                "timestamp": log.get("timestamp"),
-                "session_id": log.get("session_id"),
-                "status": log.get("status"),
-                "user_feedback": log.get("user_feedback"),
-                "feedback_time": log.get("feedback_time"),
-                "admin_answered": log.get("admin_answered", False),
-                "admin_response_time": log.get("admin_response_time"),
-                "matched_files": log.get("matched_files", []),
-                "safety_blocked": log.get("safety_blocked", False),
+                "query_type": query_type_val,
+                "timestamp": entry.get("updated_at", entry.get("created_at")),
+                "session_id": None,  # Not relevant for cached queries
+                "status": "answered" if answered else "unanswered",
+                "user_feedback": entry.get("user_feedback"),
+                "feedback_time": None,  # Could be derived from updated_at if needed
+                "admin_answered": entry.get("answer_quality") == "admin_answered",
+                "admin_response_time": entry.get("updated_at") if entry.get("answer_quality") == "admin_answered" else None,
+                "matched_files": entry.get("matched_files", []),
+                "safety_blocked": False,  # Not stored in cache currently
+                "usage_count": entry.get("usage_count", 0),
+                "last_used": entry.get("last_used"),
                 "needs_attention_reason": []
             }
             
+            # Add attention reasons
             if not answered:
                 query_item["needs_attention_reason"].append("unanswered")
-            if log.get("user_feedback") == "negative":
+            if entry.get("user_feedback") == "negative":
                 query_item["needs_attention_reason"].append("negative_feedback")
-            if log.get("safety_blocked"):
-                query_item["needs_attention_reason"].append("safety_blocked")
             
             formatted_queries.append(query_item)
         
@@ -328,76 +316,126 @@ def get_queries():
             "page": page,
             "limit": limit,
             "total_pages": (total + limit - 1) // limit if total > 0 else 0,
-            "query_type": query_type
+            "query_type": query_type,
+            "data_source": "cached_queries"
         }), 200
         
     except Exception as e:
-        print(f"Error fetching queries: {str(e)}")
+        print(f"Error fetching queries from cache: {str(e)}")
         return jsonify({"error": "Failed to fetch queries"}), 500
 
 
 @admin_bp.route('/update-query', methods=['POST'])
 @require_admin
 def update_query():
-
     try:
+        from services.cache_store import update_cached_answer
+        from services.log_store import sync_cache_to_chat_logs
+        
         data = request.get_json()
-        message_id = data.get("id")
+        question_hash = data.get("id")  # Now expecting question_hash as ID
         new_answer = data.get("answer")
         action_type = data.get("type", "update")  
 
-        if not message_id or not new_answer:
-            return jsonify({"error": "Missing message ID or answer"}), 400
+        if not question_hash or not new_answer:
+            return jsonify({"error": "Missing question hash or answer"}), 400
 
-        logs = load_all_chat_logs()
-        original_log = None
-        for log in logs:
-            if log.get("message_id") == message_id:
-                original_log = log
-                break
+        # Update cached query first
+        cache_updated = update_cached_answer(question_hash, new_answer, "admin_answered")
         
-        if not original_log:
-            return jsonify({"error": "Message not found"}), 404
+        if not cache_updated:
+            return jsonify({"error": "Failed to update cached query"}), 500
 
-        action_reasons = []
-        if not original_log.get("answered", original_log.get("ai_answered", False)):
-            action_reasons.append("answering unanswered question")
-        if original_log.get("user_feedback") == "negative":
-            action_reasons.append("updating negative feedback")
+        # Sync changes to all related chat logs
+        sync_success = sync_cache_to_chat_logs(question_hash, new_answer=new_answer)
         
-        print(f"Updating message {message_id} - Reasons: {', '.join(action_reasons)}")
+        action_reasons = ["admin updated cached query"]
+        if sync_success:
+            action_reasons.append("synced to related chat logs")
+        else:
+            action_reasons.append("warning: sync to chat logs failed")
+        
+        print(f"Updated cached query {question_hash} - Reasons: {', '.join(action_reasons)}")
         print(f"New answer: {new_answer[:100]}...")
-
-        success = update_chat_log_with_admin_response(message_id, new_answer)
-        
-        if not success:
-            return jsonify({"error": "Failed to update message"}), 500
 
         return jsonify({
             "message": "Query updated successfully",
-            "message_id": message_id,
-            "action_reasons": action_reasons
+            "question_hash": question_hash,
+            "action_reasons": action_reasons,
+            "cache_updated": cache_updated,
+            "logs_synced": sync_success
         }), 200
         
     except Exception as e:
         print(f"Error updating query: {str(e)}")
         return jsonify({"error": "Failed to update query"}), 500
     
-@admin_bp.route('/delete-query/<message_id>', methods=['DELETE'])
+@admin_bp.route('/delete-query/<question_hash>', methods=['DELETE'])
 @require_admin
-def delete_query(message_id):
+def delete_query(question_hash):
+    """
+    Delete cached query only, chat logs remain for audit purposes
+    """
     try:
-        success = delete_chat_log_by_id(message_id)
+        from services.cache_store import delete_cached_entry_by_hash
+        
+        success = delete_cached_entry_by_hash(question_hash)
         
         if success:
-            return jsonify({"message": "Query deleted successfully"}), 200
+            return jsonify({
+                "message": "Cached query deleted successfully",
+                "question_hash": question_hash,
+                "note": "Chat logs preserved for audit purposes"
+            }), 200
         else:
-            return jsonify({"error": "Query not found"}), 404
+            return jsonify({"error": "Cached query not found"}), 404
         
     except Exception as e:
-        print(f"Error deleting query: {str(e)}")
-        return jsonify({"error": "Failed to delete query"}), 500
+        print(f"Error deleting cached query: {str(e)}")
+        return jsonify({"error": "Failed to delete cached query"}), 500
     
+
+@admin_bp.route('/chat-logs', methods=['GET'])
+@require_admin
+def get_chat_logs():
+    """
+    Get chat logs for audit purposes (read-only)
+    Returns complete conversation history
+    """
+    try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 50))
+        session_id = request.args.get('session_id')
+        
+        all_logs = load_all_chat_logs()
+        # 排除统计记录
+        real_logs = [log for log in all_logs if log.get("type") != "stats_summary"]
+        
+        # Filter by session_id if provided
+        if session_id:
+            real_logs = [log for log in real_logs if log.get("session_id") == session_id]
+        
+        real_logs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        total = len(real_logs)
+        start = (page - 1) * limit
+        end = start + limit
+        page_logs = real_logs[start:end]
+        
+        return jsonify({
+            "chat_logs": page_logs,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if total > 0 else 0,
+            "session_filter": session_id,
+            "data_source": "chat_logs",
+            "read_only": True
+        }), 200
+        
+    except Exception as e:
+        print(f"Error fetching chat logs: {str(e)}")
+        return jsonify({"error": "Failed to fetch chat logs"}), 500
 
 @admin_bp.route('/clear-all-logs', methods=['DELETE'])
 @require_admin

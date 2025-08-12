@@ -13,7 +13,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@unsw.edu.au}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-unswcse2025}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - GOOGLE_APPLICATION_CREDENTIALS=rag/key.json
+      - GOOGLE_APPLICATION_CREDENTIALS=config/key.json
       - HOST=0.0.0.0
       - PORT=5000
     volumes:
@@ -21,7 +21,6 @@ services:
       - ./backend/logs:/app/logs
       - ./backend/rag/docs:/app/rag/docs
       - ./backend/rag/vector_store:/app/rag/vector_store
-      - ./backend/rag/key.json:/app/rag/key.json
     networks:
       - chatbot-network
     restart: unless-stopped

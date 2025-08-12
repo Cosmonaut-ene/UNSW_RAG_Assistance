@@ -1,6 +1,6 @@
-# ai/query_processor.py
+# ai/query_enhancer.py
 """
-Query Processor - Handles query enhancement, rewriting, and conversation context
+Query Enhancer - Handles query enhancement, rewriting, and conversation context
 """
 
 from .llm_client import get_genai_model

@@ -56,6 +56,7 @@ def load_all_chat_logs():
 def update_chat_log_with_feedback(message_id, feedback_type):
     """
     Update the chat record and add feedback information
+    Also syncs to cached query
     """
     sydney_tz = tz.gettz('Australia/Sydney')
     try:
@@ -70,18 +71,33 @@ def update_chat_log_with_feedback(message_id, feedback_type):
         
         # Find the corresponding record and update it
         updated = False
+        updated_log = None
         for log in logs:
             if log.get('message_id') == message_id:
                 # Add a feedback field in the chat record
                 log['user_feedback'] = feedback_type
                 log['feedback_time'] = datetime.now(sydney_tz).isoformat()
                 updated = True
+                updated_log = log
                 print(f"[AdminStore] Updated chat log {message_id} with feedback: {feedback_type}")
                 break
         
         if not updated:
             print(f"[AdminStore] Message {message_id} not found for feedback update")
             return False
+        
+        # Sync feedback to cache if question_hash exists
+        question_hash = updated_log.get('question_hash')
+        if question_hash:
+            try:
+                from services.cache_store import sync_feedback_to_cache
+                cache_synced = sync_feedback_to_cache(question_hash, user_feedback=feedback_type)
+                if cache_synced:
+                    print(f"[AdminStore] Also synced feedback to cache for question_hash: {question_hash}")
+                else:
+                    print(f"[AdminStore] Warning: Failed to sync feedback to cache for question_hash: {question_hash}")
+            except Exception as cache_error:
+                print(f"[AdminStore] Warning: Cache sync failed: {cache_error}")
         
         with open(LOG_FILE, "w", encoding='utf-8') as f:
             for log in logs:
@@ -235,9 +251,9 @@ def update_chat_log_with_admin_response(message_id, admin_response):
         return False
 
 def delete_chat_log_by_id(message_id):
-
     try:
         logs = []
+        deleted_log = None
         if os.path.exists(LOG_FILE):
             with open(LOG_FILE, "r", encoding='utf-8') as f:
                 for line in f:
@@ -246,12 +262,30 @@ def delete_chat_log_by_id(message_id):
                     except json.JSONDecodeError:
                         continue
         
+        # Find the log to be deleted to get question_hash
+        for log in logs:
+            if log.get('message_id') == message_id:
+                deleted_log = log
+                break
+        
         original_count = len(logs)
         logs = [log for log in logs if log.get('message_id') != message_id]
         
         if len(logs) == original_count:
             print(f"[AdminStore] Message {message_id} not found for deletion")
             return False
+        
+        # Delete corresponding cached query if question_hash exists
+        if deleted_log and deleted_log.get('question_hash'):
+            try:
+                from services.cache_store import delete_cached_entry_by_hash
+                cache_deleted = delete_cached_entry_by_hash(deleted_log['question_hash'])
+                if cache_deleted:
+                    print(f"[AdminStore] Also deleted cached query for question_hash: {deleted_log['question_hash']}")
+                else:
+                    print(f"[AdminStore] Warning: Could not delete cached query for question_hash: {deleted_log['question_hash']}")
+            except Exception as cache_error:
+                print(f"[AdminStore] Warning: Cache deletion failed: {cache_error}")
         
         with open(LOG_FILE, "w", encoding='utf-8') as f:
             for log in logs:
@@ -267,14 +301,77 @@ def delete_chat_log_by_id(message_id):
 def clear_all_chat_logs():
     """
     Clear all chat logs by truncating the log file
+    Also clears corresponding cached queries
     Returns: bool - success status
     """
     try:
         # Clear file contents but keep the file
         with open(LOG_FILE, "w", encoding='utf-8') as f:
             pass  # Write empty content
+        
+        # Also clear the cache since all chat logs are being deleted
+        try:
+            from services.cache_store import clear_cache
+            cache_cleared = clear_cache()
+            if cache_cleared:
+                print("[AdminStore] Also cleared all cached queries")
+            else:
+                print("[AdminStore] Warning: Failed to clear cached queries")
+        except Exception as cache_error:
+            print(f"[AdminStore] Warning: Cache clearing failed: {cache_error}")
+        
         print("[AdminStore] All chat logs cleared successfully")
         return True
     except Exception as e:
         print(f"[AdminStore] Failed to clear chat logs: {e}")
+        return False
+
+def sync_cache_to_chat_logs(question_hash, new_answer=None, user_feedback=None, query_type=None):
+    """
+    Sync cached query changes to all related chat logs
+    Used when admin updates cached query
+    """
+    try:
+        logs = []
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r", encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        logs.append(json.loads(line.strip()))
+                    except json.JSONDecodeError:
+                        continue
+        
+        updated_count = 0
+        sydney_tz = tz.gettz('Australia/Sydney')
+        current_time = datetime.now(sydney_tz).isoformat()
+        
+        # Update all logs with matching question_hash
+        for log in logs:
+            if log.get('question_hash') == question_hash:
+                if new_answer is not None:
+                    log['answer'] = new_answer
+                    log['answered'] = True
+                    log['status'] = 'answered'
+                    log['admin_answered'] = True
+                    log['admin_response_time'] = current_time
+                if user_feedback is not None:
+                    log['user_feedback'] = user_feedback
+                    log['feedback_time'] = current_time
+                if query_type is not None:
+                    log['query_type'] = query_type
+                updated_count += 1
+        
+        if updated_count > 0:
+            with open(LOG_FILE, "w", encoding='utf-8') as f:
+                for log in logs:
+                    f.write(json.dumps(log, ensure_ascii=False) + "\n")
+            
+            print(f"[AdminStore] Synced cache changes to {updated_count} chat logs for question_hash: {question_hash}")
+            return True
+        else:
+            print(f"[AdminStore] No chat logs found with question_hash: {question_hash}")
+            return False
+        
+    except Exception as e:
+        print(f"[AdminStore] Failed to sync cache to chat logs: {e}")
         return False

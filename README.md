@@ -332,7 +332,7 @@ python scripts/run_scraping.py
 **1. Google API Authentication Error**
 - Verify `GOOGLE_API_KEY` is correctly set
 - Ensure the API key has access to Gemini API
-- Check that `backend/rag/key.json` exists (if using service account)
+- Check that `backend/config/key.json` exists (if using service account)
 
 **2. Vector Store Initialization**
 - First startup may take several minutes to build the vector database

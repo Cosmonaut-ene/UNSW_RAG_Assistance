@@ -3,7 +3,7 @@
 AI Module - Handles LLM interactions, prompt engineering, and response generation
 """
 
-from .query_processor import enhance_query, rewrite_query_with_context
+from .query_enhancer import enhance_query, rewrite_query_with_context
 from .response_generator import generate_response, process_with_ai_pipeline, ask_with_hybrid_search, ask_with_rag_and_fallback
 from .safety_checker import is_query_safe_by_gemini
 # Removed direct rag dependency - HybridSearchEngine will be imported by services layer when needed

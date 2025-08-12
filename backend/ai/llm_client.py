@@ -12,7 +12,7 @@ from typing import Optional
 # Use configurable path for Google credentials
 from pathlib import Path
 _backend_root = Path(__file__).parent.parent
-_default_credentials_path = _backend_root / "rag" / "key.json"
+_default_credentials_path = _backend_root / "config" / "key.json"
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", str(_default_credentials_path))
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))

@@ -189,7 +189,7 @@ docker system prune -a
    docker-compose exec backend env | grep GOOGLE
    
    # Verify key.json file exists
-   docker-compose exec backend ls -la rag/key.json
+   docker-compose exec backend ls -la config/key.json
    ```
 
 3. **Memory issues**

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from .llm_client import get_chat_llm
 from .prompt_manager import PromptManager
 from .safety_checker import is_query_safe_by_gemini
-from .query_processor import rewrite_query_with_context
+from .query_enhancer import rewrite_query_with_context
 # Removed direct rag dependency - will be handled by services layer
 
 def generate_response(context: str, question: str, formatted_history: str = "") -> str:
@@ -116,10 +116,10 @@ def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, f
         lines = formatted_history.split('\n')
         current_q, current_a = None, None
         for line in lines:
-            if line.startswith('用户: '):
-                current_q = line[3:]
-            elif line.startswith('助手: '):
-                current_a = line[3:]
+            if line.startswith('User: '):
+                current_q = line[6:]
+            elif line.startswith('Assistant: '):
+                current_a = line[11:]
                 if current_q and current_a:
                     conversation_history.append({'question': current_q, 'answer': current_a})
                     current_q, current_a = None, None
