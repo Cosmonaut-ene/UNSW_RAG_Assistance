@@ -3,6 +3,7 @@
 from datetime import datetime
 from difflib import SequenceMatcher
 from services.log_store import load_all_chat_logs, append_chat_log
+from services.cache_store import find_cached_answer, save_to_cache, get_question_hash
 # Import modules without circular dependencies
 from rag import process_with_rag_detailed, ask_with_hybrid_search  
 from ai import process_query as ai_process_query
@@ -16,7 +17,7 @@ def similarity(a, b):
 def estimate_tokens(text):
     if not text:
         return 0
-    return len(text) // 4  #约4个字符=1个token
+    return len(text) // 4  # 约4个字符=1个token
 
 def get_recent_conversation_history(session_id, limit=5):
     """获取指定session的最近5轮对话历史"""
@@ -66,22 +67,18 @@ def format_conversation_history(history_logs):
     return "\n".join(formatted_lines).strip()
 
 def find_best_answer(question):
-    all_logs = load_all_chat_logs()
-    answered_logs = [log for log in all_logs if log.get("answered", log.get("ai_answered", False)) and log.get("type") != "stats_summary"] # 排除统计记录，只检查真实的查询记录
-    print(f"[QueryProcessor] Checking {len(answered_logs)} answered logs.")
-    best_match = None
-    best_similarity = 0.0
-    for log in answered_logs:
-        log_question = log.get("question", "")
-        sim_score = similarity(question, log_question)
-        if sim_score > 0.95 and sim_score > best_similarity:
-            best_match = log
-            best_similarity = sim_score
-            print(f"[QueryProcessor] Found match: {log_question[:30]}... (similarity: {sim_score:.2f})")
-    if best_match:
-        return best_match.get("answer", ""), True
-    print(f"[QueryProcessor] No match found in answered logs.")
-    return None, False
+    """
+    Find cached answer for a question using the new cache system
+    Returns: (answer, found)
+    """
+    answer, found, cache_entry = find_cached_answer(question)
+    
+    if found:
+        print(f"[QueryProcessor] Cache hit: {question[:30]}...")
+        return answer, True
+    else:
+        print(f"[QueryProcessor] No cached answer found for: {question[:30]}...")
+        return None, False
 
 # def get_simple_response(question_lower):
 #     greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
@@ -404,15 +401,14 @@ def log_current_stats():
 
 def save_to_admin_system(question, answer, answered, session_id, matched_files=None, safety_blocked=False, performance_data=None):
     """
+    Save query to both chat log and cache system
     Return message_id so that the front end can use it
     """
     sydney_tz = tz.gettz('Australia/Sydney')
     # Determine query type based on response method
     if not answered:
         query_type = "unanswered"
-    elif safety_blocked or (performance_data and 
-                            (performance_data.get("safety_blocked") or 
-                             performance_data.get("warning_returned"))):
+    elif safety_blocked or (performance_data and (performance_data.get("safety_blocked") or performance_data.get("warning_returned"))):
         query_type = "unanswered"
     elif (performance_data and 
           (performance_data.get("fallback_used") or 
@@ -420,6 +416,20 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
         query_type = "ai_answered"
     else:
         query_type = "rag_answered"
+    
+    # Generate question hash for cache linking
+    question_hash = get_question_hash(question) if question else None
+    cache_hit = performance_data.get("cache_hit", False) if performance_data else False
+    
+    # Save to cache if it's a new answered query (not a cache hit)
+    if answered and not cache_hit and not safety_blocked and question and answer:
+        print(f"[QueryProcessor] Saving new answer to cache...")
+        save_to_cache(
+            question=question,
+            answer=answer,
+            answer_quality=query_type,
+            matched_files=matched_files or []
+        )
     
     chat_entry = {
         "timestamp": datetime.now(sydney_tz).isoformat(),
@@ -430,7 +440,9 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
         "answered": answered,
         "query_type": query_type,
         "matched_files": matched_files or [],
-        "safety_blocked": safety_blocked
+        "safety_blocked": safety_blocked,
+        "cache_hit": cache_hit,
+        "question_hash": question_hash
     }
     
     if performance_data:
@@ -438,12 +450,11 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
             "response_time_ms": performance_data.get("response_time_ms", 0),
             "tokens_used": performance_data.get("tokens_used", 0),
             "processing_steps": performance_data.get("processing_steps", []),
-            "cache_hit": performance_data.get("cache_hit", False),
             "model_used": "gemini-pro",  # 默认模型
         })
     
     message_id = append_chat_log(chat_entry)
-    print(f"[QueryProcessor] Saved to chat log. answered={answered}, matched_files={matched_files}, message_id={message_id}")
+    print(f"[QueryProcessor] Saved to chat log. answered={answered}, cache_hit={cache_hit}, matched_files={matched_files}, message_id={message_id}")
     if performance_data:
         print(f"[QueryProcessor] Performance: {performance_data.get('response_time_ms', 0)}ms, {performance_data.get('tokens_used', 0)} tokens")
     
