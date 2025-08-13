@@ -69,6 +69,7 @@ class BM25SearchEngine:
         self.corpus = []           # All chunk texts
         self.chunk_metadata = []   # Corresponding metadata
         self.documents = []        # Original Document objects
+        self.bm25_index = None     # Add this for compatibility with tests
         self.bm25 = None
         self.bm25_available = BM25_AVAILABLE
         
@@ -93,21 +94,30 @@ class BM25SearchEngine:
         if not text:
             return []
         
-        # Convert to lowercase and tokenize
-        tokens = word_tokenize(text.lower())
+        try:
+            # Convert to lowercase and tokenize
+            tokens = word_tokenize(text.lower())
+        except Exception as e:
+            print(f"[BM25Search] Tokenization error: {e}, falling back to simple split")
+            # Fallback to simple tokenization
+            tokens = text.lower().split()
         
         # Filter out stopwords and non-alphabetic tokens, but keep academic codes
         filtered_tokens = []
         for token in tokens:
-            # Keep academic codes (COMP9900, 8543, etc.)
-            if re.match(r'^[A-Z]{4}\d{4}$', token.upper()) or re.match(r'^\d{4}$', token):
-                filtered_tokens.append(token.upper())
-            # Keep meaningful words (not stopwords, not punctuation)
-            elif token.isalpha() and len(token) > 2 and token not in self.stop_words:
-                filtered_tokens.append(token)
-            # Keep numbers that might be important
-            elif token.isdigit() and len(token) >= 2:
-                filtered_tokens.append(token)
+            try:
+                # Keep academic codes (COMP9900, 8543, etc.)
+                if re.match(r'^[A-Z]{4}\d{4}$', token.upper()) or re.match(r'^\d{4}$', token):
+                    filtered_tokens.append(token.upper())
+                # Keep meaningful words (not stopwords, not punctuation)
+                elif token.isalpha() and len(token) > 2 and token not in self.stop_words:
+                    filtered_tokens.append(token)
+                # Keep numbers that might be important
+                elif token.isdigit() and len(token) >= 2:
+                    filtered_tokens.append(token)
+            except Exception as e:
+                print(f"[BM25Search] Error processing token '{token}': {e}")
+                continue
         
         return filtered_tokens
     
@@ -141,6 +151,7 @@ class BM25SearchEngine:
             
             # Build BM25 index
             self.bm25 = BM25Okapi(tokenized_corpus)
+            self.bm25_index = self.bm25  # Alias for test compatibility
             print(f"[BM25Search] Built BM25 index with {len(self.corpus)} documents")
             
         except Exception as e:

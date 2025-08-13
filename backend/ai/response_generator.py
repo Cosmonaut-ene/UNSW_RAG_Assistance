@@ -54,36 +54,56 @@ def generate_fallback_response(question: str, formatted_history: str = "") -> st
     """
     # History formatting is now handled by the calling service layer
     
-    mazemap_context = PromptManager.get_mazemap_context()
-    llm = get_chat_llm()
-    
-    if formatted_history:
-        # Use fallback template with history
-        template = PromptManager.get_fallback_prompt_template()
-        # Modify template to include history
-        template_with_history = template.template.replace(
-            "❓ Question: {question}",
-            "== Conversation History ==\n{history}\n\n❓ Question: {question}"
-        )
-        template_with_history = template_with_history.replace(
-            'input_variables=["question", "mazemap_context"]',
-            'input_variables=["question", "mazemap_context", "history"]'
-        )
+    try:
+        mazemap_context = PromptManager.get_mazemap_context()
+        llm = get_chat_llm()
         
-        response = llm.invoke(template_with_history.format(
-            history=formatted_history,
-            question=question,
-            mazemap_context=mazemap_context
-        ))
-    else:
-        template = PromptManager.get_fallback_prompt_template()
-        response = llm.invoke(template.format(
-            question=question,
-            mazemap_context=mazemap_context
-        ))
+        if formatted_history:
+            # Use fallback template with history
+            template = PromptManager.get_fallback_prompt_template()
+            # Modify template to include history
+            template_with_history = template.template.replace(
+                "❓ Question: {question}",
+                "== Conversation History ==\n{history}\n\n❓ Question: {question}"
+            )
+            template_with_history = template_with_history.replace(
+                'input_variables=["question", "mazemap_context"]',
+                'input_variables=["question", "mazemap_context", "history"]'
+            )
+            
+            response = llm.invoke(template_with_history.format(
+                history=formatted_history,
+                question=question,
+                mazemap_context=mazemap_context
+            ))
+        else:
+            template = PromptManager.get_fallback_prompt_template()
+            response = llm.invoke(template.format(
+                question=question,
+                mazemap_context=mazemap_context
+            ))
+    except Exception as e:
+        print(f"[AI Response] Error in fallback response generation: {e}")
+        return "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
     
     print("[AI Response] Using fallback direct LLM with UNSW CSE assistant identity")
-    return response.content if hasattr(response, 'content') else str(response)
+    
+    # Handle response extraction with error handling
+    try:
+        if hasattr(response, 'content'):
+            result = response.content
+            # Handle empty or None content
+            if not result:
+                result = "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+            return result
+        else:
+            result = str(response)
+            if not result or result.lower() in ['none', 'null', '']:
+                result = "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+            return result
+    except Exception as e:
+        print(f"[AI Response] Error extracting response content: {e}")
+        return "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
 
 def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, formatted_history: str = "") -> Dict:
     """

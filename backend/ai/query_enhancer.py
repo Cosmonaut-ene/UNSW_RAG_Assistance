@@ -17,9 +17,30 @@ def rewrite_query_with_context(original_query: str, conversation_history: list =
     Returns:
         str: Enhanced/rewritten query
     """
+    # Handle edge cases
+    if not original_query or original_query is None:
+        return ""
+        
+    if isinstance(original_query, str) and not original_query.strip():
+        return ""
+    
     # Format conversation history for context
-    from services.query_processor import format_conversation_history
-    formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    try:
+        from services.query_processor import format_conversation_history
+        formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
+    except ImportError:
+        # Handle case where services module isn't available (e.g., during testing)
+        def format_conversation_history(history):
+            if not history:
+                return ""
+            formatted = []
+            for entry in history:
+                if entry is None:
+                    continue
+                if isinstance(entry, dict) and 'question' in entry and 'answer' in entry:
+                    formatted.append(f"Q: {entry['question']}\nA: {entry['answer']}")
+            return "\n".join(formatted)
+        formatted_history = format_conversation_history(conversation_history) if conversation_history else ""
     
     history_context = ""
     if formatted_history:

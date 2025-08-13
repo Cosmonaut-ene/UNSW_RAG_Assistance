@@ -32,9 +32,13 @@ def validate_vector_database_exists() -> bool:
         return False
     
     # Look for ChromaDB collection directories
-    chroma_dirs = [d for d in os.listdir(VECTOR_STORE_DIR) 
-                   if os.path.isdir(os.path.join(VECTOR_STORE_DIR, d)) and 
-                   d != "__pycache__" and not d.startswith('.')]
+    try:
+        chroma_dirs = [d for d in os.listdir(VECTOR_STORE_DIR) 
+                       if os.path.isdir(os.path.join(VECTOR_STORE_DIR, d)) and 
+                       d != "__pycache__" and not d.startswith('.')]
+    except (PermissionError, OSError) as e:
+        print(f"[VectorStore] Cannot access vector store directory: {e}")
+        return False
     
     if not chroma_dirs:
         print("[VectorStore] No ChromaDB collection directories found")

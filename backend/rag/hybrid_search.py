@@ -40,30 +40,63 @@ class HybridSearchEngine:
         
         # Process RAG results
         for result in rag_results:
-            content = result.get('page_content', result.get('content', ''))[:100]  # Use first 100 chars as ID
-            if content and content not in seen_content:
-                seen_content.add(content)
+            # Handle malformed results
+            if not isinstance(result, dict):
+                print(f"[HybridSearch] Skipping malformed RAG result: {type(result)}")
+                continue
+            
+            content = result.get('page_content', result.get('content', ''))
+            if not content:
+                print(f"[HybridSearch] Skipping RAG result with no content")
+                continue
+                
+            content_id = content[:100]  # Use first 100 chars as ID
+            if content_id not in seen_content:
+                seen_content.add(content_id)
                 all_results.append(result)
         
         # Process BM25 results, avoid duplicates by content
         for result in bm25_results:
-            content = result.get('content', result.get('page_content', ''))[:100]
-            if content and content not in seen_content:
-                seen_content.add(content)
+            # Handle malformed results
+            if not isinstance(result, dict):
+                print(f"[HybridSearch] Skipping malformed BM25 result: {type(result)}")
+                continue
+                
+            content = result.get('content', result.get('page_content', ''))
+            if not content:
+                print(f"[HybridSearch] Skipping BM25 result with no content")
+                continue
+                
+            content_id = content[:100]
+            if content_id not in seen_content:
+                seen_content.add(content_id)
                 # Convert BM25 result format to standard format
                 standardized_result = {
                     'page_content': result.get('content', ''),
                     'metadata': result.get('metadata', {}),
                     'content': result.get('content', '')
                 }
-                standardized_result['metadata']['bm25_score'] = result['metadata']['bm25_score']
+                # Handle case where metadata might not have bm25_score
+                if 'bm25_score' in result:
+                    standardized_result['metadata']['bm25_score'] = result['bm25_score']
+                elif 'metadata' in result and 'bm25_score' in result['metadata']:
+                    standardized_result['metadata']['bm25_score'] = result['metadata']['bm25_score']
+                else:
+                    standardized_result['metadata']['bm25_score'] = 0
                 all_results.append(standardized_result)
-            elif content in seen_content:
+            elif content_id in seen_content:
                 # Found duplicate, merge BM25 score with existing result
                 for existing in all_results:
                     existing_content = existing.get('page_content', existing.get('content', ''))[:100]
-                    if existing_content == content:
-                        existing['metadata']['bm25_score'] = result['metadata']['bm25_score']
+                    if existing_content == content_id:
+                        # Handle BM25 score extraction safely
+                        bm25_score = 0
+                        if 'bm25_score' in result:
+                            bm25_score = result['bm25_score']
+                        elif 'metadata' in result and 'bm25_score' in result['metadata']:
+                            bm25_score = result['metadata']['bm25_score']
+                        
+                        existing['metadata']['bm25_score'] = bm25_score
                         existing['metadata']['search_type'] = 'hybrid'
                         break
         
@@ -84,16 +117,16 @@ class HybridSearchEngine:
             bm25_score = metadata.get('bm25_score', 0)
             rag_score = metadata.get('rag_score', 0)
             
-            # Check if threshold conditions are met (using OR logic: any condition passes)
+            # Check if threshold conditions are met (using AND logic: all conditions must pass)
             passes_hybrid = hybrid_score >= self.min_hybrid_score
             passes_rag = rag_score >= self.min_rag_score
             passes_bm25 = bm25_score >= self.min_bm25_score
             
-            if passes_hybrid:
+            if passes_hybrid and passes_rag and passes_bm25:
                 filtered_results.append(result)
                 print(f"[HybridSearch] Accepted result from {metadata.get('source', 'unknown')} - "
                       f"Hybrid: {hybrid_score:.2f}, BM25: {bm25_score:.2f}, RAG: {rag_score:.2f} "
-                      f"(Passed: {'Hybrid ' if passes_hybrid else ''}{'RAG ' if passes_rag else ''}{'BM25' if passes_bm25 else ''})")
+                      f"(All thresholds passed)")
             else:
                 filtered_count += 1
                 print(f"[HybridSearch] Filtered out result from {metadata.get('source', 'unknown')} - "

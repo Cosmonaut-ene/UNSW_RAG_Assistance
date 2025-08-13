@@ -85,7 +85,7 @@ class PromptManager:
 🗺️ **Navigation**: "Where is X?" → "NAVIGATION_QUERY"
 
 ## 🎯 EXAMPLES:
-- "Tell me about COMP9020" → "COMP9020 overview"
+- "Tell me about COMP9020" → "Introduce COMP9020"
 - "Where is J17?" → "NAVIGATION_QUERY"
 - "Where can I park?" → "UNSW parking options visitor"
 - "Where to park for Open Day?" → "UNSW Open Day parking information"

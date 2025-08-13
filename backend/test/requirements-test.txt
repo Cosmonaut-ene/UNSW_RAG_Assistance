@@ -1,0 +1,34 @@
+# Testing Dependencies for UNSW CSE Chatbot Backend
+
+# Core testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-asyncio>=0.21.0
+
+# HTTP request mocking for API tests
+requests-mock>=1.11.0
+responses>=0.23.0
+
+# Flask testing utilities
+flask-testing>=0.8.1
+
+# Mock and fixture utilities
+factory-boy>=3.3.0
+faker>=19.0.0
+
+# Performance and memory testing
+pytest-benchmark>=4.0.0
+memory-profiler>=0.61.0
+
+# Test reporting and documentation
+pytest-html>=3.2.0
+pytest-json-report>=1.5.0
+
+# Coverage reporting
+coverage>=7.3.0
+diff-cover>=7.7.0
+
+# Utilities for test data
+freezegun>=1.2.0  # For datetime mocking
+pyfakefs>=5.2.0   # For filesystem mocking

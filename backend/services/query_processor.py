@@ -52,8 +52,23 @@ def format_conversation_history(history_logs):
     
     formatted_lines = []
     for i, log in enumerate(history_logs, 1):
-        question = log.get('question', '').strip()
-        answer = log.get('answer', '').strip()
+        # Handle malformed entries
+        if not isinstance(log, dict):
+            continue
+        if log is None:
+            continue
+            
+        question = log.get('question', '')
+        answer = log.get('answer', '')
+        
+        # Handle None values
+        if question is None:
+            question = ''
+        if answer is None:
+            answer = ''
+            
+        question = question.strip()
+        answer = answer.strip()
         
         if question and answer:
             # 截断过长的答案以节省token
