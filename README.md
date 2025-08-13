@@ -5,8 +5,9 @@ A COMP9900 capstone project providing an AI-powered chatbot for UNSW Computer Sc
 ## System Overview
 
 This chatbot combines:
+
 - **Google Gemini 2.5 Flash** for natural language generation
-- **ChromaDB** vector database for semantic document search  
+- **ChromaDB** vector database for semantic document search
 - **BM25** keyword search for improved retrieval accuracy
 - **Web scraping** from UNSW handbook for up-to-date course information
 - **PDF processing** for campus documents and guides
@@ -14,6 +15,7 @@ This chatbot combines:
 ## Architecture
 
 ### Backend (Python Flask)
+
 - **Flask** web framework with CORS support
 - **Google Generative AI** (`google-generativeai`) for LLM and embeddings
 - **LangChain** framework for RAG pipeline orchestration
@@ -24,6 +26,7 @@ This chatbot combines:
 - **NLTK** for text preprocessing
 
 ### Frontend (Vue 3)
+
 - **Vue 3** with Composition API and `<script setup>` syntax
 - **Element Plus** UI component library
 - **Vite** for fast development and building
@@ -31,6 +34,7 @@ This chatbot combines:
 - **Vue Router** for navigation between pages
 
 ### Data Storage
+
 - **Documents**: PDF files stored in `data/knowledge_base/documents/`
 - **Scraped Content**: UNSW handbook data in `data/knowledge_base/scraped_content/`
 - **Vector Store**: ChromaDB database in `data/knowledge_base/vector_store/`
@@ -71,7 +75,14 @@ capstone-project-25t2-9900-f10a-almond/
 │   ├── scripts/                     # Utility scripts
 │   │   ├── update_vector_store.py  # Vector store management
 │   │   └── full_pipeline.py        # Complete data processing pipeline
-│   ├── test/                        # Testing files
+│   ├── test/                        # Testing files (185 tests)
+│   │   ├── unit/                   # Unit tests
+│   │   │   ├── test_ai/           # AI module tests
+│   │   │   ├── test_rag/          # RAG system tests
+│   │   │   └── test_services/     # Service layer tests
+│   │   ├── integration/           # Integration tests
+│   │   ├── mocks/                 # Mock implementations
+│   │   └── conftest.py            # Pytest configuration
 │   ├── requirements.txt            # Python dependencies
 │   └── app.py                      # Flask application entry point
 ├── frontend/
@@ -88,8 +99,15 @@ capstone-project-25t2-9900-f10a-almond/
 │   │   └── assets/                 # Static assets
 │   │       ├── logoDark.png       # Dark theme logo
 │   │       └── logoLight.png      # Light theme logo
+│   ├── tests/                       # Frontend tests (42 tests)
+│   │   ├── unit/                   # Unit tests
+│   │   │   ├── components/        # Component tests
+│   │   │   ├── pages/             # Page tests
+│   │   │   └── utils/             # Utility tests
+│   │   ├── integration/           # Integration tests
+│   │   └── setup.js               # Test configuration
 │   ├── package.json               # Node.js dependencies
-│   └── vite.config.js             # Vite configuration
+│   └── vitest.config.js           # Vitest configuration
 ├── data/                           # Application data directory
 │   └── knowledge_base/
 │       ├── documents/              # PDF source documents
@@ -107,6 +125,7 @@ capstone-project-25t2-9900-f10a-almond/
 │           └── chat_logs.jsonl    # JSONL format conversation logs
 ├── docker-compose.yml              # Docker production configuration
 ├── docker-compose.dev.yml          # Docker development configuration
+├── run-all-tests.sh               # Unified test runner script (227 tests)
 ├── DOCKER_README.md                # Detailed Docker setup guide
 └── README.md                       # This file
 ```
@@ -116,12 +135,14 @@ capstone-project-25t2-9900-f10a-almond/
 ### Option 1: Docker Deployment (Recommended)
 
 1. **Clone and setup**:
+
 ```bash
 git clone <repository-url>
 cd capstone-project-25t2-9900-f10a-almond
 ```
 
 2. **Configure environment variables**:
+
 ```bash
 # Copy the Docker environment template (if exists)
 # Or create a .env file manually
@@ -129,6 +150,7 @@ nano .env
 ```
 
 Add these variables to `.env`:
+
 ```env
 GOOGLE_API_KEY=your-google-gemini-api-key
 ADMIN_EMAIL=admin@unsw.edu.au
@@ -137,11 +159,13 @@ SECRET_KEY=your-flask-secret-key
 ```
 
 3. **Start the application**:
+
 ```bash
 docker-compose up -d
 ```
 
 4. **Access the application**:
+
 - **Chat Interface**: http://localhost:8080
 - **Admin Panel**: http://localhost:8080/admin
 - **Backend API**: http://localhost:5000
@@ -151,6 +175,7 @@ See [DOCKER_README.md](DOCKER_README.md) for comprehensive Docker setup instruct
 ### Option 2: Manual Development Setup
 
 #### Backend Setup
+
 ```bash
 cd backend
 
@@ -173,6 +198,7 @@ python app.py
 ```
 
 #### Frontend Setup
+
 ```bash
 cd frontend
 
@@ -189,24 +215,28 @@ npm run build
 ## Key Features
 
 ### AI Conversation Engine
+
 - **Context-Aware Responses**: Maintains conversation history for natural follow-up questions
-- **Query Enhancement**: Automatically rewrites queries for better search results  
+- **Query Enhancement**: Automatically rewrites queries for better search results
 - **Safety Filtering**: Ensures responses focus on UNSW-related content
 - **Fallback Handling**: Uses direct Gemini responses when knowledge base is insufficient
 
 ### Hybrid Search Technology
+
 - **Semantic Search**: ChromaDB with Google embeddings for contextual document retrieval
 - **Keyword Search**: BM25 algorithm for exact term matching
 - **Combined Scoring**: Hybrid approach balances semantic understanding with keyword relevance
 - **Performance Optimization**: Response caching and similarity-based deduplication
 
 ### Content Management System
+
 - **Automated Web Scraping**: Extracts course information from UNSW handbook
 - **Document Processing**: Intelligent PDF parsing with metadata extraction
 - **Vector Store Management**: Incremental updates without service interruption
 - **Admin Interface**: Upload documents, manage content, view analytics
 
 ### User Interface Features
+
 - **Modern Design**: Clean, responsive interface with dark/light theme toggle
 - **Real-time Interaction**: Typewriter effect for bot responses with loading animations
 - **User Feedback**: Thumbs up/down rating system and message copying
@@ -215,6 +245,7 @@ npm run build
 ## API Endpoints
 
 ### Public Endpoints
+
 ```
 POST /api/query
 Content-Type: application/json
@@ -228,6 +259,7 @@ Body: {"session_id": "session_id", "feedback_type": "positive", "timestamp": "20
 ```
 
 ### Admin Endpoints (Requires Authentication Token)
+
 ```
 POST /api/admin/login
 Body: {"email": "admin@unsw.edu.au", "password": "password"}
@@ -253,23 +285,26 @@ Body: PDF file upload
 ## Configuration
 
 ### Required Environment Variables
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `GOOGLE_API_KEY` | Google Gemini API key | `AIza...` |
-| `ADMIN_EMAIL` | Admin login email | `admin@unsw.edu.au` |
-| `ADMIN_PASSWORD` | Admin login password | `SecurePass123!` |
-| `SECRET_KEY` | Flask session secret key | `your-secret-key-here` |
+
+| Variable         | Description              | Example                |
+| ---------------- | ------------------------ | ---------------------- |
+| `GOOGLE_API_KEY` | Google Gemini API key    | `AIza...`              |
+| `ADMIN_EMAIL`    | Admin login email        | `admin@unsw.edu.au`    |
+| `ADMIN_PASSWORD` | Admin login password     | `SecurePass123!`       |
+| `SECRET_KEY`     | Flask session secret key | `your-secret-key-here` |
 
 ### Optional Environment Variables
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `FLASK_DEBUG` | Enable Flask debug mode | `False` |
-| `HOST` | Backend host address | `0.0.0.0` |
-| `PORT` | Backend port number | `5000` |
+
+| Variable      | Description             | Default   |
+| ------------- | ----------------------- | --------- |
+| `FLASK_DEBUG` | Enable Flask debug mode | `False`   |
+| `HOST`        | Backend host address    | `0.0.0.0` |
+| `PORT`        | Backend port number     | `5000`    |
 
 ### Key Dependencies
 
 **Backend (Python 3.12+)**:
+
 - Flask 3.1+ - Web framework
 - google-generativeai - Gemini API client
 - langchain 0.3+ - RAG framework
@@ -279,6 +314,7 @@ Body: PDF file upload
 - PyMuPDF - PDF processing
 
 **Frontend (Node.js 18+)**:
+
 - Vue 3.5+ - JavaScript framework
 - Element Plus 2.10+ - UI components
 - Vite 5.4+ - Build tool
@@ -286,13 +322,94 @@ Body: PDF file upload
 
 ## Development & Testing
 
+### Testing Strategy
+
+Our testing approach follows industry best practices with comprehensive coverage across both backend and frontend:
+
+#### Backend Testing (Python/Flask)
+
+- **Framework**: Pytest with comprehensive fixtures and mocking
+- **Tests**: 185 passing tests across all modules
+- **Scope**: Unit tests for AI, RAG, services, and authentication
+- **Mocking**: Google Gemini API, ChromaDB, file systems
+- **Location**: `backend/test/` with detailed README
+- **Coverage**: Focused on core business logic and integrations
+
+#### Frontend Testing (Vue.js)
+
+- **Framework**: Vitest + Vue Test Utils + jsdom
+- **Tests**: 42 passing tests covering core functionality
+- **Scope**: Authentication utilities, component rendering, user workflows
+- **Mocking**: Element Plus, Vue Router, Fetch API, localStorage
+- **Location**: `frontend/tests/` with detailed README
+- **Coverage**: 100% on critical utilities (auth.js) and core components
+
 ### Running Tests
+
+#### Unified Test Runner
+
 ```bash
-cd backend
-python -m pytest test/ -v
+# Run all tests (backend + frontend)
+./run-all-tests.sh
+
+# Run with coverage reports
+./run-all-tests.sh coverage
+
+# Backend only options
+./run-all-tests.sh backend          # All backend unit tests (185 tests)
+./run-all-tests.sh backend-quick    # Quick verification
+./run-all-tests.sh backend-ai       # AI module tests only
+./run-all-tests.sh backend-services # Service layer tests only
+
+# Frontend only options
+./run-all-tests.sh frontend         # All frontend tests (42 tests)
+./run-all-tests.sh frontend-coverage # Frontend with coverage
 ```
 
-### API Testing Examples
+#### Manual Testing (if needed)
+
+```bash
+# Backend tests (Docker-based)
+cd backend
+../run-all-tests.sh backend
+
+# Frontend tests
+cd frontend
+npm install
+npm run test:run
+```
+
+### Test Coverage Reports
+
+- **Backend**: HTML reports generated in `backend/htmlcov/` (when using coverage option)
+- **Frontend**: HTML reports generated in `frontend/coverage/`
+- **Combined**: 227 total passing tests (185 backend + 42 frontend)
+- **Quality Focus**: Critical business logic, authentication, and core components
+
+### Test Coverage Details
+
+**Backend Tests (185 passing)**:
+
+- AI modules: LLM client, prompt management, query enhancement, safety checking
+- RAG system: Vector store, BM25 search, hybrid search algorithms
+- Services: Authentication, caching, logging
+- API endpoints: User queries, admin operations
+- Error handling: Network failures, API errors, invalid inputs
+
+**Frontend Tests (42 passing)**:
+
+- Authentication utilities: 100% coverage (19 tests)
+- LoadingSpinner component: 100% coverage (8 tests)
+- Login workflow: User interactions and form validation (8 tests)
+- Integration flows: End-to-end authentication scenarios (7 tests)
+
+**Happy & Sad Paths Covered**:
+
+- ✅ Successful operations: Chat queries, admin login, file management
+- ❌ Error scenarios: Network failures, invalid credentials, API timeouts
+
+### Manual API Testing Examples
+
 ```bash
 # Test chat functionality
 curl -X POST http://localhost:5000/api/query \
@@ -313,6 +430,7 @@ curl -X POST http://localhost:5000/api/admin/login \
 ```
 
 ### Knowledge Base Management
+
 ```bash
 # Update vector store with new documents
 cd backend
@@ -330,26 +448,31 @@ python scripts/run_scraping.py
 ### Common Issues
 
 **1. Google API Authentication Error**
+
 - Verify `GOOGLE_API_KEY` is correctly set
 - Ensure the API key has access to Gemini API
 - Check that `backend/config/key.json` exists (if using service account)
 
 **2. Vector Store Initialization**
+
 - First startup may take several minutes to build the vector database
 - Check logs for "Vector store initialization completed"
 - Ensure sufficient disk space (minimum 1GB for full knowledge base)
 
 **3. Port Conflicts**
+
 - Default ports: Frontend (8080), Backend (5000)
 - Change ports in `docker-compose.yml` if conflicts occur
 - For manual setup, use different ports with `PORT` environment variable
 
 **4. Memory Issues**
+
 - Vector operations require minimum 2GB available RAM
 - Monitor memory usage during vector store updates
 - Consider increasing Docker memory limits if using containers
 
 ### Debug Mode
+
 ```bash
 # Enable detailed logging
 export FLASK_DEBUG=True
@@ -366,9 +489,10 @@ docker-compose logs -f frontend
 ## Performance & Analytics
 
 The system tracks detailed performance metrics:
+
 - **Response Times**: Average query processing time
 - **Cache Hit Rates**: Efficiency of response caching
-- **Token Usage**: Google API consumption tracking  
+- **Token Usage**: Google API consumption tracking
 - **User Feedback**: Positive/negative ratings and interactions
 - **Query Analytics**: Popular topics and search patterns
 
