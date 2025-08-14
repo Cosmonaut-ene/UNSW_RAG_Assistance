@@ -125,7 +125,7 @@ capstone-project-25t2-9900-f10a-almond/
 │           └── chat_logs.jsonl    # JSONL format conversation logs
 ├── docker-compose.yml              # Docker production configuration
 ├── docker-compose.dev.yml          # Docker development configuration
-├── run-all-tests.sh               # Unified test runner script (227 tests)
+├── run-all-tests.sh               # Unified test runner script
 ├── DOCKER_README.md                # Detailed Docker setup guide
 └── README.md                       # This file
 ```
@@ -226,7 +226,7 @@ npm run build
 - **Semantic Search**: ChromaDB with Google embeddings for contextual document retrieval
 - **Keyword Search**: BM25 algorithm for exact term matching
 - **Combined Scoring**: Hybrid approach balances semantic understanding with keyword relevance
-- **Performance Optimization**: Response caching and similarity-based deduplication
+- **Performance Optimization**: Response caching and query deduplication
 
 ### Content Management System
 
@@ -250,36 +250,234 @@ npm run build
 POST /api/query
 Content-Type: application/json
 Body: {"question": "What is COMP9900?", "session_id": "unique_session_id"}
+Returns: {"answer": "...", "session_id": "...", "status": "answered|unanswered"}
 ```
 
 ```
 POST /api/feedback
 Content-Type: application/json
 Body: {"session_id": "session_id", "feedback_type": "positive", "timestamp": "2024-01-01T00:00:00"}
+Returns: {"message": "Feedback submitted successfully"}
+```
+
+```
+GET /docs/<filename>
+Returns: PDF document files
 ```
 
 ### Admin Endpoints (Requires Authentication Token)
 
+#### Authentication
 ```
 POST /api/admin/login
 Body: {"email": "admin@unsw.edu.au", "password": "password"}
-Returns: {"token": "jwt_token"}
+Returns: {"token": "jwt_token", "message": "Login successful", "expires_in": "1 hour"}
 ```
 
+```
+GET /api/admin/verify-token
+Headers: Authorization: Bearer <token>
+Returns: {"valid": true, "message": "Token is valid", "role": "admin"}
+```
+
+#### System Management
 ```
 GET /api/admin/health
-Returns: System health status
+Returns: {"status": "healthy", "service": "admin_query_service", "timestamp": "..."}
 ```
 
 ```
-GET /api/admin/queries?page=1&limit=20&filter=all
-Returns: Paginated query logs with analytics
+GET /api/admin/stats
+Returns: System statistics including query counts, response times, token usage
 ```
 
+#### File Management
 ```
 POST /api/admin/upload
 Content-Type: multipart/form-data
 Body: PDF file upload
+Returns: {"message": "File uploaded successfully", "filename": "...", "vector_store_update": {...}}
+```
+
+```
+GET /api/admin/files
+Returns: List of uploaded PDF files with URLs
+```
+
+```
+DELETE /api/admin/delete/<filename>
+Returns: {"message": "File deleted", "filename": "...", "vector_store_update": {...}}
+```
+
+#### Query Management
+```
+GET /api/admin/queries?page=1&limit=20&type=all
+Parameters: type=[all|rag_answered|ai_answered|unanswered|negative_feedback|positive_feedback]
+Returns: Paginated query logs with analytics
+```
+
+```
+POST /api/admin/update-query
+Body: {"id": "question_hash", "answer": "new_answer", "type": "update"}
+Returns: {"message": "Query updated successfully", "question_hash": "..."}
+```
+
+```
+DELETE /api/admin/delete-query/<question_hash>
+Returns: {"message": "Cached query deleted successfully"}
+```
+
+```
+GET /api/admin/unanswered
+Returns: {"total": 0, "unanswered": [...]}
+```
+
+```
+GET /api/admin/history/<session_id>
+Returns: {"session_id": "...", "count": 0, "history": [...]}
+```
+
+#### Chat Logs & Export
+```
+GET /api/admin/chatlog
+Returns: Chat logs as downloadable JSON
+```
+
+```
+GET /api/admin/export
+Returns: Exported chat logs data
+```
+
+```
+GET /api/admin/chat-logs?page=1&limit=50&session_id=...
+Returns: Paginated chat logs for audit purposes
+```
+
+```
+DELETE /api/admin/clear-all-logs
+Returns: {"message": "All chat logs cleared successfully"}
+```
+
+#### Vector Store Management
+```
+GET /api/admin/vectorstore/status
+Returns: Vector store update queue status
+```
+
+```
+GET /api/admin/vectorstore/status/<task_id>
+Returns: Status of specific vector store update task
+```
+
+```
+GET /api/admin/vectorstore/stats
+Returns: Vector store statistics and document counts
+```
+
+```
+POST /api/admin/vector-store/rebuild
+Returns: {"message": "Vector store rebuilt successfully"}
+```
+
+#### Content Scraping & Management
+```
+GET /api/admin/scrapers/status
+Returns: Comprehensive status of scrapers and content sources
+```
+
+```
+GET /api/admin/scrapers/links?page=1&limit=10
+Returns: Current links list with pagination support
+```
+
+```
+POST /api/admin/scrapers/links/add
+Body: {"url": "https://..."}
+Returns: {"message": "Link added successfully", "scraping": {...}}
+```
+
+```
+DELETE /api/admin/scrapers/links/<url>
+Returns: {"message": "Link deleted successfully", "vector_store_update": {...}}
+```
+
+```
+POST /api/admin/scrapers/links
+Body: {"links": ["url1", "url2", ...]}
+Returns: {"message": "Links updated successfully", "total_links": 0}
+```
+
+```
+POST /api/admin/scrapers/discover
+Body: {"root_url": "https://..."}
+Returns: Discovery results with new links preview
+```
+
+```
+POST /api/admin/scrapers/confirm-and-scrape
+Body: {"confirmed_links": [...], "update_vector_store": true}
+Returns: {"success": true, "scraping_id": "...", "progress_endpoint": "..."}
+```
+
+```
+GET /api/admin/scrapers/progress/<scraping_id>
+Returns: Real-time scraping progress
+```
+
+```
+POST /api/admin/scrapers/cancel/<scraping_id>
+Returns: {"success": true, "message": "Scraping cancelled successfully"}
+```
+
+```
+POST /api/admin/scrapers/monitor
+Body: {"auto_scrape": false}
+Returns: Monitoring results for content changes
+```
+
+#### Content Management (Alternative API)
+```
+GET /api/admin/content/status
+Returns: Comprehensive status of scraped content
+```
+
+```
+POST /api/admin/content/links
+Body: {"urls": [...], "auto_update_vector_store": true}
+Returns: Content links addition result
+```
+
+```
+DELETE /api/admin/content/links
+Body: {"urls": [...], "update_vector_store": true}
+Returns: Content links removal result
+```
+
+```
+PUT /api/admin/content/links
+Body: {"urls": [...], "auto_update_vector_store": true}
+Returns: Content links update result
+```
+
+```
+GET /api/admin/content/scraping/<scraping_id>
+Returns: Status of ongoing scraping operation
+```
+
+```
+POST /api/admin/content/cleanup
+Returns: Cleanup results for orphaned content
+```
+
+#### Legacy Endpoints
+```
+POST /api/admin/discover
+Returns: Link discovery results (legacy)
+```
+
+```
+POST /api/admin/scrape
+Returns: Content scraping results (legacy)
 ```
 
 ## Configuration
@@ -329,7 +527,7 @@ Our testing approach follows industry best practices with comprehensive coverage
 #### Backend Testing (Python/Flask)
 
 - **Framework**: Pytest with comprehensive fixtures and mocking
-- **Tests**: 185 passing tests across all modules
+- **Tests**: 209 test functions across all modules
 - **Scope**: Unit tests for AI, RAG, services, and authentication
 - **Mocking**: Google Gemini API, ChromaDB, file systems
 - **Location**: `backend/test/` with detailed README
@@ -338,7 +536,7 @@ Our testing approach follows industry best practices with comprehensive coverage
 #### Frontend Testing (Vue.js)
 
 - **Framework**: Vitest + Vue Test Utils + jsdom
-- **Tests**: 42 passing tests covering core functionality
+- **Tests**: Comprehensive test coverage of core functionality
 - **Scope**: Authentication utilities, component rendering, user workflows
 - **Mocking**: Element Plus, Vue Router, Fetch API, localStorage
 - **Location**: `frontend/tests/` with detailed README
@@ -356,13 +554,13 @@ Our testing approach follows industry best practices with comprehensive coverage
 ./run-all-tests.sh coverage
 
 # Backend only options
-./run-all-tests.sh backend          # All backend unit tests (185 tests)
+./run-all-tests.sh backend          # All backend unit tests
 ./run-all-tests.sh backend-quick    # Quick verification
 ./run-all-tests.sh backend-ai       # AI module tests only
 ./run-all-tests.sh backend-services # Service layer tests only
 
 # Frontend only options
-./run-all-tests.sh frontend         # All frontend tests (42 tests)
+./run-all-tests.sh frontend         # All frontend tests
 ./run-all-tests.sh frontend-coverage # Frontend with coverage
 ```
 
@@ -383,12 +581,12 @@ npm run test:run
 
 - **Backend**: HTML reports generated in `backend/htmlcov/` (when using coverage option)
 - **Frontend**: HTML reports generated in `frontend/coverage/`
-- **Combined**: 227 total passing tests (185 backend + 42 frontend)
+- **Combined**: Comprehensive test suite across backend and frontend
 - **Quality Focus**: Critical business logic, authentication, and core components
 
 ### Test Coverage Details
 
-**Backend Tests (185 passing)**:
+**Backend Tests (209 test functions)**:
 
 - AI modules: LLM client, prompt management, query enhancement, safety checking
 - RAG system: Vector store, BM25 search, hybrid search algorithms
@@ -396,12 +594,12 @@ npm run test:run
 - API endpoints: User queries, admin operations
 - Error handling: Network failures, API errors, invalid inputs
 
-**Frontend Tests (42 passing)**:
+**Frontend Tests**:
 
-- Authentication utilities: 100% coverage (19 tests)
-- LoadingSpinner component: 100% coverage (8 tests)
-- Login workflow: User interactions and form validation (8 tests)
-- Integration flows: End-to-end authentication scenarios (7 tests)
+- Authentication utilities: 100% coverage
+- LoadingSpinner component: 100% coverage  
+- Login workflow: User interactions and form validation
+- Integration flows: End-to-end authentication scenarios
 
 **Happy & Sad Paths Covered**:
 
@@ -490,8 +688,7 @@ docker-compose logs -f frontend
 
 The system tracks detailed performance metrics:
 
-- **Response Times**: Average query processing time
-- **Cache Hit Rates**: Efficiency of response caching
+- **Response Times**: Average query processing time (tracked in ms)
 - **Token Usage**: Google API consumption tracking
 - **User Feedback**: Positive/negative ratings and interactions
 - **Query Analytics**: Popular topics and search patterns
