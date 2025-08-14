@@ -81,7 +81,7 @@ onMounted(async () => {
   gap: 18px;
   background: transparent;
   border-bottom: none;
-  /* 重点！ */
+  /* Important! */
   justify-content: space-between;
   position: relative;
 }
@@ -92,7 +92,7 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* 居中标题 */
+/* Center title */
 .admin-title {
   flex: 1;
   text-align: center;
@@ -113,7 +113,7 @@ onMounted(async () => {
   border-radius: 20px;
   min-width: 110px;
   height: 38px;
-  margin-left: 0; /* 防止多余空隙 */
+  margin-left: 0; /* Prevent extra spacing */
 }
 
 

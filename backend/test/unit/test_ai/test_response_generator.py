@@ -163,7 +163,7 @@ class TestResponseGeneratorEdgeCases:
         mock_llm.invoke.return_value.content = "I can provide information about UNSW programs in English."
         mock_get_chat_llm.return_value = mock_llm
         
-        query = "UNSW的计算机科学课程如何？"  # Chinese characters
+        query = "UNSW的计算机科学课程如何？"  # Chinese: "How are UNSW's computer science programs?"
         
         result = generate_fallback_response(query, "")
         

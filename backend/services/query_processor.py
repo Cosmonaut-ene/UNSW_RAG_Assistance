@@ -17,15 +17,15 @@ def similarity(a, b):
 def estimate_tokens(text):
     if not text:
         return 0
-    return len(text) // 4  # 约4个字符=1个token
+    return len(text) // 4  # Approximately 4 characters = 1 token
 
 def get_recent_conversation_history(session_id, limit=5):
-    """获取指定session的最近5轮对话历史"""
+    """Get recent conversation history for the specified session (last 5 rounds)"""
     if not session_id or session_id == "unknown_session":
         return []
     
     all_logs = load_all_chat_logs()
-    # 只获取该session且AI已回答的记录，排除统计记录
+    # Only get records for this session where AI has answered, excluding stats records
     session_logs = [
         log for log in all_logs 
         if log.get('session_id') == session_id 
@@ -35,18 +35,18 @@ def get_recent_conversation_history(session_id, limit=5):
         and log.get("type") != "stats_summary"
     ]
     
-    # 按时间倒序排列，获取最近的记录
+    # Sort by time in descending order, get recent records
     session_logs.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
     recent_logs = session_logs[:limit]
     
-    # 转回时间顺序（旧到新）以符合对话流程
+    # Reverse back to chronological order (old to new) to match conversation flow
     recent_logs.reverse()
     
     print(f"[QueryProcessor] Found {len(recent_logs)} recent conversations for session {session_id}")
     return recent_logs
 
 def format_conversation_history(history_logs):
-    """将历史对话格式化为prompt可用的格式"""
+    """Format conversation history into a prompt-usable format"""
     if not history_logs:
         return ""
     
@@ -71,13 +71,13 @@ def format_conversation_history(history_logs):
         answer = answer.strip()
         
         if question and answer:
-            # 截断过长的答案以节省token
+            # Truncate overly long answers to save tokens
             if len(answer) > 200:
                 answer = answer[:200] + "..."
             
             formatted_lines.append(f"User: {question}")
             formatted_lines.append(f"Assistant: {answer}")
-            formatted_lines.append("")  # 空行分隔
+            formatted_lines.append("")  # Empty line separator
     
     return "\n".join(formatted_lines).strip()
 
@@ -117,12 +117,12 @@ def find_best_answer(question):
 #     return None
 
 def process_with_ai(question, session_id=None):
-    # 开始性能跟踪
+    # Start performance tracking
     start_time = time.time()
     processing_steps = []
     cache_hit = False
     
-    # 检查缓存记录
+    # Check cache records
     processing_steps.append("cache_check")
     answer, found = find_best_answer(question)
     if found:
@@ -157,7 +157,7 @@ def process_with_ai(question, session_id=None):
             "safety_blocked": True
         }
     
-    # 获取对话历史 (only after safety check passes)
+    # Get conversation history (only after safety check passes)
     processing_steps.append("history_retrieval")
     conversation_history = get_recent_conversation_history(session_id) if session_id else []
     
@@ -381,12 +381,12 @@ def process_with_ai(question, session_id=None):
     }
 
 def log_current_stats():
-    """将记录写入chat_logs.jsonl"""
+    """Write records to chat_logs.jsonl"""
     try:
         sydney_tz = tz.gettz('Australia/Sydney')
         logs = load_all_chat_logs()
         
-        # 只统计真实的查询记录（排除统计记录本身）
+        # Only count real query records (excluding stats records themselves)
         query_logs = [log for log in logs if log.get("type") != "stats_summary"]
         total_queries = len(query_logs)
         
@@ -465,7 +465,7 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
             "response_time_ms": performance_data.get("response_time_ms", 0),
             "tokens_used": performance_data.get("tokens_used", 0),
             "processing_steps": performance_data.get("processing_steps", []),
-            "model_used": "gemini-pro",  # 默认模型
+            "model_used": "gemini-pro",  # Default model
         })
     
     message_id = append_chat_log(chat_entry)
@@ -473,7 +473,7 @@ def save_to_admin_system(question, answer, answered, session_id, matched_files=N
     if performance_data:
         print(f"[QueryProcessor] Performance: {performance_data.get('response_time_ms', 0)}ms, {performance_data.get('tokens_used', 0)} tokens")
     
-    # 添加统计记录
+    # Add statistics record
     log_current_stats()
     
     return message_id

@@ -158,7 +158,7 @@ def get_message_id_by_session_and_time_and_question(session_id, timestamp_hint=N
 
 def save_feedback(session_id, feedback_type, timestamp_hint=None, question_text=None):
     """
-    改进版反馈保存：使用多种方式定位消息
+    Improved feedback saving: locate messages using multiple methods
     """
     message_id = get_message_id_by_session_and_time_and_question(
         session_id, timestamp_hint, question_text
@@ -172,7 +172,7 @@ def save_feedback(session_id, feedback_type, timestamp_hint=None, question_text=
 
 # def get_feedback_stats():
 #     """
-#     从聊天记录中统计反馈数据
+#     Collect feedback statistics from chat records
 #     """
 #     logs = load_all_chat_logs()
 #     stats = {

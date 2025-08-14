@@ -123,7 +123,7 @@ class TestSafetyCheckerEdgeCases:
         mock_llm.generate_content.return_value.text = "This query with unicode characters is appropriate."
         mock_get_genai.return_value = mock_llm
         
-        unicode_query = "UNSW的计算机科学课程如何？"  # Chinese characters
+        unicode_query = "UNSW的计算机科学课程如何？"  # Chinese: "How are UNSW's computer science programs?"
         
         result = is_query_safe_by_gemini(unicode_query)
         

@@ -221,7 +221,7 @@ class TestBM25SearchEngineEdgeCases:
         mock_vector_store = MockVectorStore()
         search_engine = BM25SearchEngine(mock_vector_store)
         
-        query = "计算机科学 COMP9900"  # Chinese characters
+        query = "计算机科学 COMP9900"  # Chinese characters for computer science
         results = search_engine.search(query, top_k=3)
         
         assert isinstance(results, list)

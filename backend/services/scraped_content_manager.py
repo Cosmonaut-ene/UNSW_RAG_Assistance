@@ -1,5 +1,5 @@
 """
-Scraped Content Manager - 统一管理scraped content的增删改查
+Scraped Content Manager - Unified management of scraped content CRUD operations
 Manages the lifecycle of scraped content including URLs, JSON files, and vector store chunks
 """
 
@@ -16,7 +16,7 @@ from scrapers.utils.file_utils import slugify_url
 
 
 class ScrapedContentManager:
-    """统一管理scraped content的增删改查"""
+    """Unified management of scraped content CRUD operations"""
     
     def __init__(self, base_path: str = None):
         """Initialize with scraped content base path"""
@@ -121,7 +121,7 @@ class ScrapedContentManager:
     
     def add_links(self, urls: List[str], auto_update_vector_store: bool = True) -> Dict:
         """
-        添加新链接并爬取内容
+        Add new links and scrape content
         
         Args:
             urls: List of URLs to add
@@ -189,7 +189,7 @@ class ScrapedContentManager:
     
     def remove_links(self, urls: List[str], update_vector_store: bool = True) -> Dict:
         """
-        删除链接及相关内容
+        Remove links and related content
         
         Args:
             urls: List of URLs to remove
@@ -251,7 +251,7 @@ class ScrapedContentManager:
     
     def update_links(self, urls: List[str] = None, auto_update_vector_store: bool = True) -> Dict:
         """
-        重新爬取指定链接（或所有链接）
+        Re-scrape specified links (or all links)
         
         Args:
             urls: List of URLs to update (None = update all)
@@ -292,7 +292,7 @@ class ScrapedContentManager:
     
     def get_content_status(self) -> Dict:
         """
-        获取当前内容状态统计
+        Get current content status statistics
         
         Returns:
             Dict with comprehensive status information

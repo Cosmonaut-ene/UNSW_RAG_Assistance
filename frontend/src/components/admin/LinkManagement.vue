@@ -1,6 +1,6 @@
 <template>
   <section class="link-section">
-    <!-- 新增链接表单 -->
+    <!-- Add new link form -->
     <el-card class="mb-3" style="margin-bottom:18px;">
       <el-form :model="newLink" :rules="rules" ref="formRef" inline>
         <el-form-item prop="name" label="Name">
@@ -76,7 +76,7 @@ const adding = ref(false)
 const deletingId = ref(null)
 const token = localStorage.getItem('admin_token')
 
-// 新增表单
+// Add new form
 const newLink = ref({ name: '', url: '' })
 const rules = {
   name: [{ required: true, message: 'Please input name', trigger: 'blur' }],
@@ -104,7 +104,7 @@ const extractNameFromUrl = (url) => {
   }
 }
 
-// 获取链接
+// Fetch links
 const fetchLinks = async () => {
   loading.value = true
   try {
@@ -136,7 +136,7 @@ const handlePageChange = p => {
   fetchLinks()
 }
 
-// 新增链接
+// Add new link
 const addLink = () => {
   formRef.value.validate(async valid => {
     if (!valid) return
@@ -167,7 +167,7 @@ const addLink = () => {
   })
 }
 
-// 删除链接
+// Delete link
 const deleteLink = async (row) => {
   if (!row.url) return
   deletingId.value = row.id

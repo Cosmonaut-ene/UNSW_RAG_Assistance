@@ -163,7 +163,7 @@ def export_chat_log():
 @require_admin
 def get_unanswered():
     logs = load_all_chat_logs()
-    # 排除统计记录，只显示真实的未回答查询
+    # Exclude stats records, only show real unanswered queries
     unanswered = [log for log in logs if not log.get("answered", log.get("ai_answered", False)) and log.get("type") != "stats_summary"]
     unanswered.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return jsonify({
@@ -175,7 +175,7 @@ def get_unanswered():
 @require_admin
 def get_session_history(session_id):
     logs = load_all_chat_logs()
-    # 排除统计记录，只显示真实的对话历史
+    # Exclude stats records, only show real conversation history
     history = [log for log in logs if log.get("session_id") == session_id and log.get("type") != "stats_summary"]
     history.sort(key=lambda x: x.get("timestamp", ""))
     return jsonify({
@@ -194,7 +194,7 @@ def export_data():
 @require_admin
 def get_stats():
     logs = load_all_chat_logs()
-    # 排除统计记录，只统计真实查询
+    # Exclude stats records, only count real queries
     query_logs = [log for log in logs if log.get("type") != "stats_summary"]
     total = len(query_logs)
     answered = len([log for log in query_logs if log.get("answered", log.get("ai_answered", False))])
@@ -211,7 +211,7 @@ def get_stats():
     positive_feedback = len([log for log in query_logs if log.get("user_feedback") == "positive"])
     negative_feedback = len([log for log in query_logs if log.get("user_feedback") == "negative"])
 
-    # Daily breakdown (排除统计记录)
+    # Daily breakdown (exclude stats records)
     day_counts = {}
     for log in query_logs:
         ts = log.get("timestamp", "")
@@ -408,7 +408,7 @@ def get_chat_logs():
         session_id = request.args.get('session_id')
         
         all_logs = load_all_chat_logs()
-        # 排除统计记录
+        # Exclude stats records
         real_logs = [log for log in all_logs if log.get("type") != "stats_summary"]
         
         # Filter by session_id if provided

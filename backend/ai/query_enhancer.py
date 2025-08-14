@@ -51,7 +51,7 @@ def rewrite_query_with_context(original_query: str, conversation_history: list =
     {formatted_history}
     
     🔍 Context-Aware Rewriting:
-    - If the user's current query contains pronouns or vague references (like "it", "this course", "that program", "them", "这个", "那个"), use the conversation history to determine what they're referring to and make the query specific.
+    - If the user's current query contains pronouns or vague references (like "it", "this course", "that program", "them"), use the conversation history to determine what they're referring to and make the query specific.
     - If the user is asking a follow-up question about something mentioned earlier, incorporate the specific course/program codes or names from the history.
     - If the user is comparing things mentioned in history, make sure to include all relevant identifiers.
     
