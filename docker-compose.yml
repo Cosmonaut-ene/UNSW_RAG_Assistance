@@ -18,10 +18,10 @@ services:
       - PORT=5000
       - PYTHONUNBUFFERED=1 # Forces Python stdout/stderr to be unbuffered
       - PYTHONDONTWRITEBYTECODE=1 # Prevents .pyc files
-      - KNOWLEDGE_BASE_ROOT=/app/data/knowledge_base # Restore to original location
+      - KNOWLEDGE_BASE_ROOT=/data/knowledge_base # Point to mounted volume location
     volumes:
       - ./backend:/app
-      - ./data:/app/data # Mount data directory
+      - ./data/knowledge_base:/data/knowledge_base # Mount data directory outside app directory
     networks:
       - chatbot-network
     restart: unless-stopped
