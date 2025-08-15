@@ -122,7 +122,7 @@ class HybridSearchEngine:
             passes_rag = rag_score >= self.min_rag_score
             passes_bm25 = bm25_score >= self.min_bm25_score
             
-            if passes_hybrid and passes_rag and passes_bm25:
+            if passes_hybrid or passes_rag or passes_bm25:
                 filtered_results.append(result)
                 print(f"[HybridSearch] Accepted result from {metadata.get('source', 'unknown')} - "
                       f"Hybrid: {hybrid_score:.2f}, BM25: {bm25_score:.2f}, RAG: {rag_score:.2f} "
