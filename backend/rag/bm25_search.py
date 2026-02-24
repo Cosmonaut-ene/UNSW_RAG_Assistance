@@ -5,7 +5,7 @@ BM25 Search Engine - Replaces keyword search with proper BM25 scoring on vector 
 
 import re
 from typing import List, Dict, Optional
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 # Try to import BM25 and NLTK dependencies
 try:

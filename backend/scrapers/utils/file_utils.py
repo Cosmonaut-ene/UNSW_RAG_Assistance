@@ -7,7 +7,7 @@ import json
 import hashlib
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from ..config import config
 from ..core.exceptions import FileOperationError

@@ -5,7 +5,7 @@ Search Engine - Handles vector similarity search and document retrieval
 
 from typing import List, Optional
 import threading
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from .vector_store import load_vector_store, validate_vector_database_exists
 
 # Global flag to prevent multiple simultaneous rebuilds

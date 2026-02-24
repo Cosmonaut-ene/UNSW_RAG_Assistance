@@ -20,7 +20,10 @@ def query():
     ai_answer, can_answer, matched_files, performance_data = process_with_ai(question, session_id)
 
     # Check if query was safety blocked
-    safety_blocked = "violate safety guidelines" in ai_answer.lower()
+    safety_blocked = (
+        performance_data.get("safety_blocked", False)
+        or "violate safety guidelines" in ai_answer.lower()
+    )
 
     if safety_blocked:
         status = "safety_blocked"

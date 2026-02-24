@@ -5,7 +5,7 @@ Tests BM25 search engine functionality and keyword matching
 
 import pytest
 from unittest.mock import patch, MagicMock
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from rag.bm25_search import BM25SearchEngine
 from test.mocks.mock_vector_store import MockVectorStore

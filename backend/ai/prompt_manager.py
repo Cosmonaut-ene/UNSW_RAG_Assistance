@@ -3,7 +3,7 @@
 Prompt Manager - Handles prompt templates and engineering
 """
 
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from typing import Dict, Optional
 
 class PromptManager:

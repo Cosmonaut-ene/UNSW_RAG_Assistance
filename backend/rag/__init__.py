@@ -294,7 +294,10 @@ __all__ = [
     
     # Chain building
     'build_rag_qa_chain',
-    
+
+    # LangGraph RAG
+    'graph_rag',
+
     # Backward compatibility
     'process_with_rag',
     'process_with_rag_detailed', 

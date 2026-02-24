@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from threading import Thread
 from bs4 import BeautifulSoup
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from ..core.base import BaseScraper, BaseDocumentProcessor
 from ..core.exceptions import ContentParsingError, NetworkError

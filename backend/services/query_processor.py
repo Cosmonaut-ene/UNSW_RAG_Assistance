@@ -4,9 +4,6 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from services.log_store import load_all_chat_logs, append_chat_log
 from services.cache_store import find_cached_answer, save_to_cache, get_question_hash
-# Import modules without circular dependencies
-from rag import process_with_rag_detailed, ask_with_hybrid_search  
-from ai import process_query as ai_process_query
 from dateutil import tz
 import time
 import uuid
@@ -117,12 +114,16 @@ def find_best_answer(question):
 #     return None
 
 def process_with_ai(question, session_id=None):
+    """
+    Process user question through the LangGraph RAG pipeline.
+    Cache check is handled here before invoking the graph.
+    """
     # Start performance tracking
     start_time = time.time()
     processing_steps = []
     cache_hit = False
-    
-    # Check cache records
+
+    # Check cache records (outside graph - fast path)
     processing_steps.append("cache_check")
     answer, found = find_best_answer(question)
     if found:
@@ -137,248 +138,60 @@ def process_with_ai(question, session_id=None):
             "cache_hit": cache_hit
         }
 
-    question_lower = question.lower().strip()
-    
-    # Early safety check before any processing
-    processing_steps.append("safety_check")
-    from ai.safety_checker import is_query_safe_by_gemini
-    if not is_query_safe_by_gemini(question):
-        # Return warning immediately without any further processing
-        warning_message = "I can only help with UNSW-related questions. Please ask about UNSW programs and courses."
-        processing_steps.append("safety_warning_returned")
-        print(f"[QueryProcessor] Safety check failed, returning warning directly")
+    # Get conversation history for the graph
+    processing_steps.append("history_retrieval")
+    conversation_history = get_recent_conversation_history(session_id) if session_id else []
+    formatted_history = format_conversation_history(conversation_history)
+
+    try:
+        print("[QueryProcessor] Invoking LangGraph RAG pipeline...")
+        from rag.graph_rag import invoke_rag_graph
+
+        result = invoke_rag_graph(
+            query=question,
+            session_id=session_id or "",
+            conversation_history=conversation_history,
+            formatted_history=formatted_history,
+        )
+
+        answer = result.get("answer", "")
+        answered = result.get("answered", False)
+        matched_files = result.get("matched_files", [])
+        perf = result.get("performance", {})
+
+        # Merge processing steps
+        graph_steps = perf.get("processing_steps", [])
+        processing_steps.extend(graph_steps)
+
         response_time = int((time.time() - start_time) * 1000)
-        tokens_used = estimate_tokens(question + warning_message)
-        return warning_message, True, [], {
+        tokens_used = estimate_tokens(question + (answer or ""))
+
+        return answer, answered, matched_files, {
             "response_time_ms": response_time,
             "tokens_used": tokens_used,
             "processing_steps": processing_steps,
             "cache_hit": cache_hit,
-            "safety_blocked": True
+            "fallback_used": perf.get("fallback_used", False),
+            "safety_blocked": perf.get("safety_blocked", False),
+            "warning_returned": perf.get("warning_returned", False),
         }
-    
-    # Get conversation history (only after safety check passes)
-    processing_steps.append("history_retrieval")
-    conversation_history = get_recent_conversation_history(session_id) if session_id else []
-    
-    try:
-        print("[QueryProcessor] Starting RAG workflow...")
-        formatted_history = format_conversation_history(conversation_history)
-        
-        # Step 1: Query rewriting (only if safety check passed)
-        processing_steps.append("query_rewriting")
-        from ai.query_enhancer import rewrite_query_with_context
-        rewritten_query = rewrite_query_with_context(question, conversation_history)
-        print(f"[QueryProcessor] Original query: {question}")
-        print(f"[QueryProcessor] Rewritten query: {rewritten_query}")
-        
-        # Check for standardized navigation query
-        if rewritten_query.strip() == "NAVIGATION_QUERY":
-            processing_steps.append("navigation_direct_llm")
-            print(f"[QueryProcessor] Navigation query detected via rewrite, using direct LLM")
-            
-            from ai.response_generator import generate_fallback_response
-            fallback_answer = generate_fallback_response(question, formatted_history)
-            
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + fallback_answer)
-            return fallback_answer, True, [], {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit,
-                "navigation_fallback": True
-            }
-        
-        # Handle redirect warnings (both with and without REDIRECT prefix)
-        if (rewritten_query.startswith("REDIRECT:") or 
-            "can only help with unsw-related questions" in rewritten_query.lower()):
-            
-            if rewritten_query.startswith("REDIRECT:"):
-                warning_message = rewritten_query[9:].strip()
-            else:
-                warning_message = rewritten_query
-                
-            processing_steps.append("warning_returned")
-            print(f"[QueryProcessor] Warning message detected via rewrite, returning directly")
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + warning_message)
-            return warning_message, True, [], {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit,
-                "warning_returned": True
-            }
-        
-        # Step 2: RAG search using rewritten query
-        processing_steps.append("rag_search")
-        rag_result = process_with_rag_detailed(rewritten_query, conversation_history=conversation_history)
-        rag_search_results = rag_result.get("search_results", [])
-        
-        # Step 3: Hybrid search (RAG + BM25 search combination)
-        processing_steps.append("hybrid_search")
-        from rag.hybrid_search import HybridSearchEngine
-        
-        # Get vector store for BM25 indexing
-        try:
-            from rag import load_vector_store
-            vector_store = load_vector_store()
-        except Exception as e:
-            print(f"[QueryProcessor] Warning: Could not load vector store for BM25: {e}")
-            vector_store = None
-        
-        # Initialize hybrid search engine with vector store
-        hybrid_engine = HybridSearchEngine(
-            vector_store=vector_store,
-            min_hybrid_score=70.0,  # Higher threshold for better precision
-            min_bm25_score=3.0,     # BM25 minimum score
-            min_rag_score=25.0      # RAG minimum score
-        )
-        
-        # Convert RAG results to hybrid search format
-        hybrid_rag_results = []
-        for doc in rag_search_results:
-            hybrid_rag_results.append({
-                'page_content': doc.get('page_content', ''),
-                'metadata': doc.get('metadata', {})
-            })
-        
-        # Perform hybrid search
-        hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=20)
-        print(f"[QueryProcessor] Hybrid search returned {len(hybrid_results)} results")
-        
-        # Convert hybrid results back to standard format
-        search_results = []
-        matched_files = []
-        for result in hybrid_results:
-            search_results.append({
-                'page_content': result.get('page_content', result.get('content', '')),
-                'metadata': result.get('metadata', {})
-            })
-            
-            # Extract file info
-            metadata = result.get('metadata', {})
-            source_file = metadata.get('source', 'Unknown')
-            if source_file != 'Unknown':
-                filename = source_file.split('/')[-1] if '/' in source_file else source_file
-                if filename not in matched_files:
-                    matched_files.append(filename)
-        
-        # Check if we have any search results, if not, use fallback immediately
-        if not search_results:
-            processing_steps.append("no_search_results_fallback")
-            print(f"[QueryProcessor] No search results found, using direct LLM fallback")
-            
-            from ai.response_generator import generate_fallback_response
-            fallback_answer = generate_fallback_response(rewritten_query, formatted_history)
-            
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + fallback_answer)
-            return fallback_answer, True, [], {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit,
-                "fallback_used": True,
-                "fallback_reason": "no_search_results"
-            }
-        
-        # Step 4: Process with AI module using hybrid search results
-        processing_steps.append("ai_generation")
-        ai_result = ai_process_query(rewritten_query, search_results, formatted_history)
-        rag_answer = ai_result.get("answer", "")
-        safety_blocked = ai_result.get("safety_blocked", False)
-        
-        # Update matched files if AI found more
-        ai_matched_files = ai_result.get("matched_files", [])
-        for file in ai_matched_files:
-            if file not in matched_files:
-                matched_files.append(file)
-        
-        # Handle safety blocked queries
-        if safety_blocked:
-            processing_steps.append("safety_blocked")
-            print(f"[QueryProcessor] Query blocked by safety filter")
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + rag_answer)
-            return rag_answer, True, matched_files, {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit,
-                "safety_blocked": True
-            }
-        
-        # Check fallback conditions with detailed logging
-        fallback_triggered = False
-        fallback_reason = ""
-        
-        if not rag_answer:
-            fallback_triggered = True
-            fallback_reason = "no_answer"
-        elif "i don't have any information" in rag_answer.lower():
-            fallback_triggered = True
-            fallback_reason = "no_information_phrase"
-        elif "i don't know" in rag_answer.lower():
-            fallback_triggered = True
-            fallback_reason = "dont_know_phrase"
-        elif "INSUFFICIENT_CONTEXT" in rag_answer:
-            fallback_triggered = True
-            fallback_reason = "insufficient_context_marker"
-        elif ("within the current context" in rag_answer.lower() and 
-              ("don't have" in rag_answer.lower() or "please refer" in rag_answer.lower())):
-            fallback_triggered = True
-            fallback_reason = "context_limitation_expressed"
-        elif not search_results:
-            fallback_triggered = True
-            fallback_reason = "no_search_results"
-        
-        if fallback_triggered:
-            processing_steps.append("rag_fallback")
-            print(f"[QueryProcessor] RAG fallback triggered: {fallback_reason}, using direct LLM")
-            print(f"[QueryProcessor] RAG answer preview: {rag_answer[:100] if rag_answer else 'None'}...")
-            
-            # Execute fallback to direct LLM
-            from ai.response_generator import generate_fallback_response
-            fallback_answer = generate_fallback_response(rewritten_query, formatted_history)
-            
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + fallback_answer)
-            return fallback_answer, True, [], {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit,
-                "fallback_used": True
-            }
-        else:
-            processing_steps.append("rag_success")
-            print(f"[QueryProcessor] RAG Answer: {rag_answer[:50]}...")
-            print(f"[QueryProcessor] Matched files: {matched_files}")
-            print(f"[QueryProcessor] Used conversation history: {len(conversation_history)} previous exchanges")
-            response_time = int((time.time() - start_time) * 1000)
-            tokens_used = estimate_tokens(question + rag_answer)
-            return rag_answer, True, matched_files, {
-                "response_time_ms": response_time,
-                "tokens_used": tokens_used,
-                "processing_steps": processing_steps,
-                "cache_hit": cache_hit
-            }
-    except Exception as e:
-        processing_steps.append("rag_error")
-        print(f"[QueryProcessor] RAG failed: {e}")
 
-    processing_steps.append("no_answer")
-    print(f"[QueryProcessor] No answer found for: {question}")
-    response_time = int((time.time() - start_time) * 1000)
-    tokens_used = estimate_tokens(question + "I do not know the answer to this question.")
-    return "I do not know the answer to this question.", False, [], {
-        "response_time_ms": response_time,
-        "tokens_used": tokens_used,
-        "processing_steps": processing_steps,
-        "cache_hit": cache_hit
-    }
+    except Exception as e:
+        processing_steps.append("graph_error")
+        print(f"[QueryProcessor] LangGraph pipeline failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Final fallback
+        processing_steps.append("no_answer")
+        response_time = int((time.time() - start_time) * 1000)
+        tokens_used = estimate_tokens(question + "I do not know the answer to this question.")
+        return "I do not know the answer to this question.", False, [], {
+            "response_time_ms": response_time,
+            "tokens_used": tokens_used,
+            "processing_steps": processing_steps,
+            "cache_hit": cache_hit
+        }
 
 def log_current_stats():
     """Write records to chat_logs.jsonl"""

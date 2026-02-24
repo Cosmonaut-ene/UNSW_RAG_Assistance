@@ -5,7 +5,7 @@ Content processing utilities - text cleaning, document building, data extraction
 import re
 from typing import Optional, List, Dict, Any
 from bs4 import BeautifulSoup
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 IGNORED_KEYS = {"key", "cl_id", "state", "linking_id", "order", "active", "hbeorder"}
 

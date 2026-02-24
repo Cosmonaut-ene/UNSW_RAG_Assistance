@@ -27,21 +27,16 @@ RUN python -m spacy download en_core_web_sm
 # Copy application code
 COPY . .
 
-# Create a user with the same UID/GID as the host user (zhang=1000)
-RUN groupadd -g 1000 appuser && \
-    useradd -u 1000 -g appuser -m -s /bin/bash appuser
-
-# Create necessary directories and set ownership
-RUN chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /home/appuser
+# Create data directories (they may be overridden by volume mounts)
+RUN mkdir -p /data/knowledge_base/vector_store \
+             /data/knowledge_base/documents \
+             /data/knowledge_base/scraped_content/content \
+             /data/knowledge_base/logs
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
-
-# Switch to non-root user
-USER appuser
 
 # Expose port
 EXPOSE 5000
@@ -50,5 +45,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5000/api/admin/health || exit 1
 
-# Run the application
+# Run as root so bind-mounted volumes are writable on Windows/Mac Docker Desktop
 CMD ["python", "app.py"]

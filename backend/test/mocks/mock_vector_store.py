@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from typing import Dict, List, Any, Optional
 import uuid
 import numpy as np
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 
 class MockChromaCollection:

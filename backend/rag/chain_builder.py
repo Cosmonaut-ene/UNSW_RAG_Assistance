@@ -4,7 +4,7 @@ Chain Builder - Builds LangChain RetrievalQA chains for backward compatibility
 """
 
 from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain_chroma import Chroma
 from .vector_store import load_vector_store, VECTOR_STORE_DIR
 from ai.llm_client import get_chat_llm, get_embeddings_client

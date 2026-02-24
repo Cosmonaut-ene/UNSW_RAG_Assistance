@@ -9,7 +9,7 @@ import queue
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import traceback
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 class AsyncVectorStoreUpdater:
     """

@@ -2,6 +2,7 @@
 import os
 import sys
 import subprocess
+import time
 from flask import Blueprint, request, jsonify, make_response
 from flask_cors import cross_origin
 from datetime import datetime, timedelta
@@ -1148,6 +1149,365 @@ def cleanup_orphaned_content():
         return jsonify({
             "success": False,
             "error": f"Failed to cleanup content: {str(e)}"
+        }), 500
+
+
+# ========== RAG Evaluation Endpoints ==========
+
+@admin_bp.route('/evaluation/status', methods=['GET'])
+@require_admin
+def get_evaluation_status():
+    """Get current status of evaluation system"""
+    try:
+        # Check if RAGAS is available
+        try:
+            from evaluation.metrics import RAGEvaluator
+            ragas_available = True
+        except ImportError:
+            ragas_available = False
+        
+        # Check if datasets exist
+        from evaluation.config import GROUND_TRUTH_PATH, TEST_QUERIES_PATH, EVALUATION_RESULTS_PATH
+        datasets_exist = GROUND_TRUTH_PATH.exists() and TEST_QUERIES_PATH.exists()
+        
+        # Check if results exist
+        results_exist = EVALUATION_RESULTS_PATH.exists()
+        
+        status = {
+            "ragas_available": ragas_available,
+            "datasets_exist": datasets_exist,
+            "results_exist": results_exist,
+            "system_ready": ragas_available and datasets_exist,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        return jsonify(status), 200
+        
+    except Exception as e:
+        print(f"Error getting evaluation status: {e}")
+        return jsonify({"error": "Failed to get evaluation status"}), 500
+
+@admin_bp.route('/evaluation/datasets/create', methods=['POST'])
+@require_admin 
+def create_evaluation_datasets():
+    """Create evaluation datasets with ground truth and test queries"""
+    try:
+        from evaluation.datasets import EvaluationDataset
+        
+        data = request.get_json() or {}
+        sample_size = data.get('sample_size', 50)
+        
+        dataset = EvaluationDataset()
+        
+        # Create ground truth
+        ground_truth = dataset.create_unsw_ground_truth()
+        
+        # Generate test queries
+        test_queries = dataset.generate_test_queries(sample_size=sample_size)
+        
+        # Save datasets
+        dataset.save_datasets()
+        
+        return jsonify({
+            "success": True,
+            "ground_truth_items": len(ground_truth),
+            "test_queries": len(test_queries),
+            "sample_size": sample_size,
+            "message": "Evaluation datasets created successfully",
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error creating evaluation datasets: {e}")
+        return jsonify({
+            "error": f"Failed to create evaluation datasets: {str(e)}"
+        }), 500
+
+@admin_bp.route('/evaluation/run', methods=['POST'])
+@require_admin
+def run_evaluation():
+    """Run comprehensive RAG evaluation"""
+    try:
+        from evaluation.pipeline import EvaluationPipeline
+        
+        data = request.get_json() or {}
+        sample_size = data.get('sample_size', 20)
+        categories = data.get('categories')  # Optional category filter
+        use_hybrid_search = data.get('use_hybrid_search', True)
+        
+        # Create and run evaluation pipeline
+        pipeline = EvaluationPipeline(use_hybrid_search=use_hybrid_search)
+        
+        # Run evaluation
+        results = pipeline.run_comprehensive_evaluation(
+            sample_size=sample_size,
+            categories=categories
+        )
+        
+        # Save results
+        pipeline.save_pipeline_results()
+        
+        return jsonify({
+            "success": True,
+            "evaluation_results": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error running evaluation: {e}")
+        return jsonify({
+            "error": f"Failed to run evaluation: {str(e)}"
+        }), 500
+
+@admin_bp.route('/evaluation/results', methods=['GET'])
+@require_admin
+def get_evaluation_results():
+    """Get latest evaluation results"""
+    try:
+        from evaluation.config import EVALUATION_RESULTS_PATH
+        
+        if not EVALUATION_RESULTS_PATH.exists():
+            return jsonify({
+                "message": "No evaluation results found. Run evaluation first.",
+                "results": []
+            }), 200
+        
+        # Load results
+        import json
+        with open(EVALUATION_RESULTS_PATH, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        
+        # Paginate results
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_results = results[start_idx:end_idx]
+        
+        return jsonify({
+            "results": paginated_results,
+            "total": len(results),
+            "page": page,
+            "limit": limit,
+            "total_pages": (len(results) + limit - 1) // limit if results else 0
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting evaluation results: {e}")
+        return jsonify({"error": "Failed to get evaluation results"}), 500
+
+@admin_bp.route('/evaluation/summary', methods=['GET'])
+@require_admin
+def get_evaluation_summary():
+    """Get evaluation summary report"""
+    try:
+        from evaluation.pipeline import EvaluationPipeline
+        from evaluation.metrics import RAGEvaluator
+        
+        pipeline = EvaluationPipeline()
+        latest_results = pipeline.get_latest_results()
+        
+        if not latest_results:
+            # Try to load from evaluator
+            evaluator = RAGEvaluator()
+            evaluator.load_results()
+            if evaluator.evaluation_results:
+                latest_results = evaluator.evaluation_results[-1]
+        
+        if not latest_results:
+            return jsonify({
+                "message": "No evaluation results found. Run evaluation first.",
+                "summary": None
+            }), 200
+        
+        # Generate summary report
+        evaluator = RAGEvaluator()
+        evaluator.evaluation_results = [latest_results]
+        summary_text = evaluator.generate_report_summary()
+        
+        return jsonify({
+            "summary": {
+                "text": summary_text,
+                "data": latest_results.get("summary", {}),
+                "aggregate_scores": latest_results.get("aggregate_scores", {}),
+                "performance_analysis": latest_results.get("performance_analysis", {})
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error generating evaluation summary: {e}")
+        return jsonify({"error": "Failed to generate evaluation summary"}), 500
+
+@admin_bp.route('/evaluation/ab-test', methods=['POST'])
+@require_admin
+def run_ab_test():
+    """Run A/B test comparing search modes"""
+    try:
+        from evaluation.pipeline import EvaluationPipeline
+        
+        data = request.get_json() or {}
+        sample_size = data.get('sample_size', 10)
+        
+        pipeline = EvaluationPipeline()
+        
+        # Run both hybrid and semantic search tests
+        hybrid_results = pipeline.run_ab_test(use_hybrid=True)
+        semantic_results = pipeline.run_ab_test(use_hybrid=False)
+        
+        # Compare results
+        comparison = pipeline.generate_performance_comparison(
+            semantic_results["test_results"],
+            hybrid_results["test_results"]
+        )
+        
+        return jsonify({
+            "success": True,
+            "ab_test_results": {
+                "hybrid_search": hybrid_results,
+                "semantic_search": semantic_results,
+                "comparison": comparison
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error running A/B test: {e}")
+        return jsonify({
+            "error": f"Failed to run A/B test: {str(e)}"
+        }), 500
+
+@admin_bp.route('/evaluation/categories', methods=['GET'])
+@require_admin
+def get_evaluation_categories():
+    """Get available evaluation categories"""
+    try:
+        from evaluation.config import QUERY_CATEGORIES
+        
+        return jsonify({
+            "categories": QUERY_CATEGORIES,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error getting evaluation categories: {e}")
+        return jsonify({"error": "Failed to get evaluation categories"}), 500
+
+@admin_bp.route('/evaluation/category-analysis', methods=['POST'])
+@require_admin
+def run_category_analysis():
+    """Run evaluation analysis by category"""
+    try:
+        from evaluation.pipeline import EvaluationPipeline
+        
+        pipeline = EvaluationPipeline()
+        results = pipeline.run_category_analysis()
+        
+        return jsonify({
+            "success": True,
+            "category_analysis": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error running category analysis: {e}")
+        return jsonify({
+            "error": f"Failed to run category analysis: {str(e)}"
+        }), 500
+
+@admin_bp.route('/evaluation/single', methods=['POST'])
+@require_admin
+def evaluate_single_query():
+    """Evaluate a single query for testing"""
+    try:
+        from evaluation.metrics import RAGEvaluator
+        from services.query_processor import process_with_ai
+        from rag.search_engine import search_documents_with_scores
+        
+        data = request.get_json()
+        query = data.get('query')
+        ground_truth = data.get('ground_truth')  # Optional
+        
+        if not query:
+            return jsonify({"error": "Query is required"}), 400
+        
+        # Generate RAG response
+        answer, answered, matched_files, performance = process_with_ai(
+            query, session_id=f"eval_single_{int(time.time())}"
+        )
+        
+        # Get contexts
+        contexts = []
+        try:
+            similar_docs = search_documents_with_scores(query, k=5)
+            contexts = [doc.page_content for doc, score in similar_docs]
+        except:
+            contexts = ["Context retrieval failed"]
+        
+        # Evaluate with RAGAS
+        evaluator = RAGEvaluator()
+        evaluation_result = evaluator.evaluate_response(
+            query=query,
+            generated_answer=answer,
+            retrieved_contexts=contexts,
+            ground_truth_answer=ground_truth
+        )
+        
+        return jsonify({
+            "success": True,
+            "query": query,
+            "generated_answer": answer,
+            "contexts": contexts,
+            "ground_truth": ground_truth,
+            "evaluation": evaluation_result,
+            "rag_metadata": {
+                "answered": answered,
+                "matched_files": matched_files,
+                "performance": performance
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"Error evaluating single query: {e}")
+        return jsonify({
+            "error": f"Failed to evaluate query: {str(e)}"
+        }), 500
+
+@admin_bp.route('/evaluation/health', methods=['GET'])
+def evaluation_health():
+    """Check evaluation system health"""
+    try:
+        health_status = {
+            "evaluation_system": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": "rag_evaluation_service"
+        }
+        
+        # Check RAGAS availability
+        try:
+            from evaluation.metrics import RAGEvaluator
+            health_status["ragas_available"] = True
+        except ImportError:
+            health_status["ragas_available"] = False
+            health_status["evaluation_system"] = "degraded"
+        
+        # Check dataset availability
+        from evaluation.config import GROUND_TRUTH_PATH, TEST_QUERIES_PATH
+        health_status["datasets_available"] = GROUND_TRUTH_PATH.exists() and TEST_QUERIES_PATH.exists()
+        
+        if not health_status["datasets_available"]:
+            health_status["evaluation_system"] = "degraded"
+        
+        return jsonify(health_status), 200
+        
+    except Exception as e:
+        return jsonify({
+            "evaluation_system": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
         }), 500
 
 

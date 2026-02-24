@@ -9,7 +9,7 @@ import tempfile
 import shutil
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from rag.vector_store import (
     validate_vector_database_exists,

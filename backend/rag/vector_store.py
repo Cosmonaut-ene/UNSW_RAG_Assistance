@@ -5,9 +5,10 @@ Vector Store - Manages ChromaDB operations and vector storage
 
 import os
 import shutil
+import time
 from datetime import datetime
 from typing import List, Dict, Optional
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from langchain_chroma import Chroma
 # Remove direct import to avoid circular dependency
 # from ai.llm_client import get_embeddings_client
@@ -23,41 +24,28 @@ SCRAPED_CONTENT_DIR = str(PathConfig.SCRAPED_CONTENT_DIR)
 def validate_vector_database_exists() -> bool:
     """
     Check if vector database files exist and are accessible.
-    
+    Modern ChromaDB (0.4+) uses a single chroma.sqlite3 file.
+
     Returns:
         bool: True if database exists and appears valid, False otherwise
     """
     if not os.path.exists(VECTOR_STORE_DIR):
         print("[VectorStore] Vector store directory does not exist")
         return False
-    
-    # Look for ChromaDB collection directories
+
     try:
-        chroma_dirs = [d for d in os.listdir(VECTOR_STORE_DIR) 
-                       if os.path.isdir(os.path.join(VECTOR_STORE_DIR, d)) and 
-                       d != "__pycache__" and not d.startswith('.')]
+        # Modern ChromaDB uses chroma.sqlite3
+        sqlite_path = os.path.join(VECTOR_STORE_DIR, "chroma.sqlite3")
+        if os.path.exists(sqlite_path) and os.path.getsize(sqlite_path) > 0:
+            print(f"[VectorStore] Valid ChromaDB SQLite database found ({os.path.getsize(sqlite_path)} bytes)")
+            return True
+
+        print("[VectorStore] ChromaDB SQLite database not found or empty")
+        return False
+
     except (PermissionError, OSError) as e:
         print(f"[VectorStore] Cannot access vector store directory: {e}")
         return False
-    
-    if not chroma_dirs:
-        print("[VectorStore] No ChromaDB collection directories found")
-        return False
-    
-    # Check if any collection has essential ChromaDB files
-    essential_files = ['header.bin', 'data_level0.bin']
-    for chroma_dir in chroma_dirs:
-        chroma_path = os.path.join(VECTOR_STORE_DIR, chroma_dir)
-        has_essential_files = all(
-            os.path.exists(os.path.join(chroma_path, f)) 
-            for f in essential_files
-        )
-        if has_essential_files:
-            print(f"[VectorStore] Valid vector database found in {chroma_dir}")
-            return True
-    
-    print("[VectorStore] Vector database files appear to be missing or corrupted")
-    return False
 
 def create_vector_store(documents: List[Document]) -> Chroma:
     """
@@ -77,56 +65,60 @@ def create_vector_store(documents: List[Document]) -> Chroma:
     
     # Clear existing vector store contents to ensure clean rebuild
     if os.path.exists(VECTOR_STORE_DIR):
-        # Only remove contents that we have permission to delete
-        for item in os.listdir(VECTOR_STORE_DIR):
-            item_path = os.path.join(VECTOR_STORE_DIR, item)
-            try:
-                if os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                else:
-                    os.remove(item_path)
-                print(f"[VectorStore] Removed {item}")
-            except (PermissionError, OSError) as e:
-                print(f"[VectorStore] Skipping {item} (permission denied): {e}")
-                continue
-        print("[VectorStore] Cleared accessible vector store contents")
+        # Remove the entire directory and recreate to avoid stale SQLite locks
+        try:
+            shutil.rmtree(VECTOR_STORE_DIR)
+            print("[VectorStore] Removed existing vector store directory")
+        except (PermissionError, OSError) as e:
+            print(f"[VectorStore] Could not remove directory, clearing contents: {e}")
+            # Fall back to clearing contents individually
+            for item in os.listdir(VECTOR_STORE_DIR):
+                item_path = os.path.join(VECTOR_STORE_DIR, item)
+                try:
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                    print(f"[VectorStore] Removed {item}")
+                except (PermissionError, OSError) as inner_e:
+                    print(f"[VectorStore] Skipping {item} (permission denied): {inner_e}")
+
+    os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+    print("[VectorStore] Created fresh vector store directory")
     
     # Use fixed collection name for consistency
     collection_name = "knowledge_base"
     
-    # Handle large document collections with batching
+    # Embed all documents using local HuggingFace model (no rate limits)
     total_docs = len(documents)
-    batch_size = 1000  # Conservative batch size
-    
+    batch_size = 500  # Large batches are fine with local embeddings
+
+    print(f"[VectorStore] Creating vector store with {total_docs} documents...")
+
     if total_docs <= batch_size:
-        # Small collection, create directly
         db = Chroma.from_documents(
-            documents, 
-            embeddings, 
+            documents,
+            embeddings,
             persist_directory=VECTOR_STORE_DIR,
             collection_name=collection_name
         )
     else:
-        # Large collection, create with first batch then add remaining
-        print(f"[VectorStore] Creating vector store with {total_docs} documents in batches...")
-        
-        # Create with first batch
+        # Create with first batch then add remainder
         first_batch = documents[:batch_size]
         db = Chroma.from_documents(
-            first_batch, 
-            embeddings, 
+            first_batch,
+            embeddings,
             persist_directory=VECTOR_STORE_DIR,
             collection_name=collection_name
         )
-        print(f"[VectorStore] Created initial vector store with {len(first_batch)} documents")
-        
-        # Add remaining documents in batches
+        total_batches = (total_docs + batch_size - 1) // batch_size
+        print(f"[VectorStore] Batch 1/{total_batches}: {len(first_batch)} documents embedded")
+
         for i in range(batch_size, total_docs, batch_size):
             batch = documents[i:i + batch_size]
-            db.add_documents(batch)
             batch_num = (i // batch_size) + 1
-            total_batches = (total_docs + batch_size - 1) // batch_size
-            print(f"[VectorStore] Added batch {batch_num}/{total_batches - 1}: {len(batch)} documents")
+            db.add_documents(batch)
+            print(f"[VectorStore] Batch {batch_num}/{total_batches}: {len(batch)} documents embedded")
     
     print(f"[VectorStore] Created ChromaDB vector store '{collection_name}' with {len(documents)} documents")
     return db
@@ -261,13 +253,13 @@ def add_documents_incremental(documents: List[Document]) -> bool:
         vectorstore = load_vector_store()
         
         # Add documents to existing collection in batches
-        batch_size = 1000  # Conservative batch size
+        batch_size = 500
         total_docs = len(documents)
-        
+
         if total_docs <= batch_size:
             vectorstore.add_documents(documents)
         else:
-            print(f"[VectorStore] Adding {total_docs} documents in batches...")
+            print(f"[VectorStore] Adding {total_docs} documents in batches of {batch_size}...")
             for i in range(0, total_docs, batch_size):
                 batch = documents[i:i + batch_size]
                 vectorstore.add_documents(batch)

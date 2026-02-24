@@ -6,8 +6,8 @@ Text Splitter - Handles document chunking with different strategies for PDF and 
 import re
 import spacy
 from typing import List, Dict
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Load English spaCy model for PDF processing
 try:
@@ -117,28 +117,84 @@ def split_by_h2_headers(content: str) -> List[str]:
     
     return cleaned_sections
 
+def _generate_pdf_context_summary(full_text: str, metadata: Dict) -> str:
+    """
+    Generate a contextual summary for a PDF document using Gemini.
+    This implements the Anthropic Contextual Retrieval technique:
+    prepend a short summary to each chunk so it retains document-level context.
+
+    Results are cached in-memory per source file to avoid redundant API calls.
+
+    Args:
+        full_text: The full text of the PDF document
+        metadata: Document metadata
+
+    Returns:
+        str: A 1-2 sentence context summary, or empty string on failure
+    """
+    source = metadata.get('source', 'unknown')
+
+    # Check in-memory cache
+    if not hasattr(_generate_pdf_context_summary, '_cache'):
+        _generate_pdf_context_summary._cache = {}
+
+    if source in _generate_pdf_context_summary._cache:
+        return _generate_pdf_context_summary._cache[source]
+
+    try:
+        from ai.llm_client import get_genai_model
+        model = get_genai_model("gemini-2.5-flash")
+
+        # Use first 2000 chars for summary generation (saves tokens)
+        excerpt = full_text[:2000]
+        title = metadata.get('title', source)
+
+        prompt = (
+            f"This is a document titled '{title}' from UNSW CSE. "
+            f"Based on the following excerpt, write a 1-2 sentence summary that identifies "
+            f"what this document is about and what key topics it covers. "
+            f"Be specific and concise.\n\nExcerpt:\n{excerpt}"
+        )
+
+        response = model.generate_content(prompt)
+        summary = response.text.strip()
+
+        # Cache it
+        _generate_pdf_context_summary._cache[source] = summary
+        print(f"[TextSplitter] Generated context summary for PDF: {source}")
+        return summary
+
+    except Exception as e:
+        print(f"[TextSplitter] Failed to generate PDF context summary: {e}")
+        _generate_pdf_context_summary._cache[source] = ""
+        return ""
+
+
 def split_pdf_documents_spacy(documents: List[Document], sentences_per_chunk: int = 3) -> List[Document]:
     """
-    Split PDF documents using spaCy for semantic chunking (preserves existing logic)
-    
+    Split PDF documents using spaCy for semantic chunking with contextual prefix.
+    Each chunk gets a document-level context summary prepended (Contextual Retrieval).
+
     Args:
         documents: List of PDF documents
         sentences_per_chunk: Number of sentences per chunk
-        
+
     Returns:
-        List of chunked documents
+        List of chunked documents with contextual prefixes
     """
     if not SPACY_AVAILABLE:
-        # Fallback to simple text splitting
         return split_documents_simple(documents)
-    
+
     new_chunks = []
     for doc in documents:
         if doc.metadata.get('content_type') != 'pdf':
-            new_chunks.append(doc)  # Skip non-PDF documents
+            new_chunks.append(doc)
             continue
-            
+
         try:
+            # Generate document-level context summary
+            context_summary = _generate_pdf_context_summary(doc.page_content, doc.metadata)
+
             spacy_doc = nlp(doc.page_content)
             sentences = [sent.text.strip() for sent in spacy_doc.sents if sent.text.strip()]
             metadata = doc.metadata
@@ -146,15 +202,20 @@ def split_pdf_documents_spacy(documents: List[Document], sentences_per_chunk: in
             for i in range(0, len(sentences), sentences_per_chunk):
                 chunk_text = " ".join(sentences[i:i + sentences_per_chunk])
                 if chunk_text:
-                    new_chunks.append(Document(page_content=chunk_text, metadata=metadata))
-                    
+                    # Prepend context summary to each chunk
+                    if context_summary:
+                        chunk_text = f"[Document Context: {context_summary}]\n\n{chunk_text}"
+
+                    chunk_metadata = metadata.copy()
+                    chunk_metadata['has_context_prefix'] = bool(context_summary)
+                    new_chunks.append(Document(page_content=chunk_text, metadata=chunk_metadata))
+
         except Exception as e:
             print(f"[TextSplitter] SpaCy processing error for PDF: {e}")
-            # Fallback to simple splitting for this document
             simple_chunks = split_documents_simple([doc])
             new_chunks.extend(simple_chunks)
-    
-    print(f"[TextSplitter] Created {len(new_chunks)} PDF chunks using spaCy")
+
+    print(f"[TextSplitter] Created {len(new_chunks)} PDF chunks using spaCy with contextual prefix")
     return new_chunks
 
 def split_scraped_documents_by_headers(documents: List[Document]) -> List[Document]:

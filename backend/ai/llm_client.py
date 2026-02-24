@@ -1,15 +1,16 @@
 # ai/llm_client.py
 """
-LLM Client - Manages Google Generative AI connections and configurations
+LLM Client - Manages Google Generative AI connections and configurations.
+Embeddings use a local sentence-transformers model (no API quota limits).
 """
 
 import os
 import google.generativeai as genai
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from typing import Optional
 
 # ========== Google API Configuration ==========
-# Use configurable path for Google credentials
 from pathlib import Path
 _backend_root = Path(__file__).parent.parent
 _default_credentials_path = _backend_root / "config" / "key.json"
@@ -22,6 +23,10 @@ _chat_llm_client = None
 _embeddings_client = None
 _genai_model = None
 
+# Local embedding model — no API key, no rate limits
+# all-MiniLM-L6-v2: 384-dim, ~22MB, fast on CPU, good retrieval quality
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+
 def get_chat_llm(model: str = "gemini-2.5-flash") -> ChatGoogleGenerativeAI:
     """Get ChatGoogleGenerativeAI client (singleton)"""
     global _chat_llm_client
@@ -30,12 +35,20 @@ def get_chat_llm(model: str = "gemini-2.5-flash") -> ChatGoogleGenerativeAI:
         print(f"[AI] Initialized ChatGoogleGenerativeAI with model: {model}")
     return _chat_llm_client
 
-def get_embeddings_client(model: str = "models/embedding-001") -> GoogleGenerativeAIEmbeddings:
-    """Get GoogleGenerativeAIEmbeddings client (singleton)"""
+def get_embeddings_client(model: str = None) -> HuggingFaceEmbeddings:
+    """
+    Get local HuggingFace embeddings client (singleton).
+    Uses sentence-transformers/all-MiniLM-L6-v2 — no API quota limits.
+    """
     global _embeddings_client
     if _embeddings_client is None:
-        _embeddings_client = GoogleGenerativeAIEmbeddings(model=model)
-        print(f"[AI] Initialized GoogleGenerativeAIEmbeddings with model: {model}")
+        model_name = model or EMBEDDING_MODEL_NAME
+        _embeddings_client = HuggingFaceEmbeddings(
+            model_name=model_name,
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True},
+        )
+        print(f"[AI] Initialized local HuggingFaceEmbeddings with model: {model_name}")
     return _embeddings_client
 
 def get_genai_model(model: str = "gemini-2.5-flash") -> genai.GenerativeModel:

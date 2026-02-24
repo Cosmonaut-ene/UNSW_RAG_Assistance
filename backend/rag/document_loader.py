@@ -6,7 +6,7 @@ Document Loader - Handles loading of PDF and scraped JSON documents
 import os
 import json
 from typing import List
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from langchain_community.document_loaders import PyMuPDFLoader
 
 def load_pdf_documents(folder_path: str) -> List[Document]:

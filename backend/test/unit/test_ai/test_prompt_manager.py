@@ -4,7 +4,7 @@ Tests prompt templates and engineering functionality
 """
 
 import pytest
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 from ai.prompt_manager import PromptManager
 

@@ -5,7 +5,7 @@ Incremental vector store operations to avoid ChromaDB rebuild issues
 
 import os
 from typing import List, Dict, Optional
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from .vector_store import VECTOR_STORE_DIR, validate_vector_database_exists
 

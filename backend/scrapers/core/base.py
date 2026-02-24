@@ -4,7 +4,7 @@ Base classes and interfaces for scrapers module
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Set
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 
 from .types import LinkData, ContentData, ScrapingResult, ProcessingOptions, ProgressInfo
 
