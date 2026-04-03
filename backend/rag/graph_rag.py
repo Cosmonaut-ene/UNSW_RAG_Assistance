@@ -473,6 +473,11 @@ def invoke_rag_graph(query: str,
         "answer": result.get("answer", ""),
         "answered": result.get("answered", False),
         "matched_files": result.get("matched_files", []),
+        "retrieved_contexts": [
+            doc.get("page_content", "")
+            for doc in result.get("reranked_docs", [])
+            if doc.get("page_content", "").strip()
+        ],
         "performance": {
             "response_time_ms": response_time,
             "processing_steps": result.get("processing_steps", []),

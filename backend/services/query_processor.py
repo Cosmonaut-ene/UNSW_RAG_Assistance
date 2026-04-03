@@ -157,6 +157,7 @@ def process_with_ai(question, session_id=None):
         answer = result.get("answer", "")
         answered = result.get("answered", False)
         matched_files = result.get("matched_files", [])
+        retrieved_contexts = result.get("retrieved_contexts", [])
         perf = result.get("performance", {})
 
         # Merge processing steps
@@ -174,6 +175,7 @@ def process_with_ai(question, session_id=None):
             "fallback_used": perf.get("fallback_used", False),
             "safety_blocked": perf.get("safety_blocked", False),
             "warning_returned": perf.get("warning_returned", False),
+            "retrieved_contexts": retrieved_contexts,
         }
 
     except Exception as e:

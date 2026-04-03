@@ -13,9 +13,6 @@ from .config import TEST_CONFIG
 
 # Import existing RAG system components
 from services.query_processor import process_with_ai
-from rag.search_engine import search_similar_documents, search_documents_with_scores
-from rag.hybrid_search import HybridSearchEngine
-from rag.vector_store import load_vector_store
 
 
 class EvaluationPipeline:
@@ -132,31 +129,10 @@ class EvaluationPipeline:
                 session_id=f"eval_{int(time.time())}"
             )
             
-            # Extract contexts from the search process
-            contexts = []
-            
-            # Method 1: Try to get contexts from vector search
-            try:
-                vector_store = load_vector_store()
-                if vector_store:
-                    # Get similar documents
-                    similar_docs = search_documents_with_scores(query, k=10)
-                    contexts = [doc.page_content for doc, score in similar_docs]
-                    
-                    # If using hybrid search, get additional contexts
-                    if self.use_hybrid_search:
-                        hybrid_engine = HybridSearchEngine(vector_store)
-                        hybrid_results = hybrid_engine.search_hybrid(query, max_results=5)
-                        hybrid_contexts = [result.get('page_content', result.get('content', '')) 
-                                         for result in hybrid_results]
-                        contexts.extend(hybrid_contexts)
-                        
-            except Exception as e:
-                print(f"Warning: Could not retrieve contexts: {e}")
-                contexts = []
-            
-            # Remove duplicates and empty contexts
-            contexts = list(set([ctx for ctx in contexts if ctx and ctx.strip()]))
+            # Use the actual contexts that were passed to the LLM during generation.
+            # These come directly from the LangGraph pipeline (post-rerank, post-CRAG),
+            # ensuring RAGAS evaluates faithfulness against the real retrieved context.
+            contexts = [ctx for ctx in performance.get("retrieved_contexts", []) if ctx and ctx.strip()]
             
             return {
                 "answer": answer,
