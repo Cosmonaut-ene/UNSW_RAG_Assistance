@@ -13,7 +13,7 @@ This chatbot combines:
 - **LangGraph** — graph-based RAG pipeline orchestration (safety → rewrite → HyDE → retrieve → rerank → grade → generate → hallucination check)
 - **HyDE** — Hypothetical Document Embeddings, improves fuzzy query retrieval
 - **CRAG** — Corrective RAG document grading, filters low-relevance chunks before generation
-- **Cross-encoder reranking** — ms-marco-MiniLM-L-6-v2, re-scores retrieved chunks for precision
+- **Cross-encoder reranking** — ms-marco-MiniLM-L-6-v2, re-scores top-50 retrieved chunks, returns top-12 for generation
 - **Web scraping** — Selenium + BeautifulSoup for up-to-date UNSW handbook content
 - **PDF processing** — PyMuPDF with Gemini-powered contextual chunk summarisation
 
@@ -316,10 +316,22 @@ safety_check → query_rewrite → hyde_expansion
 
 ### Hybrid Search Technology
 
-- **Semantic Search**: ChromaDB + local sentence-transformers embeddings
+- **Semantic Search**: ChromaDB + local sentence-transformers embeddings (top-50 candidates)
 - **Keyword Search**: BM25 for exact term matching
-- **Score Fusion**: reciprocal rank fusion combines both signals
-- **Reranking**: cross-encoder re-scores top-k results
+- **Score Fusion**: weighted combination (RAG 0.7 + BM25 0.3) with score threshold filtering
+- **Reranking**: cross-encoder re-scores top-50 candidates, returning top-12 to the LLM
+
+### Retrieval Parameters (tuned via automated RAGAS optimisation)
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| `vector_k` | 50 | Semantic search candidates |
+| `max_hybrid_results` | 50 | Pre-rerank pool size |
+| `reranker_top_k` | 12 | Final docs passed to LLM |
+| `rag_weight` | 0.7 | Semantic vs BM25 score weight |
+| `min_hybrid_score` | 50.0 | Hybrid score filter threshold |
+
+> Parameters were found via automated proxy-metric search (50 random + focused grid trials) and validated with full RAGAS evaluation on 30 queries.
 
 ### Content Management
 
