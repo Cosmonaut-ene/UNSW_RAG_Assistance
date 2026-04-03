@@ -31,7 +31,7 @@ class TestEvaluationDataset:
         
         # Check first item structure
         first_item = ground_truth[0]
-        required_fields = ["question", "ground_truth_answer", "category", "difficulty", "expected_context_keywords"]
+        required_fields = ["question", "ground_truth", "category", "difficulty", "expected_context_keywords"]
         for field in required_fields:
             assert field in first_item, f"Missing required field: {field}"
         
@@ -47,7 +47,7 @@ class TestEvaluationDataset:
         # Check for UNSW-specific content
         unsw_keywords = ["UNSW", "COMP", "Computer Science", "CSE"]
         has_unsw_content = any(
-            any(keyword in item["question"] or keyword in item["ground_truth_answer"] 
+            any(keyword in item["question"] or keyword in item["ground_truth"]
                 for keyword in unsw_keywords)
             for item in ground_truth
         )
@@ -165,11 +165,11 @@ class TestEvaluationDataset:
         for item in ground_truth:
             # Verify non-empty content
             assert len(item["question"].strip()) > 0
-            assert len(item["ground_truth_answer"].strip()) > 0
+            assert len(item["ground_truth"].strip()) > 0
             assert len(item["expected_context_keywords"]) > 0
-            
+
             # Verify answer quality (should be substantial)
-            answer_words = len(item["ground_truth_answer"].split())
+            answer_words = len(item["ground_truth"].split())
             assert answer_words >= 10, f"Answer too short: {item['question']}"
             
             # Verify question format
@@ -215,7 +215,7 @@ class TestEvaluationDataset:
         
         for item in ground_truth:
             question = item["question"].lower()
-            answer = item["ground_truth_answer"].lower()
+            answer = item["ground_truth"].lower()
             keywords = [kw.lower() for kw in item["expected_context_keywords"]]
             
             # At least one keyword should appear in question or answer

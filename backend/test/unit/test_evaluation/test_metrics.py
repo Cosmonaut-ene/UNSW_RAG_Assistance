@@ -73,7 +73,7 @@ class TestRAGEvaluator:
         assert "query" in result
         assert "generated_answer" in result
         assert "retrieved_contexts" in result
-        assert "ground_truth_answer" in result
+        assert "ground_truth" in result
         assert "scores" in result
         assert "performance_analysis" in result
         assert "evaluation_metadata" in result
@@ -113,7 +113,7 @@ class TestRAGEvaluator:
         assert "faithfulness" in result["scores"]
         assert "answer_relevancy" in result["scores"]
         assert "context_precision" in result["scores"]
-        assert result["ground_truth_answer"] is None
+        assert result["ground_truth"] is None
     
     @patch('evaluation.metrics.evaluate')
     def test_evaluate_response_error_handling(self, mock_evaluate, evaluator):
@@ -302,7 +302,7 @@ class TestRAGEvaluator:
             (0.95, "excellent"),
             (0.85, "good"),
             (0.75, "acceptable"),
-            (0.65, "acceptable"),
+            (0.65, "poor"),
             (0.55, "poor")
         ]
         

@@ -27,18 +27,17 @@ class TestVectorStoreValidation:
     
     def test_validate_vector_database_exists_with_valid_store(self, test_temp_dir, mock_paths):
         """Test validation with valid vector store"""
-        # Create mock ChromaDB files
+        # Create mock ChromaDB directory with SQLite database file
         vector_dir = Path(test_temp_dir) / "vector_store"
-        chroma_dir = vector_dir / "test_collection"
-        chroma_dir.mkdir(parents=True)
-        
-        # Create essential ChromaDB files
-        (chroma_dir / "header.bin").touch()
-        (chroma_dir / "data_level0.bin").touch()
-        
+        vector_dir.mkdir(parents=True, exist_ok=True)
+
+        # Modern ChromaDB uses a single chroma.sqlite3 file
+        sqlite_file = vector_dir / "chroma.sqlite3"
+        sqlite_file.write_bytes(b"SQLite format 3\x00" + b"\x00" * 100)
+
         with patch('rag.vector_store.VECTOR_STORE_DIR', str(vector_dir)):
             result = validate_vector_database_exists()
-            
+
         assert result is True
         
     def test_validate_vector_database_exists_missing_directory(self, test_temp_dir, mock_paths):

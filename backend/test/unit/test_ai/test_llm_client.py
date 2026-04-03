@@ -56,30 +56,38 @@ class TestLLMClient:
         client = get_chat_llm("gemini-pro")
         mock_chat_class.assert_called_once_with(model="gemini-pro")
         
-    @patch('ai.llm_client.GoogleGenerativeAIEmbeddings')
+    @patch('ai.llm_client.HuggingFaceEmbeddings')
     def test_get_embeddings_client_singleton_creation(self, mock_embeddings_class):
         """Test that embeddings client is created as singleton"""
         mock_instance = MagicMock()
         mock_embeddings_class.return_value = mock_instance
-        
+
         # First call should create instance
         client1 = get_embeddings_client()
         assert client1 == mock_instance
-        mock_embeddings_class.assert_called_once_with(model="models/embedding-001")
-        
+        mock_embeddings_class.assert_called_once_with(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True}
+        )
+
         # Second call should return same instance
         client2 = get_embeddings_client()
         assert client2 == client1
         mock_embeddings_class.assert_called_once()
-        
-    @patch('ai.llm_client.GoogleGenerativeAIEmbeddings')
+
+    @patch('ai.llm_client.HuggingFaceEmbeddings')
     def test_get_embeddings_client_custom_model(self, mock_embeddings_class):
         """Test embeddings client with custom model"""
         mock_instance = MagicMock()
         mock_embeddings_class.return_value = mock_instance
-        
-        client = get_embeddings_client("models/embedding-002")
-        mock_embeddings_class.assert_called_once_with(model="models/embedding-002")
+
+        client = get_embeddings_client("custom-model")
+        mock_embeddings_class.assert_called_once_with(
+            model_name="custom-model",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True}
+        )
         
     @patch('ai.llm_client.genai.GenerativeModel')
     def test_get_genai_model_singleton_creation(self, mock_genai_class):
@@ -107,7 +115,7 @@ class TestLLMClient:
         mock_genai_class.assert_called_once_with("gemini-pro")
         
     @patch('ai.llm_client.ChatGoogleGenerativeAI')
-    @patch('ai.llm_client.GoogleGenerativeAIEmbeddings')
+    @patch('ai.llm_client.HuggingFaceEmbeddings')
     @patch('ai.llm_client.genai.GenerativeModel')
     def test_reset_clients(self, mock_genai, mock_embeddings, mock_chat):
         """Test that reset_clients clears all singletons"""
@@ -174,12 +182,12 @@ class TestLLMClientIntegration:
         with pytest.raises(Exception, match="API connection failed"):
             get_chat_llm()
             
-    @patch('ai.llm_client.GoogleGenerativeAIEmbeddings')
+    @patch('ai.llm_client.HuggingFaceEmbeddings')
     def test_embeddings_client_error_handling(self, mock_embeddings_class):
         """Test error handling in embeddings client creation"""
-        mock_embeddings_class.side_effect = Exception("Embeddings API unavailable")
-        
-        with pytest.raises(Exception, match="Embeddings API unavailable"):
+        mock_embeddings_class.side_effect = Exception("Embeddings model load failed")
+
+        with pytest.raises(Exception, match="Embeddings model load failed"):
             get_embeddings_client()
             
     @patch('ai.llm_client.genai.GenerativeModel')
