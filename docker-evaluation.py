@@ -72,8 +72,8 @@ def run_evaluation_in_container():
     
     # Create evaluation command
     eval_commands = [
-        # Install evaluation dependencies
-        "pip install ragas==0.1.21 datasets==2.20.0",
+        # Evaluation dependencies are already in requirements.txt (ragas>=0.2.6)
+        "pip install --quiet 'ragas>=0.2.6' 'datasets>=3.0.0'",
         
         # Setup evaluation datasets with 30 queries
         "python scripts/run_evaluation.py --setup-datasets --sample-size 30",

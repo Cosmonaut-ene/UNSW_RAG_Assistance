@@ -65,42 +65,37 @@ class TestEvaluationPipeline:
             assert pipeline.evaluation_results == []
     
     @patch('evaluation.pipeline.process_with_ai')
-    @patch('evaluation.pipeline.load_vector_store')
-    @patch('evaluation.pipeline.search_documents_with_scores')
-    def test_generate_rag_response(self, mock_search, mock_load_vector, mock_process, pipeline):
-        """Test RAG response generation"""
-        
-        # Mock process_with_ai response
+    def test_generate_rag_response(self, mock_process, pipeline):
+        """Test RAG response generation uses actual LangGraph retrieved contexts"""
+
+        # process_with_ai now returns retrieved_contexts in the performance dict,
+        # reflecting the real contexts used by the LLM (post-rerank, post-CRAG).
         mock_process.return_value = (
             "COMP9900 is a capstone project course.",  # answer
             True,  # answered
             ["handbook.pdf"],  # matched_files
-            {"response_time_ms": 500}  # performance
+            {
+                "response_time_ms": 500,
+                "retrieved_contexts": [
+                    "COMP9900 course description",
+                    "Capstone project requirements",
+                ],
+            }
         )
-        
-        # Mock vector store and search
-        mock_vector_store = MagicMock()
-        mock_load_vector.return_value = mock_vector_store
-        
-        mock_doc1 = MagicMock()
-        mock_doc1.page_content = "COMP9900 course description"
-        mock_doc2 = MagicMock()
-        mock_doc2.page_content = "Capstone project requirements"
-        
-        mock_search.return_value = [(mock_doc1, 0.9), (mock_doc2, 0.8)]
-        
+
         query = "What is COMP9900?"
         response = pipeline._generate_rag_response(query)
-        
+
         # Verify response structure
         assert "answer" in response
         assert "contexts" in response
         assert "metadata" in response
-        
+
         assert response["answer"] == "COMP9900 is a capstone project course."
-        assert len(response["contexts"]) > 0
+        assert len(response["contexts"]) == 2
         assert "COMP9900 course description" in response["contexts"]
-        
+        assert "Capstone project requirements" in response["contexts"]
+
         # Verify metadata
         metadata = response["metadata"]
         assert metadata["answered"] is True
@@ -373,36 +368,29 @@ class TestEvaluationPipeline:
         # Verify pipeline metadata reflects the filter
         assert result["pipeline_metadata"]["categories_tested"] == ["course_information"]
     
-    def test_hybrid_search_integration(self, pipeline):
-        """Test integration with hybrid search functionality"""
-        
+    @patch('evaluation.pipeline.process_with_ai')
+    def test_hybrid_search_integration(self, mock_process, pipeline):
+        """Test that _generate_rag_response uses retrieved_contexts from the
+        LangGraph pipeline (which already runs hybrid search internally)."""
+
         pipeline.use_hybrid_search = True
-        
-        with patch('evaluation.pipeline.HybridSearchEngine') as mock_hybrid_class:
-            mock_hybrid_engine = MagicMock()
-            mock_hybrid_results = [
-                {"page_content": "Hybrid context 1", "metadata": {"score": 0.9}},
-                {"page_content": "Hybrid context 2", "metadata": {"score": 0.8}}
-            ]
-            mock_hybrid_engine.search_hybrid.return_value = mock_hybrid_results
-            mock_hybrid_class.return_value = mock_hybrid_engine
-            
-            with patch('evaluation.pipeline.process_with_ai') as mock_process, \
-                 patch('evaluation.pipeline.load_vector_store') as mock_load_vector, \
-                 patch('evaluation.pipeline.search_documents_with_scores') as mock_search:
-                
-                # Mock dependencies
-                mock_process.return_value = ("Answer", True, [], {})
-                mock_vector_store = MagicMock()
-                mock_load_vector.return_value = mock_vector_store
-                mock_search.return_value = []
-                
-                response = pipeline._generate_rag_response("Test query")
-                
-                # Verify hybrid search was used
-                mock_hybrid_class.assert_called_once_with(mock_vector_store)
-                mock_hybrid_engine.search_hybrid.assert_called_once()
-                
-                # Verify hybrid contexts were included
-                assert "Hybrid context 1" in response["contexts"]
-                assert "Hybrid context 2" in response["contexts"]
+
+        # Simulate LangGraph returning the actual reranked contexts
+        mock_process.return_value = (
+            "Answer from RAG",
+            True,
+            [],
+            {
+                "retrieved_contexts": [
+                    "Hybrid context 1",
+                    "Hybrid context 2",
+                ]
+            }
+        )
+
+        response = pipeline._generate_rag_response("Test query")
+
+        # Contexts should come directly from the pipeline performance dict
+        assert "Hybrid context 1" in response["contexts"]
+        assert "Hybrid context 2" in response["contexts"]
+        assert len(response["contexts"]) == 2
