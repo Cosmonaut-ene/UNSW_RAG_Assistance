@@ -170,7 +170,7 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
     """
     try:
         # Perform document search
-        search_results = search_similar_documents(question, k=20)
+        search_results = search_similar_documents(question, k=50)
         
         print(f"[RAG] Processing {len(search_results)} retrieved chunks for query: {question[:50]}...")
         

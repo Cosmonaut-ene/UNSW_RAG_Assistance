@@ -134,17 +134,19 @@ def retrieve_node(state: RAGState) -> dict:
 
     hybrid_engine = HybridSearchEngine(
         vector_store=vector_store,
-        min_hybrid_score=70.0,
-        min_bm25_score=3.0,
+        min_hybrid_score=50.0,
+        min_bm25_score=1.0,
         min_rag_score=25.0
     )
+    hybrid_engine.rag_weight = 0.7
+    hybrid_engine.bm25_weight = 0.3
 
     hybrid_rag_results = [
         {"page_content": doc.get("page_content", ""), "metadata": doc.get("metadata", {})}
         for doc in rag_search_results
     ]
 
-    hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=30)
+    hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=50)
 
     # If we have a HyDE doc, do additional search and merge
     if hyde_doc:
@@ -185,10 +187,10 @@ def rerank_node(state: RAGState) -> dict:
 
     try:
         from rag.reranker import rerank_documents
-        reranked = rerank_documents(rewritten_query, documents, top_k=7)
+        reranked = rerank_documents(rewritten_query, documents, top_k=12)
     except Exception as e:
         print(f"[GraphRAG] Reranking failed: {e}")
-        reranked = documents[:7]
+        reranked = documents[:12]
 
     # Extract matched files
     matched_files = []
