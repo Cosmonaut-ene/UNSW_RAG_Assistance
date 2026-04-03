@@ -17,11 +17,12 @@ from services.query_processor import process_with_ai
 
 class EvaluationPipeline:
     """Automated pipeline for evaluating RAG system performance"""
-    
-    def __init__(self, use_hybrid_search: bool = True):
+
+    def __init__(self, use_hybrid_search: bool = True, retrieval_config=None):
         self.evaluator = RAGEvaluator()
         self.dataset = EvaluationDataset()
         self.use_hybrid_search = use_hybrid_search
+        self.retrieval_config = retrieval_config  # Optional RetrievalConfig for tuning
         self.evaluation_results = []
         
     def run_comprehensive_evaluation(self, 
@@ -123,17 +124,32 @@ class EvaluationPipeline:
         """
         
         try:
-            # Use existing query processor to generate response
-            answer, answered, matched_files, performance = process_with_ai(
-                query, 
-                session_id=f"eval_{int(time.time())}"
-            )
-            
-            # Use the actual contexts that were passed to the LLM during generation.
-            # These come directly from the LangGraph pipeline (post-rerank, post-CRAG),
-            # ensuring RAGAS evaluates faithfulness against the real retrieved context.
-            contexts = [ctx for ctx in performance.get("retrieved_contexts", []) if ctx and ctx.strip()]
-            
+            if self.retrieval_config is not None:
+                # Tuning mode: run retrieval-only with custom params, then call LLM
+                from evaluation.retrieval_tuner import RetrievalRunner
+                runner = RetrievalRunner()
+                docs = runner.run(query, self.retrieval_config)
+                contexts = [
+                    d.get("page_content", d.get("content", ""))
+                    for d in docs
+                    if d.get("page_content", d.get("content", "")).strip()
+                ]
+                # Still call process_with_ai for the answer, contexts come from tuner
+                answer, answered, matched_files, performance = process_with_ai(
+                    query,
+                    session_id=f"eval_tune_{int(time.time())}"
+                )
+            else:
+                # Normal mode: use existing query processor to generate response
+                answer, answered, matched_files, performance = process_with_ai(
+                    query,
+                    session_id=f"eval_{int(time.time())}"
+                )
+                # Use the actual contexts that were passed to the LLM during generation.
+                # These come directly from the LangGraph pipeline (post-rerank, post-CRAG),
+                # ensuring RAGAS evaluates faithfulness against the real retrieved context.
+                contexts = [ctx for ctx in performance.get("retrieved_contexts", []) if ctx and ctx.strip()]
+
             return {
                 "answer": answer,
                 "contexts": contexts[:10],  # Limit to top 10 contexts
