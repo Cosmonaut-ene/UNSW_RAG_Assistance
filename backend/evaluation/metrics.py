@@ -10,31 +10,47 @@ import traceback
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 
+import nest_asyncio
+nest_asyncio.apply()
+
 try:
     from ragas import evaluate
-    # RAGAS 0.2+ uses class-based metrics
-    try:
-        from ragas.metrics import (
-            Faithfulness,
-            AnswerRelevancy,
-            ContextRecall,
-            ContextPrecision,
-        )
-        faithfulness = Faithfulness()
-        answer_relevancy = AnswerRelevancy()
-        context_recall = ContextRecall()
-        context_precision = ContextPrecision()
-        RAGAS_V2 = True
-    except ImportError:
-        # Fallback to RAGAS 0.1.x style
-        from ragas.metrics import (
-            faithfulness,
-            answer_relevancy,
-            context_recall,
-            context_precision,
-        )
-        RAGAS_V2 = False
+    from ragas.metrics import (
+        Faithfulness,
+        AnswerRelevancy,
+        ContextRecall,
+        ContextPrecision,
+    )
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.embeddings import LangchainEmbeddingsWrapper
     from datasets import Dataset
+
+    # Configure RAGAS to use Gemini (LLM judge) + local HuggingFace embeddings
+    import os
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_huggingface import HuggingFaceEmbeddings
+
+    _ragas_llm = LangchainLLMWrapper(
+        ChatGoogleGenerativeAI(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+    )
+    # Use local embeddings to avoid Google Embedding API quota/availability issues
+    _ragas_embeddings = LangchainEmbeddingsWrapper(
+        HuggingFaceEmbeddings(
+            model_name=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True},
+        )
+    )
+
+    faithfulness = Faithfulness(llm=_ragas_llm)
+    answer_relevancy = AnswerRelevancy(llm=_ragas_llm, embeddings=_ragas_embeddings)
+    context_recall = ContextRecall(llm=_ragas_llm)
+    context_precision = ContextPrecision(llm=_ragas_llm)
+
+    RAGAS_V2 = True
     RAGAS_AVAILABLE = True
 except ImportError:
     print("RAGAS not available. Run: pip install ragas datasets")
@@ -104,14 +120,32 @@ class RAGEvaluator:
             if gt:
                 metrics_to_use.append(context_recall)
             
-            # Run evaluation
-            result = evaluate(dataset, metrics=metrics_to_use)
+            # Run evaluation with Gemini as judge LLM
+            result = evaluate(
+                dataset,
+                metrics=metrics_to_use,
+                llm=_ragas_llm,
+                embeddings=_ragas_embeddings,
+            )
             
-            # Extract scores
+            # Extract scores — RAGAS v0.2+ returns EvaluationResult, not a dict.
+            # Use to_pandas() to get per-sample scores, then average across the batch.
             scores = {}
-            for metric_name in result.keys():
-                if metric_name in ['faithfulness', 'answer_relevancy', 'context_recall', 'context_precision']:
-                    scores[metric_name] = float(result[metric_name])
+            metric_keys = ['faithfulness', 'answer_relevancy', 'context_recall', 'context_precision']
+            try:
+                df = result.to_pandas()
+                for metric_name in metric_keys:
+                    if metric_name in df.columns:
+                        val = df[metric_name].dropna().mean()
+                        if not (val != val):  # NaN check
+                            scores[metric_name] = float(val)
+            except Exception:
+                # Fallback: try dict-style access (older RAGAS versions)
+                for metric_name in metric_keys:
+                    try:
+                        scores[metric_name] = float(result[metric_name])
+                    except (KeyError, TypeError):
+                        pass
             
             evaluation_time = time.time() - start_time
             
