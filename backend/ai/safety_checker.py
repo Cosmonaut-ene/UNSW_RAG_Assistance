@@ -11,7 +11,7 @@ that could silently disagree with each other.
 """
 
 import json
-from .llm_client import get_genai_model
+from .llm_client import get_genai_model, CLASSIFICATION_MODEL
 from config.rag_config import RAG_CONFIG
 
 SAFETY_SCHEMA = {
@@ -63,7 +63,7 @@ def classify_query_safety(query: str) -> str:
     print(f"🛡️ [Safety Guardian] Classifying query: '{query[:50]}...'")
 
     try:
-        model = get_genai_model("gemini-2.5-flash")
+        model = get_genai_model(CLASSIFICATION_MODEL)
         prompt = _SAFETY_PROMPT_TEMPLATE.format(query=query)
 
         response = model.generate_content(

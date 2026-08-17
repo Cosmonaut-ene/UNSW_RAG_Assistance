@@ -27,6 +27,13 @@ _genai_models: dict = {}  # keyed by model name -- see get_genai_model()
 # all-MiniLM-L6-v2: 384-dim, ~22MB, fast on CPU, good retrieval quality
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
+# Lite model for cheap binary/enum classification calls (safety_check,
+# CRAG relevance grading) that don't need gemini-2.5-flash's generation
+# quality -- roughly 2x faster round-trip in manual testing (~1s vs ~2s
+# for a structured classification prompt). Generation and faithfulness
+# checking stay on gemini-2.5-flash, where output quality actually matters.
+CLASSIFICATION_MODEL = "gemini-3.1-flash-lite"
+
 def get_chat_llm(model: str = "gemini-2.5-flash") -> ChatGoogleGenerativeAI:
     """Get ChatGoogleGenerativeAI client (singleton)"""
     global _chat_llm_client
