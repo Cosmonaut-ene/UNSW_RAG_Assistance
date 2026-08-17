@@ -21,7 +21,7 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 # ========== LLM Client Singletons ==========
 _chat_llm_client = None
 _embeddings_client = None
-_genai_model = None
+_genai_models: dict = {}  # keyed by model name -- see get_genai_model()
 
 # Local embedding model — no API key, no rate limits
 # all-MiniLM-L6-v2: 384-dim, ~22MB, fast on CPU, good retrieval quality
@@ -52,17 +52,25 @@ def get_embeddings_client(model: str = None) -> HuggingFaceEmbeddings:
     return _embeddings_client
 
 def get_genai_model(model: str = "gemini-2.5-flash") -> genai.GenerativeModel:
-    """Get native Google GenerativeAI model (singleton)"""
-    global _genai_model
-    if _genai_model is None:
-        _genai_model = genai.GenerativeModel(model)
+    """
+    Get native Google GenerativeAI model (singleton per model name).
+
+    Previously cached in a single module-level variable regardless of the
+    `model` argument, so whichever model name was requested first silently
+    won for the rest of the process -- callers asking for a different model
+    later got the first one back with no error. Caching by name is what
+    lets different call sites (e.g. a lighter model for simple classification
+    tasks vs. the model used for generation) actually take effect.
+    """
+    if model not in _genai_models:
+        _genai_models[model] = genai.GenerativeModel(model)
         print(f"[AI] Initialized GenerativeModel with model: {model}")
-    return _genai_model
+    return _genai_models[model]
 
 def reset_clients():
     """Reset all client singletons (useful for testing)"""
-    global _chat_llm_client, _embeddings_client, _genai_model
+    global _chat_llm_client, _embeddings_client, _genai_models
     _chat_llm_client = None
     _embeddings_client = None
-    _genai_model = None
+    _genai_models = {}
     print("[AI] Reset all LLM clients")
