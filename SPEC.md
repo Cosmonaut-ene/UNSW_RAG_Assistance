@@ -89,7 +89,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 | # | 模块 | 分支建议 | 状态 | PR |
 |---|---|---|---|---|
 | A1 | 修复 `hyde_search` 内重复检索 rewritten_query | `fix/hyde-duplicate-search` | 已完成 | [#5](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/5) |
-| A2 | `generate_node` 去掉重复的安全检查/query改写 | `fix/generate-node-dedup` | 未开始 | |
+| A2 | `generate_node` 去掉重复的安全检查/query改写 | `fix/generate-node-dedup` | 已完成 | [#8](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/8) |
 | A3 | HyDE prompt 去掉编造课程代码的指令 | `fix/hyde-prompt-fabrication` | 未开始 | |
 
 ### 阶段 B · 检索质量根基
