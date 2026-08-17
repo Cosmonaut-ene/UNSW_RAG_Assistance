@@ -7,7 +7,13 @@ the old process_with_ai_pipeline()).
 
 from unittest.mock import patch, MagicMock
 
-from rag.graph_rag import generate_node, query_rewrite_node, route_after_rewrite
+from rag.graph_rag import (
+    generate_node,
+    query_rewrite_node,
+    route_after_rewrite,
+    grade_documents_node,
+    route_after_grading,
+)
 
 
 def make_state(**overrides):
@@ -24,7 +30,6 @@ def make_state(**overrides):
             {"page_content": "COMP9900 is a capstone project course.",
              "metadata": {"source": "docs/handbook.pdf"}}
         ],
-        "docs_relevant": True,
         "answer": "",
         "answered": False,
         "matched_files": [],
@@ -162,3 +167,40 @@ class TestRouteAfterRewrite:
         state = make_state()
         del state["query_intent"]
         assert route_after_rewrite(state) == "retrieve"
+
+
+class TestGradeDocumentsNode:
+    """
+    grade_documents_node now filters reranked_docs in place -- no separate
+    docs_relevant flag (D1 in SPEC.md).
+    """
+
+    @patch('rag.retrieval_evaluator.grade_documents')
+    def test_correct_grade_keeps_filtered_docs(self, mock_grade):
+        filtered = [{"page_content": "relevant chunk", "metadata": {}}]
+        mock_grade.return_value = ("CORRECT", filtered)
+
+        result = grade_documents_node(make_state())
+
+        assert result["reranked_docs"] == filtered
+        assert "crag_incorrect" not in result["processing_steps"]
+
+    @patch('rag.retrieval_evaluator.grade_documents')
+    def test_incorrect_grade_results_in_empty_docs(self, mock_grade):
+        mock_grade.return_value = ("INCORRECT", [])
+
+        result = grade_documents_node(make_state())
+
+        assert result["reranked_docs"] == []
+        assert "crag_incorrect" in result["processing_steps"]
+
+
+class TestRouteAfterGrading:
+    """Routing reads reranked_docs directly -- empty means nothing survived grading"""
+
+    def test_empty_reranked_docs_routes_to_fallback(self):
+        assert route_after_grading(make_state(reranked_docs=[])) == "fallback"
+
+    def test_nonempty_reranked_docs_routes_to_generate(self):
+        docs = [{"page_content": "a", "metadata": {}}]
+        assert route_after_grading(make_state(reranked_docs=docs)) == "generate"

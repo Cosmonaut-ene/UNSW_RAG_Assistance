@@ -40,7 +40,6 @@ class RAGState(TypedDict):
     query_intent: str  # "REWRITE" or "NAVIGATION", set by query_rewrite_node
     documents: List[Dict]
     reranked_docs: List[Dict]
-    docs_relevant: bool
 
     # Output
     answer: str
@@ -206,7 +205,13 @@ def rerank_node(state: RAGState) -> dict:
 
 
 def grade_documents_node(state: RAGState) -> dict:
-    """CRAG: Grade document relevance before generation"""
+    """
+    CRAG: grade each reranked document's relevance individually, keeping
+    only those judged relevant (D1 in SPEC.md). Previously only the top 5
+    of up to 12 reranked documents were evaluated, yet all 12 were approved
+    regardless of the verdict -- this now covers every document, and the
+    filtered list actually reflects the grading instead of being all-or-nothing.
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("crag_grading")
 
@@ -216,14 +221,11 @@ def grade_documents_node(state: RAGState) -> dict:
     from rag.retrieval_evaluator import grade_documents
     grade, filtered_docs = grade_documents(rewritten_query, reranked_docs)
 
-    docs_relevant = grade == "CORRECT"
-
-    if not docs_relevant:
+    if grade == "INCORRECT":
         steps.append("crag_incorrect")
 
     return {
-        "docs_relevant": docs_relevant,
-        "reranked_docs": filtered_docs if docs_relevant else reranked_docs,
+        "reranked_docs": filtered_docs,
         "processing_steps": steps,
     }
 
@@ -339,8 +341,11 @@ def route_after_rewrite(state: RAGState) -> str:
 
 
 def route_after_grading(state: RAGState) -> str:
-    if not state.get("docs_relevant", True):
-        return "fallback"
+    """
+    CRAG now filters reranked_docs in place (grade_documents_node), so an
+    empty list already means "nothing survived grading" -- no separate
+    docs_relevant flag needed to express the same thing.
+    """
     if not state.get("reranked_docs"):
         return "fallback"
     return "generate"
@@ -433,7 +438,6 @@ def invoke_rag_graph(query: str,
         "query_intent": "",
         "documents": [],
         "reranked_docs": [],
-        "docs_relevant": True,
         "answer": "",
         "answered": False,
         "matched_files": [],
