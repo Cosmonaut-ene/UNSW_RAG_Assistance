@@ -88,7 +88,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 
 | # | 模块 | 分支建议 | 状态 | PR |
 |---|---|---|---|---|
-| A1 | 修复 `hyde_search` 内重复检索 rewritten_query | `fix/hyde-duplicate-search` | 未开始 | |
+| A1 | 修复 `hyde_search` 内重复检索 rewritten_query | `fix/hyde-duplicate-search` | 已完成 | [#5](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/5) |
 | A2 | `generate_node` 去掉重复的安全检查/query改写 | `fix/generate-node-dedup` | 未开始 | |
 | A3 | HyDE prompt 去掉编造课程代码的指令 | `fix/hyde-prompt-fabrication` | 未开始 | |
 
@@ -130,6 +130,18 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 | I2 | GitHub Actions CI/CD（build/test/GHCR/手动部署 approve） | `feat/cicd-pipeline` | 未开始 | |
 | I3 | Terraform（VPS + DNS 供应） | `feat/terraform-vps` | 未开始 | |
 | I4 | OpenTelemetry tracing（RAG pipeline 每节点 span）+ Grafana Cloud 接入 | `feat/otel-tracing` | 未开始 | |
+
+### 计划外：开发环境修复（在验证 A1 时发现，已完成）
+
+不在最初的 17 项模块清单里，但是手动验证 A1 时发现 `docker-compose.dev.yml` 实际上从没真正跑通过，堵住了后面所有模块的手动测试，所以插队先修了：
+
+| 问题 | 状态 | PR |
+|---|---|---|
+| 前端/后端镜像名与生产 compose 撞车，`up` 静默复用旧镜像 | 已完成 | [#6](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/6) |
+| Vite 默认端口 5173 未与 compose 的 3000 映射对齐 | 已完成 | [#6](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/6) |
+| `/api` 代理硬编码 `localhost:8000`，端口和 host 都错 | 已完成 | [#6](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/6) |
+| 缺 `PYTHONUNBUFFERED=1`，`print()` 日志卡在缓冲区不刷新 | 已完成 | [#7](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/7) |
+| 知识库挂载路径指错（挂了两个空目录，真实数据目录 `data/knowledge_base` 没挂进容器） | 已完成 | [#7](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/7) |
 
 ---
 
