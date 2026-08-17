@@ -119,7 +119,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 
 | # | 模块 | 分支建议 | 状态 | PR | 依赖 |
 |---|---|---|---|---|---|
-| E1 | 所有 RAG 可调参数收敛到统一 config，禁止硬编码 | `refactor/unify-rag-config` | 未开始 | | 依赖 B1、D1、D3 |
+| E1 | 所有 RAG 可调参数收敛到统一 config，禁止硬编码 | `refactor/unify-rag-config` | 已完成 | [#19](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/19) | 依赖 B1、D1、D3 |
 | E2 | `fallback_node` 按 `fallback_reason` 定制 prompt，清理死代码 | `refactor/fallback-node-reasons` | 已完成 | [#18](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/18) | 依赖 C3、D1、D3 |
 
 ### 基础设施模块（技术栈引入，可与上面并行）
