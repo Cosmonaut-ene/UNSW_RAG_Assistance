@@ -165,6 +165,7 @@ class TestRAGEvaluator:
         assert "summary" in result
         assert "aggregate_scores" in result
         assert "performance_analysis" in result
+        assert "generation_latency_stats" in result
         assert "individual_results" in result
         assert "metadata" in result
         
@@ -196,6 +197,62 @@ class TestRAGEvaluator:
         assert aggregate["faithfulness_count"] == 3
         assert aggregate["answer_relevancy_count"] == 3
     
+    def test_calculate_latency_stats(self, evaluator):
+        """Test generation latency aggregation (distinct from RAGAS scoring time)"""
+        individual_results = [
+            {"rag_metadata": {"performance": {"response_time_ms": 1000}}},
+            {"rag_metadata": {"performance": {"response_time_ms": 2000}}},
+            {"rag_metadata": {"performance": {"response_time_ms": 3000}}},
+        ]
+
+        stats = evaluator._calculate_latency_stats(individual_results)
+
+        assert stats["sample_count"] == 3
+        assert stats["avg_response_time_ms"] == 2000.0
+        assert stats["min_response_time_ms"] == 1000.0
+        assert stats["max_response_time_ms"] == 3000.0
+        assert stats["median_response_time_ms"] == 2000.0
+
+    def test_calculate_latency_stats_ignores_missing_performance_data(self, evaluator):
+        """Results without rag_metadata (e.g. errored evaluations) must not crash the aggregation"""
+        individual_results = [
+            {"rag_metadata": {"performance": {"response_time_ms": 1500}}},
+            {"error": "something failed", "scores": {}},
+            {},
+        ]
+
+        stats = evaluator._calculate_latency_stats(individual_results)
+
+        assert stats["sample_count"] == 1
+        assert stats["avg_response_time_ms"] == 1500.0
+
+    def test_calculate_latency_stats_empty_results(self, evaluator):
+        stats = evaluator._calculate_latency_stats([])
+
+        assert stats == {"sample_count": 0}
+
+    @patch('evaluation.metrics.evaluate')
+    @patch('evaluation.metrics.Dataset')
+    def test_evaluate_batch_carries_rag_metadata_into_individual_results(self, mock_dataset, mock_evaluate, evaluator, mock_ragas_result):
+        """evaluate_response() itself knows nothing about timing -- evaluate_batch must
+        thread rag_metadata through from the input so latency stats have something to read"""
+        mock_dataset.from_dict.return_value = MagicMock()
+        mock_evaluate.return_value = mock_ragas_result
+
+        evaluation_data = [{
+            "query": "What is COMP9900?",
+            "generated_answer": "COMP9900 is a capstone project course.",
+            "retrieved_contexts": ["Context 1"],
+            "ground_truth_answer": "Ground truth answer 1",
+            "rag_metadata": {"performance": {"response_time_ms": 4200}},
+        }]
+
+        result = evaluator.evaluate_batch(evaluation_data)
+
+        assert result["individual_results"][0]["rag_metadata"]["performance"]["response_time_ms"] == 4200
+        assert result["generation_latency_stats"]["sample_count"] == 1
+        assert result["generation_latency_stats"]["avg_response_time_ms"] == 4200.0
+
     def test_analyze_performance(self, evaluator):
         """Test performance analysis"""
         
