@@ -113,7 +113,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 |---|---|---|---|---|---|
 | D1 | 重写 CRAG 为逐篇结构化过滤，覆盖全部候选 | `refactor/crag-per-chunk-filtering` | 已完成（真实评测：precision/faithfulness/relevancy 提升，recall 下降，是权衡不是单纯变好） | [#15](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/15) | — |
 | D2 | 统一两份生成 prompt，修正 INSUFFICIENT_CONTEXT 定义冲突 | `refactor/unify-generation-prompts` | 已完成 | [#16](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/16) | — |
-| D3 | 重写 `hallucination_check` 为忠实度+引用校验 | `refactor/hallucination-check-rewrite` | 未开始 | | 依赖 D2 |
+| D3 | 重写 `hallucination_check` 为忠实度+引用校验 | `refactor/hallucination-check-rewrite` | 已完成 | [#17](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/17) | 依赖 D2 |
 
 ### 阶段 E · 收尾整合
 
