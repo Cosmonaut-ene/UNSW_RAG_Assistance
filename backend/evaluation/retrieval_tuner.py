@@ -128,14 +128,14 @@ class RetrievalRunner:
         Run retrieval with the given config and return the final reranked docs.
         """
         # 1. Vector search
-        from rag.search_engine import search_documents_with_scores
+        from rag.search_engine import search_documents_with_scores, normalize_similarity_score
         raw_results = search_documents_with_scores(query, k=config.vector_k)
         rag_results = [
             {
                 "page_content": doc.page_content,
-                "metadata": {**doc.metadata, "rag_score": 100},
+                "metadata": {**doc.metadata, "rag_score": normalize_similarity_score(score)},
             }
-            for doc, _score in raw_results
+            for doc, score in raw_results
         ]
 
         # 2. BM25 search (reuse cached index)
@@ -162,14 +162,15 @@ class RetrievalRunner:
         seen: set = set()
         all_docs: List[Dict] = []
 
-        # Add RAG docs
+        # Add RAG docs (rag_score already set to the real, normalized
+        # similarity score by run() -- do not overwrite it here)
         for r in rag_results:
             content = r.get("page_content", "")
             key = content[:100]
             if key and key not in seen:
                 seen.add(key)
                 r.setdefault("metadata", {})
-                r["metadata"]["rag_score"] = 100
+                r["metadata"].setdefault("rag_score", 0)
                 r["metadata"]["bm25_score"] = 0
                 all_docs.append(r)
 
