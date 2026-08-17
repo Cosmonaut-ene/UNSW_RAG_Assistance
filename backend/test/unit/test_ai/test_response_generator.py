@@ -6,7 +6,7 @@ Tests AI response generation with context and conversation history
 import pytest
 from unittest.mock import patch, MagicMock
 
-from ai.response_generator import generate_fallback_response, build_context_and_sources
+from ai.response_generator import generate_fallback_response, build_context_and_sources, generate_response
 # Mock responses for testing
 MOCK_RESPONSES = {
     "greeting": {
@@ -450,3 +450,65 @@ class TestBuildContextAndSourcesDelimiters:
         delimiter_pos = context.index("--- Retrieved Document 1 ---")
         content_pos = context.index("Unique marker content XYZ")
         assert delimiter_pos < content_pos
+
+
+class TestGenerateResponse:
+    """
+    generate_response() now always uses the single unified template with a
+    conditional history_section (D2 in SPEC.md), instead of picking between
+    two separately-maintained templates.
+    """
+
+    @patch('ai.response_generator.get_chat_llm')
+    def test_uses_provided_context_and_question(self, mock_get_chat_llm):
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "COMP9900 is a capstone project course."
+        mock_get_chat_llm.return_value = mock_llm
+
+        context = "COMP9900 is a capstone project course."
+        question = "What is COMP9900?"
+
+        result = generate_response(context, question)
+
+        assert result == "COMP9900 is a capstone project course."
+        prompt_sent = mock_llm.invoke.call_args[0][0]
+        assert context in prompt_sent
+        assert question in prompt_sent
+
+    @patch('ai.response_generator.get_chat_llm')
+    def test_no_history_produces_empty_history_section(self, mock_get_chat_llm):
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "answer"
+        mock_get_chat_llm.return_value = mock_llm
+
+        generate_response("context", "question", formatted_history="")
+
+        prompt_sent = mock_llm.invoke.call_args[0][0]
+        assert "OUR CONVERSATION SO FAR" not in prompt_sent
+
+    @patch('ai.response_generator.get_chat_llm')
+    def test_history_included_when_provided(self, mock_get_chat_llm):
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "answer"
+        mock_get_chat_llm.return_value = mock_llm
+
+        formatted_history = "User: What is COMP9900?\nAssistant: A capstone project course."
+
+        generate_response("context", "question", formatted_history=formatted_history)
+
+        prompt_sent = mock_llm.invoke.call_args[0][0]
+        assert "OUR CONVERSATION SO FAR" in prompt_sent
+        assert formatted_history in prompt_sent
+
+    @patch('ai.response_generator.get_chat_llm')
+    def test_prompt_instructs_not_to_use_general_knowledge(self, mock_get_chat_llm):
+        """D2's product decision: generate_node must not self-fallback to general knowledge"""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "answer"
+        mock_get_chat_llm.return_value = mock_llm
+
+        generate_response("context", "question")
+
+        prompt_sent = mock_llm.invoke.call_args[0][0]
+        assert "general knowledge" in prompt_sent.lower()
+        assert "INSUFFICIENT_CONTEXT" in prompt_sent
