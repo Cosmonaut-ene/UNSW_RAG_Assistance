@@ -5,6 +5,7 @@ Implements comprehensive evaluation for the UNSW CSE chatbot RAG system
 
 import json
 import math
+import statistics
 import time
 import traceback
 from typing import Dict, List, Any, Optional, Tuple
@@ -221,14 +222,22 @@ class RAGEvaluator:
                         retrieved_contexts=item["retrieved_contexts"],
                         ground_truth=item.get("ground_truth", item.get("ground_truth_answer", item.get("expected_answer")))
                     )
-                    
+
+                    # Carry the response-generation performance data (response_time_ms
+                    # etc.) through into individual_results -- evaluate_response() only
+                    # deals with RAGAS scores and has no way to know it, but it's already
+                    # sitting on the input item from pipeline.py's _generate_rag_response.
+                    # Without this, generation latency has no path into the final report.
+                    if "rag_metadata" in item:
+                        result["rag_metadata"] = item["rag_metadata"]
+
                     if "error" not in result:
                         successful_evaluations += 1
                     else:
                         failed_evaluations += 1
-                        
+
                     individual_results.append(result)
-                    
+
                 except Exception as e:
                     print(f"Failed to evaluate item: {e}")
                     failed_evaluations += 1
@@ -237,9 +246,10 @@ class RAGEvaluator:
                         "error": str(e),
                         "scores": {}
                     })
-        
+
         # Calculate aggregate metrics
         aggregate_scores = self._calculate_aggregate_scores(individual_results)
+        latency_stats = self._calculate_latency_stats(individual_results)
         evaluation_time = time.time() - batch_start_time
         
         # Create comprehensive report
@@ -254,6 +264,11 @@ class RAGEvaluator:
             },
             "aggregate_scores": aggregate_scores,
             "performance_analysis": self._analyze_batch_performance(aggregate_scores),
+            # Distinct from summary.average_time_per_evaluation above, which measures
+            # how long RAGAS *scoring* took -- this measures how long the RAG system
+            # itself took to *generate* each answer (response_time_ms from
+            # services.query_processor.process_with_ai's performance dict).
+            "generation_latency_stats": latency_stats,
             "individual_results": individual_results,
             "metadata": {
                 "timestamp": datetime.now().isoformat(),
@@ -289,9 +304,40 @@ class RAGEvaluator:
             if score_counts[metric] > 0:
                 aggregate_scores[metric] = round(score_sums[metric] / score_counts[metric], 4)
                 aggregate_scores[f"{metric}_count"] = score_counts[metric]
-        
+
         return aggregate_scores
-    
+
+    def _calculate_latency_stats(self, results: List[Dict]) -> Dict[str, Any]:
+        """
+        Aggregate RAG *generation* latency (response_time_ms, from
+        services.query_processor.process_with_ai's performance dict, carried
+        through via evaluate_batch()'s rag_metadata passthrough) across all
+        evaluated queries. This is about how long the RAG system took to
+        answer, not how long RAGAS took to score it -- quality metrics alone
+        don't tell you whether the system is usable.
+        """
+        response_times = []
+        for result in results:
+            performance = result.get("rag_metadata", {}).get("performance", {})
+            response_time_ms = performance.get("response_time_ms")
+            if isinstance(response_time_ms, (int, float)):
+                response_times.append(response_time_ms)
+
+        if not response_times:
+            return {"sample_count": 0}
+
+        sorted_times = sorted(response_times)
+
+        return {
+            "sample_count": len(response_times),
+            "avg_response_time_ms": round(statistics.mean(response_times), 1),
+            "median_response_time_ms": round(statistics.median(response_times), 1),
+            "min_response_time_ms": round(min(response_times), 1),
+            "max_response_time_ms": round(max(response_times), 1),
+            "p95_response_time_ms": round(sorted_times[int(len(sorted_times) * 0.95)], 1)
+                                     if len(sorted_times) > 1 else round(sorted_times[0], 1),
+        }
+
     def _analyze_performance(self, scores: Dict[str, float]) -> Dict[str, str]:
         """Analyze performance level for individual evaluation"""
         
