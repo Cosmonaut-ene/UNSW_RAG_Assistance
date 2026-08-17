@@ -20,7 +20,13 @@ class HybridSearchEngine:
             if 'metadata' not in result:
                 result['metadata'] = {}
             result['metadata']['search_type'] = 'rag'
-            result['metadata']['rag_score'] = 100  # RAG defaults to full score as top results
+            # Use the real similarity score if the caller already computed one
+            # (process_with_rag_detailed does, via search_documents_with_scores +
+            # normalize_similarity_score). Only fall back to a flat 100 when no
+            # real score is available, so this doesn't silently break callers
+            # that still pass in score-less results.
+            if 'rag_score' not in result['metadata']:
+                result['metadata']['rag_score'] = 100
             result['metadata']['bm25_score'] = 0
         
         # Standardize BM25 results format

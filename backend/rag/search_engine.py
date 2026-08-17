@@ -88,6 +88,28 @@ def search_similar_documents(query: str, k: int = 20) -> List[Document]:
         print(f"[SearchEngine] Error during similarity search: {e}")
         return []
 
+def normalize_similarity_score(distance: float) -> float:
+    """
+    Convert a Chroma L2 distance (as returned by similarity_search_with_score)
+    into a 0-100 "higher is better" score, on the same scale BM25 scores are
+    normalized to elsewhere in this pipeline (see hybrid_search.py).
+
+    Embeddings are unit-normalized (encode_kwargs={"normalize_embeddings": True}
+    in ai/llm_client.py's get_embeddings_client), so for unit vectors a, b:
+    ||a - b||^2 = 2 - 2*cos_sim(a, b). Solving for cosine similarity and
+    clamping to [0, 1] before scaling to [0, 100].
+
+    Args:
+        distance: L2 distance from Chroma (lower = more similar)
+
+    Returns:
+        Similarity score in [0, 100] (higher = more similar)
+    """
+    cosine_similarity = 1 - (distance / 2)
+    clamped = max(0.0, min(1.0, cosine_similarity))
+    return clamped * 100
+
+
 def search_documents_with_scores(query: str, k: int = 20) -> List[tuple]:
     """
     Search for similar documents with similarity scores
