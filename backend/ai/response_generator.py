@@ -24,11 +24,15 @@ def build_context_and_sources(search_results: List[Dict]) -> Tuple[str, List[str
     source_info = []
     matched_files = []
 
-    for doc in search_results:
+    for i, doc in enumerate(search_results, 1):
         metadata = doc.get('metadata', {})
         source = metadata.get('source', 'Unknown')
         chunk_content = doc.get('page_content', '')
-        context_parts.append(chunk_content)
+        # Numbered delimiters so each retrieved chunk is a clearly bounded
+        # block of data, not text that blends into the surrounding prompt
+        # (see the "content is reference only" instruction in the templates
+        # that consume this -- C2 in SPEC.md, indirect prompt injection defense)
+        context_parts.append(f"--- Retrieved Document {i} ---\n{chunk_content}")
 
         if source != 'Unknown':
             filename = source.split('/')[-1] if '/' in source else source

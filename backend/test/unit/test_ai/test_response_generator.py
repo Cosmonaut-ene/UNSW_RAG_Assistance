@@ -422,3 +422,31 @@ class TestBuildContextAndSources:
 
         assert context == ""
         assert matched_files == []
+
+
+class TestBuildContextAndSourcesDelimiters:
+    """
+    Each retrieved chunk must be wrapped in a clear, numbered delimiter so
+    it reads as a bounded block of data rather than blending into
+    surrounding prompt text (C2 in SPEC.md, indirect injection defense).
+    """
+
+    def test_chunks_are_numbered_and_delimited(self):
+        search_results = [
+            {"page_content": "First chunk content", "metadata": {}},
+            {"page_content": "Second chunk content", "metadata": {}},
+        ]
+
+        context, _ = build_context_and_sources(search_results)
+
+        assert "--- Retrieved Document 1 ---" in context
+        assert "--- Retrieved Document 2 ---" in context
+
+    def test_delimiter_precedes_its_own_content(self):
+        search_results = [{"page_content": "Unique marker content XYZ", "metadata": {}}]
+
+        context, _ = build_context_and_sources(search_results)
+
+        delimiter_pos = context.index("--- Retrieved Document 1 ---")
+        content_pos = context.index("Unique marker content XYZ")
+        assert delimiter_pos < content_pos
