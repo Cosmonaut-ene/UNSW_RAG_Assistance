@@ -4,13 +4,17 @@ LangGraph Agentic RAG - Graph-based orchestration for the RAG pipeline.
 Replaces the if/elif chain in query_processor.py with a structured graph.
 
 Graph flow:
-  safety_check -> query_rewrite -> hyde_generate -> retrieve -> rerank
+  safety_check -> query_rewrite -> retrieve -> rerank
   -> grade_documents -> generate -> hallucination_check -> output
 
+query_rewrite now also produces the HyDE hypothetical document in the same
+structured call (previously a separate hyde_generate node/LLM call -- see
+C3 in SPEC.md). Off-topic queries are rejected by safety_check_node itself
+(OFF_TOPIC classification, C1) and never reach query_rewrite at all.
+
 Fallback paths:
-  - safety_check UNSAFE -> return warning
-  - query_rewrite NAVIGATION -> fallback LLM
-  - query_rewrite REDIRECT -> return warning
+  - safety_check not SAFE -> return warning
+  - query_rewrite NAVIGATION intent -> fallback LLM
   - grade_documents INCORRECT -> fallback LLM
   - hallucination_check FAIL -> regenerate (max 1 retry)
 """
@@ -33,6 +37,7 @@ class RAGState(TypedDict):
     # Processing
     rewritten_query: str
     hyde_doc: str
+    query_intent: str  # "REWRITE" or "NAVIGATION", set by query_rewrite_node
     documents: List[Dict]
     reranked_docs: List[Dict]
     docs_relevant: bool
@@ -75,36 +80,28 @@ def safety_check_node(state: RAGState) -> dict:
 
 
 def query_rewrite_node(state: RAGState) -> dict:
-    """Rewrite the query with conversation context"""
+    """
+    Resolve references, detect navigation intent, and generate the HyDE
+    hypothetical document -- all in one structured call (C3 in SPEC.md).
+    Previously two separate LLM round trips (query_rewrite then
+    hyde_generate); both only need the original query + history as input
+    and don't depend on each other's output, so there was no reason to
+    keep them as separate nodes/calls.
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("query_rewriting")
 
-    from ai.query_enhancer import rewrite_query_with_context
+    from ai.query_enhancer import analyze_query_with_context
     conversation_history = state.get("conversation_history", [])
-    rewritten = rewrite_query_with_context(state["query"], conversation_history)
+    result = analyze_query_with_context(state["query"], conversation_history)
 
     print(f"[GraphRAG] Original: {state['query']}")
-    print(f"[GraphRAG] Rewritten: {rewritten}")
+    print(f"[GraphRAG] Intent: {result['intent']}, Rewritten: {result['rewritten_query']}")
 
     return {
-        "rewritten_query": rewritten,
-        "processing_steps": steps,
-    }
-
-
-def hyde_generate_node(state: RAGState) -> dict:
-    """Generate hypothetical document for improved retrieval"""
-    steps = list(state.get("processing_steps", []))
-    steps.append("hyde_generation")
-
-    from rag.hyde import generate_hypothetical_document
-    hyde_doc = generate_hypothetical_document(
-        state.get("rewritten_query", state["query"]),
-        state.get("history", "")
-    )
-
-    return {
-        "hyde_doc": hyde_doc or "",
+        "rewritten_query": result["rewritten_query"],
+        "hyde_doc": result["hypothetical_document"],
+        "query_intent": result["intent"],
         "processing_steps": steps,
     }
 
@@ -336,15 +333,9 @@ def route_after_safety(state: RAGState) -> str:
 
 
 def route_after_rewrite(state: RAGState) -> str:
-    rewritten = state.get("rewritten_query", "")
-
-    if rewritten.strip() == "NAVIGATION_QUERY":
+    if state.get("query_intent") == "NAVIGATION":
         return "fallback"
-
-    if rewritten.startswith("REDIRECT:") or "can only help with unsw-related questions" in rewritten.lower():
-        return END
-
-    return "hyde_generate"
+    return "retrieve"
 
 
 def route_after_grading(state: RAGState) -> str:
@@ -375,7 +366,6 @@ def build_rag_graph() -> StateGraph:
     # Add nodes
     graph.add_node("safety_check", safety_check_node)
     graph.add_node("query_rewrite", query_rewrite_node)
-    graph.add_node("hyde_generate", hyde_generate_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("rerank", rerank_node)
     graph.add_node("grade_documents", grade_documents_node)
@@ -389,7 +379,6 @@ def build_rag_graph() -> StateGraph:
     # Add edges
     graph.add_conditional_edges("safety_check", route_after_safety)
     graph.add_conditional_edges("query_rewrite", route_after_rewrite)
-    graph.add_edge("hyde_generate", "retrieve")
     graph.add_edge("retrieve", "rerank")
     graph.add_edge("rerank", "grade_documents")
     graph.add_conditional_edges("grade_documents", route_after_grading)
@@ -441,6 +430,7 @@ def invoke_rag_graph(query: str,
         "conversation_history": conversation_history or [],
         "rewritten_query": "",
         "hyde_doc": "",
+        "query_intent": "",
         "documents": [],
         "reranked_docs": [],
         "docs_relevant": True,
@@ -456,22 +446,6 @@ def invoke_rag_graph(query: str,
     result = graph.invoke(initial_state)
 
     response_time = int((time.time() - start_time) * 1000)
-
-    # Handle REDIRECT case from query rewrite
-    rewritten = result.get("rewritten_query", "")
-    if rewritten.startswith("REDIRECT:"):
-        answer = rewritten[9:].strip()
-        return {
-            "answer": answer,
-            "answered": True,
-            "matched_files": [],
-            "performance": {
-                "response_time_ms": response_time,
-                "processing_steps": result.get("processing_steps", []),
-                "cache_hit": False,
-                "warning_returned": True,
-            }
-        }
 
     return {
         "answer": result.get("answer", ""),

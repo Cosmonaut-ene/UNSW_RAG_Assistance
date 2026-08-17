@@ -7,7 +7,7 @@ the old process_with_ai_pipeline()).
 
 from unittest.mock import patch, MagicMock
 
-from rag.graph_rag import generate_node
+from rag.graph_rag import generate_node, query_rewrite_node, route_after_rewrite
 
 
 def make_state(**overrides):
@@ -18,6 +18,7 @@ def make_state(**overrides):
         "conversation_history": [],
         "rewritten_query": "Introduce COMP9900",
         "hyde_doc": "",
+        "query_intent": "REWRITE",
         "documents": [],
         "reranked_docs": [
             {"page_content": "COMP9900 is a capstone project course.",
@@ -42,7 +43,7 @@ class TestGenerateNode:
     @patch('ai.response_generator.generate_response')
     @patch('ai.response_generator.build_context_and_sources')
     @patch('ai.safety_checker.is_query_safe_by_gemini')
-    @patch('ai.query_enhancer.rewrite_query_with_context')
+    @patch('ai.query_enhancer.analyze_query_with_context')
     def test_generate_node_does_not_call_safety_check_again(
         self, mock_rewrite, mock_safety, mock_build_context, mock_generate
     ):
@@ -56,7 +57,7 @@ class TestGenerateNode:
     @patch('ai.response_generator.generate_response')
     @patch('ai.response_generator.build_context_and_sources')
     @patch('ai.safety_checker.is_query_safe_by_gemini')
-    @patch('ai.query_enhancer.rewrite_query_with_context')
+    @patch('ai.query_enhancer.analyze_query_with_context')
     def test_generate_node_does_not_call_query_rewrite_again(
         self, mock_rewrite, mock_safety, mock_build_context, mock_generate
     ):
@@ -109,3 +110,55 @@ class TestGenerateNode:
 
         assert result["answered"] is True
         assert result["answer"] == "answer"
+
+
+class TestQueryRewriteNode:
+    """
+    query_rewrite_node now produces rewritten_query, hyde_doc, and
+    query_intent all from one call to analyze_query_with_context() (C3 in
+    SPEC.md) -- previously hyde_doc came from a separate hyde_generate node.
+    """
+
+    @patch('ai.query_enhancer.analyze_query_with_context')
+    def test_populates_rewritten_query_hyde_doc_and_intent_from_single_call(self, mock_analyze):
+        mock_analyze.return_value = {
+            "intent": "REWRITE",
+            "rewritten_query": "Introduce COMP9900",
+            "hypothetical_document": "COMP9900 is a capstone project course.",
+        }
+
+        result = query_rewrite_node(make_state())
+
+        assert result["rewritten_query"] == "Introduce COMP9900"
+        assert result["hyde_doc"] == "COMP9900 is a capstone project course."
+        assert result["query_intent"] == "REWRITE"
+        mock_analyze.assert_called_once()
+
+    @patch('ai.query_enhancer.analyze_query_with_context')
+    def test_navigation_intent_passed_through(self, mock_analyze):
+        mock_analyze.return_value = {
+            "intent": "NAVIGATION",
+            "rewritten_query": "",
+            "hypothetical_document": "",
+        }
+
+        result = query_rewrite_node(make_state(query="Where is J17?"))
+
+        assert result["query_intent"] == "NAVIGATION"
+        assert result["hyde_doc"] == ""
+
+
+class TestRouteAfterRewrite:
+    """Routing now reads the structured query_intent field, not a magic string"""
+
+    def test_navigation_intent_routes_to_fallback(self):
+        assert route_after_rewrite(make_state(query_intent="NAVIGATION")) == "fallback"
+
+    def test_rewrite_intent_routes_to_retrieve(self):
+        assert route_after_rewrite(make_state(query_intent="REWRITE")) == "retrieve"
+
+    def test_missing_intent_defaults_to_retrieve(self):
+        """Should never silently misroute to fallback just because the field is absent"""
+        state = make_state()
+        del state["query_intent"]
+        assert route_after_rewrite(state) == "retrieve"
