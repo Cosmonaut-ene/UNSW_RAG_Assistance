@@ -11,7 +11,8 @@ single structured call and keeps only the ones judged relevant.
 import json
 from unittest.mock import patch, MagicMock
 
-from rag.retrieval_evaluator import grade_documents, CHUNK_TRUNCATION_LENGTH
+from rag.retrieval_evaluator import grade_documents
+from config.rag_config import RAG_CONFIG
 
 
 def make_docs(n, prefix="Document"):
@@ -93,7 +94,7 @@ class TestGradeDocumentsCoversAllDocuments:
 
         prompt_sent = mock_model.generate_content.call_args[0][0]
         for i in range(12):
-            assert f"Document {i} content"[:CHUNK_TRUNCATION_LENGTH] in prompt_sent
+            assert f"Document {i} content"[:RAG_CONFIG.crag_chunk_truncation] in prompt_sent
 
 
 class TestGradeDocumentsStructuredOutput:

@@ -12,8 +12,7 @@ that could silently disagree with each other.
 
 import json
 from .llm_client import get_genai_model
-
-MAX_QUERY_LENGTH = 10000
+from config.rag_config import RAG_CONFIG
 
 SAFETY_SCHEMA = {
     "type": "object",
@@ -57,7 +56,7 @@ def classify_query_safety(query: str) -> str:
         print("🛡️ [Safety Guardian] Empty/None query - allowing")
         return "SAFE"
 
-    if len(query) > MAX_QUERY_LENGTH:
+    if len(query) > RAG_CONFIG.max_query_length:
         print(f"🚫 [Safety Guardian] Query too long ({len(query)} chars)")
         return "HARMFUL"
 

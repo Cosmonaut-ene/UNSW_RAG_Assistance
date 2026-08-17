@@ -9,6 +9,8 @@ from typing import List, Dict
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from config.rag_config import RAG_CONFIG
+
 # Load English spaCy model for PDF processing
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -20,8 +22,12 @@ except OSError:
 # Enhanced chunking configuration
 CHUNK_CONFIG = {
     # Merging parameters (for small sections)
-    'target_chunk_size': 600,           # Target for merged chunks
-    'min_chunk_size': 200,              # Minimum before forcing merge (realistic for varied content)
+    # target_chunk_size / min_chunk_size come from RAG_CONFIG (E1 in SPEC.md)
+    # -- other RAG modules (CRAG grading, reranking) size their truncation
+    # limits relative to these, so they need to stay in sync with a single
+    # source rather than duplicating the numbers here.
+    'target_chunk_size': RAG_CONFIG.target_chunk_size,
+    'min_chunk_size': RAG_CONFIG.min_chunk_size,       # Minimum before forcing merge (realistic for varied content)
     'merge_threshold': 1200,            # Merge sections smaller than this
     
     # Large section handling

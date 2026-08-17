@@ -6,6 +6,7 @@ Usage:
   python scripts/run_tuner.py --mode random [--n 50]
   python scripts/run_tuner.py --mode grid
   python scripts/run_tuner.py --mode validate [--top 5] [--sample-size 30]
+  python scripts/run_tuner.py --mode apply [--rank 1]
 """
 
 import argparse
@@ -20,9 +21,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Retrieval parameter tuner")
     parser.add_argument(
         "--mode",
-        choices=["random", "grid", "validate"],
+        choices=["random", "grid", "validate", "apply"],
         required=True,
         help="Tuning mode",
+    )
+    parser.add_argument(
+        "--rank",
+        type=int,
+        default=1,
+        help="Which validated candidate to promote to production (--mode apply only, 1 = best)",
     )
     parser.add_argument(
         "--n",
@@ -59,6 +66,10 @@ def main() -> int:
     elif args.mode == "validate":
         print(f"=== Phase 3: RAGAS Validation (top {args.top}, sample={args.sample_size}) ===")
         tuner.run_ragas_validation(top_k=args.top, sample_size=args.sample_size)
+
+    elif args.mode == "apply":
+        print(f"=== Phase 4: Apply rank {args.rank} config to production ===")
+        tuner.apply_best_config(rank=args.rank)
 
     return 0
 

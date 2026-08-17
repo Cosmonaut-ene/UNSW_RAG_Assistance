@@ -20,7 +20,7 @@ import json
 import re
 from typing import Dict, List, Tuple
 
-CONTEXT_TRUNCATION_LENGTH = 700  # consistent with CRAG's per-chunk truncation (D1)
+from config.rag_config import RAG_CONFIG
 
 FAITHFULNESS_SCHEMA = {
     "type": "object",
@@ -95,7 +95,7 @@ def check_faithfulness(answer: str, context_docs: List[Dict], content_key: str =
         model = get_genai_model("gemini-2.5-flash")
 
         context_text = "\n\n".join(
-            doc.get(content_key, doc.get("content", ""))[:CONTEXT_TRUNCATION_LENGTH]
+            doc.get(content_key, doc.get("content", ""))[:RAG_CONFIG.faithfulness_context_truncation]
             for doc in context_docs
         )
 

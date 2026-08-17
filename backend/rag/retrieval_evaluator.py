@@ -14,13 +14,15 @@ Grades:
 import json
 from typing import List, Dict, Tuple
 
-# Per-chunk truncation for the relevance-grading prompt. text_splitter.py's
-# target_chunk_size is 600 chars, so 700 covers the large majority of real
-# chunks in full while keeping the combined prompt size bounded even when
-# grading all ~12 reranked documents in a single call (unlike rerank.py's
-# 1500-char truncation, which is sized for scoring one chunk at a time and
-# rarely triggers against 600-char chunks anyway).
-CHUNK_TRUNCATION_LENGTH = 700
+from config.rag_config import RAG_CONFIG
+
+# Per-chunk truncation for the relevance-grading prompt lives in
+# RAG_CONFIG.crag_chunk_truncation (E1 in SPEC.md). text_splitter.py's
+# target_chunk_size is 600 chars, so the 700-char default covers the large
+# majority of real chunks in full while keeping the combined prompt size
+# bounded even when grading all ~12 reranked documents in a single call
+# (unlike rerank.py's 1500-char truncation, which is sized for scoring one
+# chunk at a time and rarely triggers against 600-char chunks anyway).
 
 GRADE_SCHEMA = {
     "type": "object",
@@ -63,7 +65,7 @@ def grade_documents(query: str,
         snippets = []
         for i, doc in enumerate(documents):
             content = doc.get(content_key, doc.get("content", ""))
-            snippet = content[:CHUNK_TRUNCATION_LENGTH] if content else "(empty)"
+            snippet = content[:RAG_CONFIG.crag_chunk_truncation] if content else "(empty)"
             snippets.append(f"[{i}] {snippet}")
 
         context_text = "\n\n".join(snippets)

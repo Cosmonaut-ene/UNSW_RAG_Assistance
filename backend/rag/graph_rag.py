@@ -127,6 +127,7 @@ def retrieve_node(state: RAGState) -> dict:
     # Hybrid search (RAG + BM25)
     steps.append("hybrid_search")
     from rag.hybrid_search import HybridSearchEngine
+    from config.rag_config import RAG_CONFIG
     try:
         from rag import load_vector_store
         vector_store = load_vector_store()
@@ -134,21 +135,17 @@ def retrieve_node(state: RAGState) -> dict:
         print(f"[GraphRAG] Could not load vector store: {e}")
         vector_store = None
 
-    hybrid_engine = HybridSearchEngine(
-        vector_store=vector_store,
-        min_hybrid_score=50.0,
-        min_bm25_score=1.0,
-        min_rag_score=25.0
-    )
-    hybrid_engine.rag_weight = 0.7
-    hybrid_engine.bm25_weight = 0.3
+    # No thresholds/weights passed explicitly -- HybridSearchEngine's own
+    # defaults already come from RAG_CONFIG (E1), so there's nothing to
+    # override here and no way for this call site to drift from it again.
+    hybrid_engine = HybridSearchEngine(vector_store=vector_store)
 
     hybrid_rag_results = [
         {"page_content": doc.get("page_content", ""), "metadata": doc.get("metadata", {})}
         for doc in rag_search_results
     ]
 
-    hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=50)
+    hybrid_results = hybrid_engine.search_hybrid(rewritten_query, hybrid_rag_results, max_results=RAG_CONFIG.max_hybrid_results)
 
     # If we have a HyDE doc, do additional search and merge
     if hyde_doc:
@@ -157,7 +154,7 @@ def retrieve_node(state: RAGState) -> dict:
             from rag.hyde import hyde_search
             from rag.search_engine import search_similar_documents
 
-            hyde_extra = hyde_search(hyde_doc, search_similar_documents, k=10)
+            hyde_extra = hyde_search(hyde_doc, search_similar_documents, k=RAG_CONFIG.hyde_search_k)
             # Convert to dict format and add to results
             seen_content = set(r.get("page_content", "")[:100] for r in hybrid_results)
             for doc in hyde_extra:
@@ -187,12 +184,14 @@ def rerank_node(state: RAGState) -> dict:
     documents = state.get("documents", [])
     rewritten_query = state.get("rewritten_query", state["query"])
 
+    from config.rag_config import RAG_CONFIG
     try:
         from rag.reranker import rerank_documents
-        reranked = rerank_documents(rewritten_query, documents, top_k=12)
+        # top_k not passed -- rerank_documents() defaults to RAG_CONFIG.reranker_top_k itself (E1)
+        reranked = rerank_documents(rewritten_query, documents)
     except Exception as e:
         print(f"[GraphRAG] Reranking failed: {e}")
-        reranked = documents[:12]
+        reranked = documents[:RAG_CONFIG.reranker_top_k]
 
     # Extract matched files
     matched_files = []

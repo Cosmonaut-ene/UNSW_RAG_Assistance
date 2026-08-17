@@ -7,6 +7,8 @@ Uses sentence-transformers cross-encoder/ms-marco-MiniLM-L-6-v2 for fast, accura
 import time
 from typing import List, Dict, Optional
 
+from config.rag_config import RAG_CONFIG
+
 # Lazy-load the model to avoid startup cost
 _cross_encoder = None
 _MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -32,7 +34,7 @@ def _get_cross_encoder():
 
 def rerank_documents(query: str,
                      documents: List[Dict],
-                     top_k: int = 7,
+                     top_k: int = None,
                      content_key: str = "page_content") -> List[Dict]:
     """
     Rerank documents using cross-encoder model.
@@ -40,12 +42,19 @@ def rerank_documents(query: str,
     Args:
         query: The user query
         documents: List of document dicts with 'page_content' or 'content' key
-        top_k: Number of top documents to return after reranking
+        top_k: Number of top documents to return after reranking. Defaults
+               to RAG_CONFIG.reranker_top_k (E1 in SPEC.md) -- this used to
+               default to 7 here while graph_rag.py always called with 12
+               explicitly, a silent inconsistency that only mattered for
+               any other caller relying on the default.
         content_key: Key to extract text content from documents
 
     Returns:
         Reranked list of documents (top_k), with 'rerank_score' added to metadata
     """
+    if top_k is None:
+        top_k = RAG_CONFIG.reranker_top_k
+
     if not documents:
         return []
 
@@ -64,8 +73,8 @@ def rerank_documents(query: str,
             if not content:
                 content = ""
             # Truncate very long content to avoid OOM (cross-encoder max ~512 tokens)
-            if len(content) > 1500:
-                content = content[:1500]
+            if len(content) > RAG_CONFIG.reranker_chunk_truncation:
+                content = content[:RAG_CONFIG.reranker_chunk_truncation]
             pairs.append([query, content])
 
         # Score all pairs

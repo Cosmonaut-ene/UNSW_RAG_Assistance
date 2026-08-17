@@ -1,16 +1,21 @@
 from typing import List, Dict, Optional
 from .bm25_search import BM25SearchEngine
+from config.rag_config import RAG_CONFIG
 
 class HybridSearchEngine:
-    def __init__(self, vector_store=None, min_hybrid_score: float = 50.0, min_bm25_score: float = 5.0, min_rag_score: float = 30.0):
+    def __init__(self, vector_store=None, min_hybrid_score: float = None, min_bm25_score: float = None, min_rag_score: float = None):
         self.bm25_searcher = BM25SearchEngine(vector_store)
-        # Weight configuration
-        self.rag_weight = 0.6
-        self.bm25_weight = 0.4
-        # Threshold configuration  
-        self.min_hybrid_score = min_hybrid_score
-        self.min_bm25_score = min_bm25_score
-        self.min_rag_score = min_rag_score
+        # Weight configuration -- was a separate hardcoded 0.6/0.4 here that
+        # disagreed with graph_rag.py's explicit 0.7/0.3 override; both now
+        # come from the same RAG_CONFIG so they can't drift apart again (E1)
+        self.rag_weight = RAG_CONFIG.rag_weight
+        self.bm25_weight = RAG_CONFIG.bm25_weight
+        # Threshold configuration -- None means "use RAG_CONFIG", explicit
+        # values (e.g. from evaluation/retrieval_tuner.py trying a different
+        # candidate) still override per-instance
+        self.min_hybrid_score = min_hybrid_score if min_hybrid_score is not None else RAG_CONFIG.min_hybrid_score
+        self.min_bm25_score = min_bm25_score if min_bm25_score is not None else RAG_CONFIG.min_bm25_score
+        self.min_rag_score = min_rag_score if min_rag_score is not None else RAG_CONFIG.min_rag_score
         
     def combine_results(self, rag_results: List[Dict], bm25_results: List[Dict], max_results: int = 5) -> List[Dict]:
         """Combine RAG and BM25 search results"""
