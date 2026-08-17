@@ -6,7 +6,7 @@ Tests AI response generation with context and conversation history
 import pytest
 from unittest.mock import patch, MagicMock
 
-from ai.response_generator import generate_fallback_response
+from ai.response_generator import generate_fallback_response, build_context_and_sources
 # Mock responses for testing
 MOCK_RESPONSES = {
     "greeting": {
@@ -372,3 +372,53 @@ class TestResponseGeneratorPerformance:
         # Should have reused the same LLM instance
         assert mock_get_chat_llm.call_count >= 3
         assert mock_llm.invoke.call_count == 3
+
+class TestBuildContextAndSources:
+    """Test build_context_and_sources() -- context/source extraction used by generate_node"""
+
+    def test_combines_page_content_from_all_docs(self):
+        search_results = [
+            {"page_content": "First chunk", "metadata": {}},
+            {"page_content": "Second chunk", "metadata": {}},
+        ]
+
+        context, matched_files = build_context_and_sources(search_results)
+
+        assert "First chunk" in context
+        assert "Second chunk" in context
+
+    def test_extracts_matched_files_deduplicated(self):
+        search_results = [
+            {"page_content": "a", "metadata": {"source": "docs/handbook.pdf"}},
+            {"page_content": "b", "metadata": {"source": "docs/handbook.pdf"}},
+            {"page_content": "c", "metadata": {"source": "scraped/comp9900.html"}},
+        ]
+
+        _, matched_files = build_context_and_sources(search_results)
+
+        assert matched_files == ["handbook.pdf", "comp9900.html"]
+
+    def test_pdf_source_gets_docs_url(self):
+        search_results = [
+            {"page_content": "a", "metadata": {"source": "docs/course_guide.pdf"}},
+        ]
+
+        context, _ = build_context_and_sources(search_results)
+
+        assert "/docs/course_guide.pdf" in context
+
+    def test_unknown_source_excluded_from_matched_files(self):
+        search_results = [
+            {"page_content": "a", "metadata": {}},
+        ]
+
+        context, matched_files = build_context_and_sources(search_results)
+
+        assert matched_files == []
+        assert "a" in context
+
+    def test_empty_search_results(self):
+        context, matched_files = build_context_and_sources([])
+
+        assert context == ""
+        assert matched_files == []

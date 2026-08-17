@@ -239,26 +239,6 @@ def process_with_rag(question: str) -> str:
     
     return '\n\n---\n\n'.join(content_parts)
 
-# Legacy search functions - delegate to AI module
-def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list = None) -> dict:
-    """Legacy function - use ai.ask_with_hybrid_search instead"""
-    try:
-        from ai import ask_with_hybrid_search as ai_hybrid_search
-        return ai_hybrid_search(question, qa_chain, conversation_history)
-    except ImportError as e:
-        print(f"[RAG] AI module not available: {e}")
-        return {
-            "answer": "Hybrid search is currently unavailable. Please check the AI module.",
-            "sources": [],
-            "matched_files": [],
-            "safety_blocked": False
-        }
-
-def ask_with_rag_and_fallback(question: str, qa_chain, conversation_history: list = None) -> dict:
-    """Legacy function - now returns RAG search results for service layer processing"""
-    # This is essentially the same as ask_with_hybrid_search now
-    return ask_with_hybrid_search(question, qa_chain, conversation_history)
-
 # Legacy function aliases for existing code
 def update_vector_store_with_scraped():
     """Legacy function - use update_knowledge_base instead"""
@@ -302,8 +282,6 @@ __all__ = [
     'process_with_rag',
     'process_with_rag_detailed', 
     'process_with_rag_only',
-    'ask_with_hybrid_search',
-    'ask_with_rag_and_fallback',
     'update_vector_store_with_scraped',
     'force_rebuild_vector_store',
     

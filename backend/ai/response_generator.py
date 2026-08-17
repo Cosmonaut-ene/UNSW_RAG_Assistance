@@ -3,12 +3,51 @@
 Response Generator - Handles AI response generation and fallback logic
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Tuple
 from .llm_client import get_chat_llm
 from .prompt_manager import PromptManager
-from .safety_checker import is_query_safe_by_gemini
-from .query_enhancer import rewrite_query_with_context
 # Removed direct rag dependency - will be handled by services layer
+
+
+def build_context_and_sources(search_results: List[Dict]) -> Tuple[str, List[str]]:
+    """
+    Build the combined context string (with source metadata) and the list of
+    matched filenames from a list of retrieved documents.
+
+    Args:
+        search_results: List of document dicts with 'page_content' and 'metadata'
+
+    Returns:
+        Tuple of (combined_context, matched_files)
+    """
+    context_parts = []
+    source_info = []
+    matched_files = []
+
+    for doc in search_results:
+        metadata = doc.get('metadata', {})
+        source = metadata.get('source', 'Unknown')
+        chunk_content = doc.get('page_content', '')
+        context_parts.append(chunk_content)
+
+        if source != 'Unknown':
+            filename = source.split('/')[-1] if '/' in source else source
+            if filename not in matched_files:
+                matched_files.append(filename)
+
+            if source.endswith('.pdf'):
+                doc_name = filename.replace('.pdf', '').replace('_', ' ')
+                source_info.append(f"Source: {doc_name} -> /docs/{filename}")
+            else:
+                doc_name = metadata.get('title', filename)
+                source_info.append(f"Source: {doc_name} -> {source}")
+
+    combined_context = '\n\n'.join(context_parts)
+    if source_info:
+        combined_context += "\n\n=== SOURCE METADATA ===\n" + '\n'.join(source_info)
+
+    return combined_context, matched_files
+
 
 def generate_response(context: str, question: str, formatted_history: str = "") -> str:
     """
@@ -104,196 +143,3 @@ def generate_fallback_response(question: str, formatted_history: str = "") -> st
     except Exception as e:
         print(f"[AI Response] Error extracting response content: {e}")
         return "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
-
-def process_with_ai_pipeline(question: str, search_results: List[Dict] = None, formatted_history: str = "") -> Dict:
-    """
-    AI processing pipeline: safety check, query rewrite, response generation
-    Note: Search/retrieval is now handled by the calling service layer
-    
-    Args:
-        question: User's question
-        search_results: Pre-retrieved search results from RAG/hybrid search
-        formatted_history: Pre-formatted conversation history
-        
-    Returns:
-        Dict with answer, sources, matched_files, and metadata
-    """
-    print(f"[AI Pipeline] Processing question: {question}")
-    
-    # 1. Safety Check
-    if not is_query_safe_by_gemini(question):
-        return {
-            "answer": "I cannot process this query as it may violate safety guidelines. Please rephrase your question.",
-            "sources": [],
-            "matched_files": [],
-            "safety_blocked": True
-        }
-    
-    # 2. Query Rewriting (if history is provided)
-    if formatted_history:
-        # Convert formatted history back to list format for query rewriting
-        conversation_history = []
-        lines = formatted_history.split('\n')
-        current_q, current_a = None, None
-        for line in lines:
-            if line.startswith('User: '):
-                current_q = line[6:]
-            elif line.startswith('Assistant: '):
-                current_a = line[11:]
-                if current_q and current_a:
-                    conversation_history.append({'question': current_q, 'answer': current_a})
-                    current_q, current_a = None, None
-        
-        rewritten_query = rewrite_query_with_context(question, conversation_history)
-        print(f"[AI Pipeline] Rewritten query: {rewritten_query}")
-    else:
-        rewritten_query = question
-    
-    # 3. Generate Response from provided search results
-    if not search_results:
-        print("[AI Pipeline] No search results provided, using fallback")
-        fallback_answer = generate_fallback_response(rewritten_query, formatted_history)
-        return {
-            "answer": fallback_answer,
-            "sources": [],
-            "matched_files": [],
-            "safety_blocked": False
-        }
-    
-    # Build context from search results with metadata
-    print(f"[AI Pipeline] Processing {len(search_results)} chunks for response generation:")
-    context_parts = []
-    source_info = []
-    for i, doc in enumerate(search_results, 1):
-        metadata = doc.get('metadata', {})
-        source = metadata.get('source', 'Unknown')
-        content_type = metadata.get('content_type', 'Unknown')
-        chunk_content = doc.get('page_content', '')
-        chunk_preview = chunk_content[:100].replace('\n', ' ') if chunk_content else 'No content'
-        
-        print(f"[AI Pipeline] Chunk {i}: {source} ({content_type}) - {chunk_preview}...")
-        context_parts.append(chunk_content)
-        
-        # Collect source information for AI to use
-        if source != 'Unknown':
-            # Extract document name and create web-accessible URL
-            if source.endswith('.pdf'):
-                filename = source.split('/')[-1]
-                doc_name = filename.replace('.pdf', '').replace('_', ' ')
-                web_url = f"/docs/{filename}"
-                source_info.append(f"Source: {doc_name} -> {web_url}")
-            else:
-                doc_name = metadata.get('title', source.split('/')[-1])
-                source_info.append(f"Source: {doc_name} -> {source}")
-    
-    # Combine content and source information
-    combined_context = '\n\n'.join(context_parts)
-    if source_info:
-        combined_context += f"\n\n=== SOURCE METADATA ===\n" + '\n'.join(source_info)
-    
-    # Generate final answer
-    final_answer = generate_response(combined_context, rewritten_query, formatted_history)
-    
-    # Extract matched files
-    matched_files = []
-    source_details = []
-    
-    for doc in search_results:
-        source_details.append(doc.get('page_content', ''))
-        metadata = doc.get('metadata', {})
-        source_file = metadata.get('source', 'Unknown')
-        if source_file != 'Unknown':
-            filename = source_file.split('/')[-1] if '/' in source_file else source_file
-            if filename not in matched_files:
-                matched_files.append(filename)
-    
-    print(f"[AI Pipeline] Generated response, matched files: {matched_files}")
-    
-    return {
-        "answer": final_answer,
-        "sources": source_details,
-        "matched_files": matched_files,
-        "safety_blocked": False,
-        "search_type": "provided_results"
-    }
-
-# ========== Legacy Functions for Backward Compatibility ==========
-
-def ask_with_hybrid_search(question: str, qa_chain, conversation_history: list = None) -> dict:
-    """
-    Answer questions using hybrid search (RAG + keyword) - backward compatibility function
-    
-    Args:
-        question: User's question
-        qa_chain: LangChain QA chain (for compatibility, but we use our own pipeline)
-        conversation_history: Previous conversation exchanges
-        
-    Returns:
-        Dict with answer, sources, matched_files, and metadata
-    """
-    print(f"[AI Response] Legacy hybrid search processing: {question}")
-    
-    # Import here to avoid circular dependency
-    from services.query_processor import process_with_ai
-    
-    try:
-        # Use the services layer to coordinate RAG + AI processing
-        session_id = "legacy_hybrid_search"  # Dummy session for legacy calls
-        answer, success, matched_files, metadata = process_with_ai(question, session_id)
-        
-        return {
-            "answer": answer,
-            "sources": [answer],  # Legacy format compatibility
-            "matched_files": matched_files,
-            "safety_blocked": metadata.get("safety_blocked", False),
-            "search_type": "hybrid_legacy"
-        }
-    except Exception as e:
-        print(f"[AI Response] Legacy hybrid search error: {e}")
-        return {
-            "answer": "I don't have information about that topic.",
-            "sources": [],
-            "matched_files": [],
-            "safety_blocked": False,
-            "search_type": "hybrid_legacy_error"
-        }
-
-def ask_with_rag_and_fallback(question: str, qa_chain, conversation_history: list = None) -> dict:
-    """
-    Try answering via RAG first, fallback to direct LLM - backward compatibility
-    Note: Now delegates to services layer for proper coordination
-    
-    Args:
-        question: User's question
-        qa_chain: LangChain QA chain (for compatibility, not used)
-        conversation_history: Previous conversation exchanges
-        
-    Returns:
-        Dict with answer, sources, matched_files, and metadata
-    """
-    print(f"[AI Response] Legacy RAG with fallback - delegating to services layer: {question}")
-    
-    # Import here to avoid circular dependency
-    from services.query_processor import process_with_ai
-    
-    try:
-        # Use the services layer to coordinate RAG + AI processing
-        session_id = "legacy_rag_fallback"  # Dummy session for legacy calls
-        answer, success, matched_files, metadata = process_with_ai(question, session_id)
-        
-        return {
-            "answer": answer,
-            "sources": [answer],  # Legacy format compatibility
-            "matched_files": matched_files,
-            "safety_blocked": metadata.get("safety_blocked", False),
-            "search_type": "rag_fallback_legacy"
-        }
-    except Exception as e:
-        print(f"[AI Response] Legacy RAG fallback error: {e}")
-        return {
-            "answer": "I don't have information about that topic.",
-            "sources": [],
-            "matched_files": [],
-            "safety_blocked": False,
-            "search_type": "rag_fallback_legacy_error"
-        }
