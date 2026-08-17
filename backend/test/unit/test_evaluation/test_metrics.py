@@ -166,6 +166,7 @@ class TestRAGEvaluator:
         assert "aggregate_scores" in result
         assert "performance_analysis" in result
         assert "generation_latency_stats" in result
+        assert "fallback_stats" in result
         assert "individual_results" in result
         assert "metadata" in result
         
@@ -196,7 +197,52 @@ class TestRAGEvaluator:
         assert abs(aggregate["answer_relevancy"] - 0.8) < 0.01  # (0.7 + 0.8 + 0.9) / 3
         assert aggregate["faithfulness_count"] == 3
         assert aggregate["answer_relevancy_count"] == 3
-    
+
+    def test_calculate_aggregate_scores_excludes_fallback_from_context_grounded_metrics(self, evaluator):
+        """
+        A fallback answer never cites retrieved context, so RAGAS scores it as
+        unsupported by construction -- averaging that into faithfulness/
+        context_recall/context_precision makes those look worse the more often
+        the system honestly declines to answer, rather than reflecting the
+        accuracy of answers it actually gave. answer_relevancy doesn't depend
+        on context, so it must still include fallback results.
+        """
+        individual_results = [
+            {"scores": {"faithfulness": 0.9, "context_recall": 0.9, "context_precision": 0.9, "answer_relevancy": 0.9},
+             "rag_metadata": {"performance": {"fallback_used": False}}},
+            {"scores": {"faithfulness": 0.0, "context_recall": 0.0, "context_precision": 0.0, "answer_relevancy": 0.5},
+             "rag_metadata": {"performance": {"fallback_used": True}}},
+        ]
+
+        aggregate = evaluator._calculate_aggregate_scores(individual_results)
+
+        assert aggregate["faithfulness"] == 0.9
+        assert aggregate["faithfulness_count"] == 1
+        assert aggregate["context_recall"] == 0.9
+        assert aggregate["context_precision"] == 0.9
+        # answer_relevancy is context-independent, so both results count
+        assert aggregate["answer_relevancy"] == 0.7
+        assert aggregate["answer_relevancy_count"] == 2
+
+    def test_calculate_fallback_stats(self, evaluator):
+        individual_results = [
+            {"rag_metadata": {"performance": {"fallback_used": True}}},
+            {"rag_metadata": {"performance": {"fallback_used": False}}},
+            {"rag_metadata": {"performance": {"fallback_used": False}}},
+            {},  # missing rag_metadata must not crash and must not count as fallback
+        ]
+
+        stats = evaluator._calculate_fallback_stats(individual_results)
+
+        assert stats["total_count"] == 4
+        assert stats["fallback_count"] == 1
+        assert stats["fallback_rate"] == 0.25
+
+    def test_calculate_fallback_stats_empty_results(self, evaluator):
+        stats = evaluator._calculate_fallback_stats([])
+
+        assert stats == {"total_count": 0}
+
     def test_calculate_latency_stats(self, evaluator):
         """Test generation latency aggregation (distinct from RAGAS scoring time)"""
         individual_results = [
