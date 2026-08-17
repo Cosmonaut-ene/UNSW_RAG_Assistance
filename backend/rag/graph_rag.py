@@ -330,6 +330,16 @@ def hallucination_check_node(state: RAGState) -> dict:
          query. A fabricated citation is itself a form of hallucination.
       b) check_faithfulness() -- structured LLM call: every claim in the
          answer must be supported by the retrieved context.
+
+    citations_missing (matched_files was non-empty but the answer cited
+    none of them) does NOT by itself force a fallback. A live 30-query
+    RAGAS run showed ~45% of hallucination-triggered fallbacks were
+    answers check_faithfulness() had already judged faithful with zero
+    unsupported claims -- the model just skipped the prompt's "add a
+    Sources line" formatting instruction, which isn't evidence the
+    content was wrong. A genuinely fabricated citation (citations_valid
+    False) is still real hallucination signal and stays on the same
+    footing as unfaithful claims.
     """
     steps = list(state.get("processing_steps", []))
     steps.append("hallucination_check")
@@ -347,8 +357,13 @@ def hallucination_check_node(state: RAGState) -> dict:
         not answer
         or not faithfulness["faithful"]
         or not citations_valid
-        or citations_missing
     )
+
+    if citations_missing:
+        # Logged for visibility even when it doesn't force a fallback --
+        # a rising rate of this still means the generation prompt's
+        # citation instruction isn't being followed and is worth revisiting.
+        steps.append("missing_citation")
 
     if is_hallucinated:
         steps.append("hallucination_detected")
@@ -358,8 +373,6 @@ def hallucination_check_node(state: RAGState) -> dict:
             steps.append(f"unfaithful_claims:{len(faithfulness['unsupported_claims'])}")
         if not citations_valid:
             steps.append("invalid_citation")
-        if citations_missing:
-            steps.append("missing_citation")
 
     result = {
         "hallucination_detected": is_hallucinated,
