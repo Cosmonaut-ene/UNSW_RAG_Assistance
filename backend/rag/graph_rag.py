@@ -43,6 +43,7 @@ class RAGState(TypedDict):
     query_intent: str  # "REWRITE" or "NAVIGATION", set by query_rewrite_node
     documents: List[Dict]
     reranked_docs: List[Dict]
+    fallback_reason: str  # "navigation" | "no_relevant_docs" | "hallucination_retry" -- which of the three paths into fallback_node fired (E2 in SPEC.md)
 
     # Output
     answer: str
@@ -105,6 +106,7 @@ def query_rewrite_node(state: RAGState) -> dict:
         "rewritten_query": result["rewritten_query"],
         "hyde_doc": result["hypothetical_document"],
         "query_intent": result["intent"],
+        "fallback_reason": "navigation" if result["intent"] == "NAVIGATION" else "",
         "processing_steps": steps,
     }
 
@@ -225,13 +227,16 @@ def grade_documents_node(state: RAGState) -> dict:
     from rag.retrieval_evaluator import grade_documents
     grade, filtered_docs = grade_documents(rewritten_query, reranked_docs)
 
-    if grade == "INCORRECT":
-        steps.append("crag_incorrect")
-
-    return {
+    result = {
         "reranked_docs": filtered_docs,
         "processing_steps": steps,
     }
+
+    if grade == "INCORRECT":
+        steps.append("crag_incorrect")
+        result["fallback_reason"] = "no_relevant_docs"
+
+    return result
 
 
 def generate_node(state: RAGState) -> dict:
@@ -279,15 +284,23 @@ def generate_node(state: RAGState) -> dict:
 
 
 def fallback_node(state: RAGState) -> dict:
-    """Direct LLM fallback when RAG context is insufficient"""
+    """
+    Direct LLM fallback when RAG context is insufficient. Reached from
+    three different triggers (query_rewrite NAVIGATION intent /
+    grade_documents no relevant docs / hallucination_check detected a
+    problem) -- fallback_reason (set by whichever of those fired) decides
+    whether the MazeMap navigation instructions belong in the prompt at
+    all (E2 in SPEC.md).
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("fallback")
 
     rewritten_query = state.get("rewritten_query", state["query"])
     history = state.get("history", "")
+    fallback_reason = state.get("fallback_reason", "")
 
     from ai.response_generator import generate_fallback_response
-    fallback_answer = generate_fallback_response(rewritten_query, history)
+    fallback_answer = generate_fallback_response(rewritten_query, history, reason=fallback_reason)
 
     return {
         "answer": fallback_answer,
@@ -343,10 +356,14 @@ def hallucination_check_node(state: RAGState) -> dict:
         if citations_missing:
             steps.append("missing_citation")
 
-    return {
+    result = {
         "hallucination_detected": is_hallucinated,
         "processing_steps": steps,
     }
+    if is_hallucinated:
+        result["fallback_reason"] = "hallucination_retry"
+
+    return result
 
 
 # ===== Routing Functions =====
@@ -461,6 +478,7 @@ def invoke_rag_graph(query: str,
         "query_intent": "",
         "documents": [],
         "reranked_docs": [],
+        "fallback_reason": "",
         "answer": "",
         "answered": False,
         "matched_files": [],

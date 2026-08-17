@@ -94,13 +94,13 @@ class TestPromptManager:
         assert "Compare COMP9900 and COMP9901" in template
 
     def test_get_fallback_prompt_template_structure(self):
-        """Test fallback prompt template structure"""
+        """Test fallback prompt template structure (E2: navigation_section conditional, no longer always mazemap_context)"""
         template = PromptManager.get_fallback_prompt_template()
 
         assert isinstance(template, PromptTemplate)
-        expected_vars = ["question", "mazemap_context"]
+        expected_vars = ["question", "navigation_section", "history_section"]
         assert all(var in template.input_variables for var in expected_vars)
-        assert len(template.input_variables) == 2
+        assert len(template.input_variables) == 3
 
     def test_get_fallback_prompt_template_content(self):
         """Test fallback prompt template content"""
@@ -108,21 +108,21 @@ class TestPromptManager:
         template_str = template.template
 
         assert "{question}" in template_str
-        assert "{mazemap_context}" in template_str
+        assert "{navigation_section}" in template_str
+        assert "{history_section}" in template_str
         assert "UNSW CSE Open Day Assistant" in template_str
-        assert "Campus Navigation" in template_str
 
     def test_fallback_template_rendering(self):
         """Test fallback template renders correctly"""
         template = PromptManager.get_fallback_prompt_template()
 
         question = "Where is the library?"
-        mazemap_context = "Interactive campus maps available"
+        navigation_section = "🗺️ **Campus Navigation:**\nInteractive campus maps available\n\n"
 
-        rendered = template.format(question=question, mazemap_context=mazemap_context)
+        rendered = template.format(question=question, navigation_section=navigation_section, history_section="")
 
         assert question in rendered
-        assert mazemap_context in rendered
+        assert navigation_section in rendered
 
     def test_get_mazemap_context(self):
         """Test MazeMap context contains expected information"""
@@ -210,14 +210,14 @@ class TestPromptManagerEdgeCases:
         formatted = template.format(history_context=history_context, original_query="Test query")
         assert history_context in formatted
 
-    def test_fallback_template_with_empty_mazemap(self):
-        """Test fallback template with empty MazeMap context"""
+    def test_fallback_template_with_empty_navigation_section(self):
+        """Empty navigation_section (non-navigation fallback reasons) must not surface Campus Navigation text at all"""
         template = PromptManager.get_fallback_prompt_template()
 
-        rendered = template.format(question="Test question", mazemap_context="")
+        rendered = template.format(question="Test question", navigation_section="", history_section="")
 
         assert "Test question" in rendered
-        assert "Campus Navigation" in rendered
+        assert "Campus Navigation" not in rendered
 
 
 class TestPromptManagerIntegration:
@@ -241,13 +241,13 @@ class TestPromptManagerIntegration:
         assert "96 units" in rendered
 
     def test_location_inquiry_fallback_prompt(self):
-        """Test fallback prompt for location inquiry"""
+        """Test fallback prompt for location inquiry (navigation_section populated, as fallback_node does for reason='navigation')"""
         template = PromptManager.get_fallback_prompt_template()
-        mazemap_context = PromptManager.get_mazemap_context()
+        navigation_section = f"🗺️ **Campus Navigation:**\n{PromptManager.get_mazemap_context()}\n\n"
 
         question = "Where is the Computer Science building?"
 
-        rendered = template.format(question=question, mazemap_context=mazemap_context)
+        rendered = template.format(question=question, navigation_section=navigation_section, history_section="")
 
         assert "Computer Science building" in rendered
         assert "mazemap.com" in rendered

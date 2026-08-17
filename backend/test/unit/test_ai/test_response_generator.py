@@ -176,22 +176,37 @@ class TestResponseGeneratorPromptConstruction:
     """Test prompt construction and formatting"""
     
     @patch('ai.response_generator.get_chat_llm')
-    def test_prompt_includes_mazemap_context(self, mock_get_chat_llm):
-        """Test that fallback prompt includes MazeMap context"""
+    def test_prompt_includes_mazemap_context_for_navigation_reason(self, mock_get_chat_llm):
+        """MazeMap context is only injected when reason='navigation' (E2 in SPEC.md)"""
         mock_llm = MagicMock()
         mock_llm.invoke.return_value.content = "I can help you navigate campus"
         mock_get_chat_llm.return_value = mock_llm
-        
+
         query = "Where is J17?"
-        
-        generate_fallback_response(query, "")
-        
+
+        generate_fallback_response(query, "", reason="navigation")
+
         # Check that MazeMap context was included in the prompt
         call_args = mock_llm.invoke.call_args[0][0]
         prompt_content = call_args.content if hasattr(call_args, 'content') else str(call_args)
-        
+
         assert "mazemap" in prompt_content.lower()
         assert "campus navigation" in prompt_content.lower()
+
+    @patch('ai.response_generator.get_chat_llm')
+    def test_prompt_omits_mazemap_context_for_non_navigation_reasons(self, mock_get_chat_llm):
+        """Non-navigation fallback reasons must not get the MazeMap section -- it's irrelevant noise for them (E2)"""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value.content = "I don't have information about that."
+        mock_get_chat_llm.return_value = mock_llm
+
+        for reason in ["no_relevant_docs", "hallucination_retry", ""]:
+            generate_fallback_response("What are COMP9021's prerequisites?", "", reason=reason)
+
+            call_args = mock_llm.invoke.call_args[0][0]
+            prompt_content = call_args.content if hasattr(call_args, 'content') else str(call_args)
+
+            assert "campus navigation" not in prompt_content.lower(), f"reason={reason} should not include MazeMap section"
         
     @patch('ai.response_generator.get_chat_llm')
     def test_prompt_includes_conversation_history(self, mock_get_chat_llm):

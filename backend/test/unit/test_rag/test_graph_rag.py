@@ -33,6 +33,7 @@ def make_state(**overrides):
             {"page_content": "COMP9900 is a capstone project course.",
              "metadata": {"source": "docs/handbook.pdf"}}
         ],
+        "fallback_reason": "",
         "answer": "",
         "answered": False,
         "matched_files": [],
@@ -141,6 +142,7 @@ class TestQueryRewriteNode:
         assert result["rewritten_query"] == "Introduce COMP9900"
         assert result["hyde_doc"] == "COMP9900 is a capstone project course."
         assert result["query_intent"] == "REWRITE"
+        assert result["fallback_reason"] == ""
         mock_analyze.assert_called_once()
 
     @patch('ai.query_enhancer.analyze_query_with_context')
@@ -155,6 +157,7 @@ class TestQueryRewriteNode:
 
         assert result["query_intent"] == "NAVIGATION"
         assert result["hyde_doc"] == ""
+        assert result["fallback_reason"] == "navigation"
 
 
 class TestRouteAfterRewrite:
@@ -188,6 +191,7 @@ class TestGradeDocumentsNode:
 
         assert result["reranked_docs"] == filtered
         assert "crag_incorrect" not in result["processing_steps"]
+        assert "fallback_reason" not in result
 
     @patch('rag.retrieval_evaluator.grade_documents')
     def test_incorrect_grade_results_in_empty_docs(self, mock_grade):
@@ -197,6 +201,7 @@ class TestGradeDocumentsNode:
 
         assert result["reranked_docs"] == []
         assert "crag_incorrect" in result["processing_steps"]
+        assert result["fallback_reason"] == "no_relevant_docs"
 
 
 class TestRouteAfterGrading:
@@ -226,6 +231,7 @@ class TestHallucinationCheckNode:
         result = hallucination_check_node(make_state(answer="COMP9900 is a capstone course."))
 
         assert result["hallucination_detected"] is False
+        assert "fallback_reason" not in result
 
     @patch('rag.hallucination_checker.check_faithfulness')
     @patch('rag.hallucination_checker.validate_citations')
@@ -237,6 +243,7 @@ class TestHallucinationCheckNode:
 
         assert result["hallucination_detected"] is True
         assert "hallucination_detected" in result["processing_steps"]
+        assert result["fallback_reason"] == "hallucination_retry"
 
     @patch('rag.hallucination_checker.check_faithfulness')
     @patch('rag.hallucination_checker.validate_citations')
@@ -281,6 +288,17 @@ class TestFallbackNode:
 
         assert result["fallback_used"] is True
         assert "hallucination_detected" not in result
+
+    @patch('ai.response_generator.generate_fallback_response')
+    def test_passes_fallback_reason_through(self, mock_fallback):
+        """fallback_node must forward whichever reason triggered it (E2 in SPEC.md)"""
+        mock_fallback.return_value = "answer"
+
+        fallback_node(make_state(fallback_reason="no_relevant_docs"))
+
+        mock_fallback.assert_called_once()
+        _, kwargs = mock_fallback.call_args
+        assert kwargs.get("reason") == "no_relevant_docs"
 
 
 class TestRouteAfterHallucinationCheck:
