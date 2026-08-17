@@ -55,33 +55,36 @@ def build_context_and_sources(search_results: List[Dict]) -> Tuple[str, List[str
 
 def generate_response(context: str, question: str, formatted_history: str = "") -> str:
     """
-    Generate response using LLM with given context
-    
+    Generate response using LLM with given context.
+
+    Uses a single unified template (D2 in SPEC.md) with a conditional
+    history section, rather than picking between two separately-maintained
+    templates that could (and did) drift out of sync with each other.
+
     Args:
         context: Retrieved context from RAG
         question: User's question
         formatted_history: Pre-formatted conversation history
-        
+
     Returns:
         str: Generated response
     """
-    
     llm = get_chat_llm()
-    
+    template = PromptManager.get_rag_prompt_template()
+
+    history_section = ""
     if formatted_history:
-        template = PromptManager.get_rag_with_history_template()
-        response = llm.invoke(template.format(
-            history=formatted_history,
-            context=context,
-            question=question
-        ))
-    else:
-        template = PromptManager.get_rag_prompt_template()
-        response = llm.invoke(template.format(
-            context=context,
-            question=question
-        ))
-    
+        history_section = (
+            "## 💬 OUR CONVERSATION SO FAR:\n"
+            f"{formatted_history}\n\n"
+        )
+
+    response = llm.invoke(template.format(
+        context=context,
+        question=question,
+        history_section=history_section,
+    ))
+
     return response.content if hasattr(response, 'content') else str(response)
 
 def generate_fallback_response(question: str, formatted_history: str = "") -> str:
