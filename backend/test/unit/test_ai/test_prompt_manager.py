@@ -158,7 +158,7 @@ class TestPromptManagerEdgeCases:
         
         # Should still contain template structure
         assert "UNSW CSE Open Day Assistant" in rendered
-        assert "Context:" in rendered
+        assert "BEGIN RETRIEVED CONTEXT" in rendered
         assert "Question:" in rendered
         
     def test_rag_prompt_with_special_characters(self):
@@ -320,3 +320,32 @@ class TestPromptManagerConsistency:
         source_format = "[Document Name](URL)"
         assert source_format in rag_template
         assert source_format in history_template
+
+class TestPromptManagerInjectionDefense:
+    """
+    Both RAG templates must clearly mark retrieved context as reference
+    data, not instructions -- defense against indirect prompt injection
+    via a poisoned knowledge base document (C2 in SPEC.md).
+    """
+
+    def test_rag_template_declares_context_is_not_instructions(self):
+        template = PromptManager.get_rag_prompt_template().template
+
+        assert "not instructions" in template.lower()
+
+    def test_history_template_declares_context_is_not_instructions(self):
+        template = PromptManager.get_rag_with_history_template().template
+
+        assert "not instructions" in template.lower()
+
+    def test_rag_template_has_clear_context_boundary_markers(self):
+        template = PromptManager.get_rag_prompt_template().template
+
+        assert "BEGIN RETRIEVED CONTEXT" in template
+        assert "END RETRIEVED CONTEXT" in template
+
+    def test_history_template_has_clear_context_boundary_markers(self):
+        template = PromptManager.get_rag_with_history_template().template
+
+        assert "BEGIN RETRIEVED CONTEXT" in template
+        assert "END RETRIEVED CONTEXT" in template
