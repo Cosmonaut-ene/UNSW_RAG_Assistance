@@ -4,17 +4,23 @@ LangGraph Agentic RAG - Graph-based orchestration for the RAG pipeline.
 Replaces the if/elif chain in query_processor.py with a structured graph.
 
 Graph flow:
-  safety_check -> query_rewrite -> retrieve -> rerank
+  safety_and_rewrite -> retrieve -> rerank
   -> grade_documents -> generate -> hallucination_check -> output
 
-query_rewrite now also produces the HyDE hypothetical document in the same
+safety_and_rewrite runs the safety classification and the query
+rewrite+HyDE call concurrently (two threads, one node) rather than as two
+sequential graph nodes -- both only need the original query + history and
+don't depend on each other's output, so there was no reason to pay for two
+back-to-back Gemini round trips on every request (previously separate
+safety_check_node -> query_rewrite_node nodes; see SPEC.md perf notes).
+query_rewrite also produces the HyDE hypothetical document in the same
 structured call (previously a separate hyde_generate node/LLM call -- see
-C3 in SPEC.md). Off-topic queries are rejected by safety_check_node itself
-(OFF_TOPIC classification, C1) and never reach query_rewrite at all.
+C3 in SPEC.md). Off-topic queries are rejected by the safety half of this
+node itself (OFF_TOPIC classification, C1) and never reach retrieve at all.
 
 Fallback paths:
-  - safety_check not SAFE -> return warning
-  - query_rewrite NAVIGATION intent -> fallback LLM
+  - safety check not SAFE -> return warning
+  - query rewrite NAVIGATION intent -> fallback LLM
   - grade_documents INCORRECT -> fallback LLM
   - hallucination_check detects a problem -> fallback LLM (one-shot; despite
     generation_attempts existing, there is no actual "regenerate with the
@@ -23,6 +29,7 @@ Fallback paths:
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict, List, Dict, Optional, Annotated
 from langgraph.graph import StateGraph, END
 
@@ -40,7 +47,7 @@ class RAGState(TypedDict):
     # Processing
     rewritten_query: str
     hyde_doc: str
-    query_intent: str  # "REWRITE" or "NAVIGATION", set by query_rewrite_node
+    query_intent: str  # "REWRITE" or "NAVIGATION", set by safety_and_rewrite_node
     documents: List[Dict]
     reranked_docs: List[Dict]
     fallback_reason: str  # "navigation" | "no_relevant_docs" | "hallucination_retry" -- which of the three paths into fallback_node fired (E2 in SPEC.md)
@@ -60,13 +67,33 @@ class RAGState(TypedDict):
 
 # ===== Node Functions =====
 
-def safety_check_node(state: RAGState) -> dict:
-    """Check if the query is safe and appropriate"""
+def safety_and_rewrite_node(state: RAGState) -> dict:
+    """
+    Classify query safety and produce the rewritten query + HyDE doc in
+    parallel (two threads, one node). Both calls only need the original
+    query + history as input and don't depend on each other's output --
+    previously two sequential graph nodes/LLM round trips, which meant
+    every request paid for both latencies back to back even though
+    neither result was needed to start the other call.
+
+    If the query is unsafe, the rewrite/HyDE work is simply discarded
+    (its cost was already paid by running concurrently, not added on top).
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("safety_check")
+    steps.append("query_rewriting")
 
     from ai.safety_checker import is_query_safe_by_gemini
-    is_safe = is_query_safe_by_gemini(state["query"])
+    from ai.query_enhancer import analyze_query_with_context
+
+    query = state["query"]
+    conversation_history = state.get("conversation_history", [])
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        safety_future = executor.submit(is_query_safe_by_gemini, query)
+        rewrite_future = executor.submit(analyze_query_with_context, query, conversation_history)
+        is_safe = safety_future.result()
+        result = rewrite_future.result()
 
     if not is_safe:
         steps.append("safety_blocked")
@@ -77,32 +104,11 @@ def safety_check_node(state: RAGState) -> dict:
             "processing_steps": steps,
         }
 
-    return {
-        "safety_blocked": False,
-        "processing_steps": steps,
-    }
-
-
-def query_rewrite_node(state: RAGState) -> dict:
-    """
-    Resolve references, detect navigation intent, and generate the HyDE
-    hypothetical document -- all in one structured call (C3 in SPEC.md).
-    Previously two separate LLM round trips (query_rewrite then
-    hyde_generate); both only need the original query + history as input
-    and don't depend on each other's output, so there was no reason to
-    keep them as separate nodes/calls.
-    """
-    steps = list(state.get("processing_steps", []))
-    steps.append("query_rewriting")
-
-    from ai.query_enhancer import analyze_query_with_context
-    conversation_history = state.get("conversation_history", [])
-    result = analyze_query_with_context(state["query"], conversation_history)
-
-    print(f"[GraphRAG] Original: {state['query']}")
+    print(f"[GraphRAG] Original: {query}")
     print(f"[GraphRAG] Intent: {result['intent']}, Rewritten: {result['rewritten_query']}")
 
     return {
+        "safety_blocked": False,
         "rewritten_query": result["rewritten_query"],
         "hyde_doc": result["hypothetical_document"],
         "query_intent": result["intent"],
@@ -244,10 +250,10 @@ def generate_node(state: RAGState) -> dict:
 
     Calls generate_response() directly rather than going through the old
     process_with_ai_pipeline() -- that function re-ran its own safety check
-    and query rewrite internally, duplicating work safety_check_node and
-    query_rewrite_node already did upstream in this graph (two extra LLM
-    calls per request, and a second, independent safety verdict that could
-    silently disagree with the first).
+    and query rewrite internally, duplicating work safety_and_rewrite_node
+    already did upstream in this graph (two extra LLM calls per request,
+    and a second, independent safety verdict that could silently disagree
+    with the first).
     """
     steps = list(state.get("processing_steps", []))
     steps.append("ai_generation")
@@ -367,13 +373,9 @@ def hallucination_check_node(state: RAGState) -> dict:
 
 # ===== Routing Functions =====
 
-def route_after_safety(state: RAGState) -> str:
+def route_after_safety_and_rewrite(state: RAGState) -> str:
     if state.get("safety_blocked"):
         return END
-    return "query_rewrite"
-
-
-def route_after_rewrite(state: RAGState) -> str:
     if state.get("query_intent") == "NAVIGATION":
         return "fallback"
     return "retrieve"
@@ -408,8 +410,7 @@ def build_rag_graph() -> StateGraph:
     graph = StateGraph(RAGState)
 
     # Add nodes
-    graph.add_node("safety_check", safety_check_node)
-    graph.add_node("query_rewrite", query_rewrite_node)
+    graph.add_node("safety_and_rewrite", safety_and_rewrite_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("rerank", rerank_node)
     graph.add_node("grade_documents", grade_documents_node)
@@ -418,11 +419,10 @@ def build_rag_graph() -> StateGraph:
     graph.add_node("hallucination_check", hallucination_check_node)
 
     # Set entry point
-    graph.set_entry_point("safety_check")
+    graph.set_entry_point("safety_and_rewrite")
 
     # Add edges
-    graph.add_conditional_edges("safety_check", route_after_safety)
-    graph.add_conditional_edges("query_rewrite", route_after_rewrite)
+    graph.add_conditional_edges("safety_and_rewrite", route_after_safety_and_rewrite)
     graph.add_edge("retrieve", "rerank")
     graph.add_edge("rerank", "grade_documents")
     graph.add_conditional_edges("grade_documents", route_after_grading)
