@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from rag.hybrid_search import HybridSearchEngine
 from test.mocks.mock_vector_store import MockVectorStore
+from config.rag_config import RAG_CONFIG
 
 
 class TestHybridSearchEngine:
@@ -23,19 +24,22 @@ class TestHybridSearchEngine:
         )
         
         assert hybrid_engine.bm25_searcher is not None
-        assert hybrid_engine.rag_weight == 0.6
-        assert hybrid_engine.bm25_weight == 0.4
+        # rag_weight/bm25_weight aren't constructor params -- they always
+        # come from RAG_CONFIG (E1 in SPEC.md), so assert against that
+        # single source rather than a literal that can drift from it again
+        assert hybrid_engine.rag_weight == RAG_CONFIG.rag_weight
+        assert hybrid_engine.bm25_weight == RAG_CONFIG.bm25_weight
         assert hybrid_engine.min_hybrid_score == 50.0
         assert hybrid_engine.min_bm25_score == 5.0
         assert hybrid_engine.min_rag_score == 30.0
-        
+
     def test_hybrid_search_engine_default_parameters(self):
-        """Test hybrid search engine with default parameters"""
+        """Test hybrid search engine with default parameters -- these now come from RAG_CONFIG (E1)"""
         hybrid_engine = HybridSearchEngine()
-        
-        assert hybrid_engine.min_hybrid_score == 50.0
-        assert hybrid_engine.min_bm25_score == 5.0
-        assert hybrid_engine.min_rag_score == 30.0
+
+        assert hybrid_engine.min_hybrid_score == RAG_CONFIG.min_hybrid_score
+        assert hybrid_engine.min_bm25_score == RAG_CONFIG.min_bm25_score
+        assert hybrid_engine.min_rag_score == RAG_CONFIG.min_rag_score
         
     def test_combine_results_with_rag_and_bm25(self):
         """Test combining RAG and BM25 results"""
@@ -274,7 +278,7 @@ class TestHybridSearchEngineScoring:
             metadata = result['metadata']
             rag_score = metadata.get('rag_score', 0)
             bm25_score = metadata.get('bm25_score', 0)
-            expected_hybrid = (rag_score * 0.6) + (bm25_score * 0.4)
+            expected_hybrid = (rag_score * RAG_CONFIG.rag_weight) + (bm25_score * RAG_CONFIG.bm25_weight)
             assert abs(metadata['hybrid_score'] - expected_hybrid) < 0.01
             
     def test_custom_weights(self):

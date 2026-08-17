@@ -480,6 +480,48 @@ class TunerOrchestrator:
         self._print_validation_table(output)
         return output
 
+    def apply_best_config(self, validation_output: Optional[Dict[str, Any]] = None, rank: int = 1) -> RetrievalConfig:
+        """
+        Promote a validated candidate to production by writing it to
+        config/rag_config_overrides.json (E1 in SPEC.md) -- the single
+        mechanism for updating production RAG parameters after a tuning
+        run. Replaces the old process of hand-copying numbers into
+        graph_rag.py and a commit message as two separate, driftable
+        steps (which is exactly how tuner_config.py's own BASELINE_CONFIG
+        comment went stale after commit 6590ea5).
+
+        Args:
+            validation_output: Result of run_ragas_validation(); if None,
+                                loads the most recent saved validation run.
+            rank: Which candidate to apply (1 = best by validation order).
+
+        Returns:
+            The RetrievalConfig that was written.
+        """
+        if validation_output is not None:
+            candidates = validation_output["candidates"]
+        else:
+            # _load_latest_results already unwraps the saved {"candidates": [...]}
+            # dict for the "validation" label -- see that method's docstring note.
+            candidates = self._load_latest_results("validation")
+            if not candidates:
+                raise RuntimeError("No validation results found. Run run_ragas_validation() first.")
+
+        if rank < 1 or rank > len(candidates):
+            raise ValueError(f"rank must be between 1 and {len(candidates)}")
+
+        chosen = candidates[rank - 1]
+        config = RetrievalConfig.from_dict(chosen["config"])
+
+        print(f"[Tuner] Applying rank {rank} config to production: {config.as_dict()}")
+        print(
+            f"        context_recall={chosen.get('context_recall')}  "
+            f"context_precision={chosen.get('context_precision')}"
+        )
+        config.save_as_overrides()
+
+        return config
+
     # ── Helpers ───────────────────────────────────────────────
 
     def _save_results(self, data: Any, label: str) -> Path:

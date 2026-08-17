@@ -174,7 +174,8 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
         # away Chroma's distance entirely, forcing hybrid_search.py to fake a
         # flat rag_score=100 for every result regardless of actual relevance)
         from .search_engine import normalize_similarity_score
-        scored_results = search_documents_with_scores(question, k=50)
+        from config.rag_config import RAG_CONFIG
+        scored_results = search_documents_with_scores(question, k=RAG_CONFIG.vector_k)
 
         print(f"[RAG] Processing {len(scored_results)} retrieved chunks for query: {question[:50]}...")
 

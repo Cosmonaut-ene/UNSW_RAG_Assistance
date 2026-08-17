@@ -1,40 +1,30 @@
 """
-Retrieval tuner configuration: parameter search space and RetrievalConfig dataclass.
+Retrieval tuner configuration: parameter search space, reusing the single
+RAGConfig dataclass (config/rag_config.py) instead of a separate,
+independently-drifting copy (E1 in SPEC.md).
+
+This file used to define its own RetrievalConfig with a BASELINE_CONFIG
+comment claiming to "mirror graph_rag.py's hard-coded values" -- which,
+after the tuning run in commit 6590ea5 updated graph_rag.py by hand, was
+wrong on 6 of 7 fields and nobody noticed until this file's own history
+was audited. RetrievalConfig is kept as an alias purely so existing
+imports elsewhere don't need renaming; BASELINE_CONFIG is now RAGConfig's
+own loader, so there is exactly one place these numbers live.
 """
 
-from dataclasses import dataclass, field
 from typing import Dict, List, Any
 
+from config.rag_config import RAGConfig
 
-@dataclass
-class RetrievalConfig:
-    """All tunable retrieval parameters in one place."""
-    vector_k: int = 20
-    max_hybrid_results: int = 30
-    min_hybrid_score: float = 70.0
-    min_rag_score: float = 25.0
-    min_bm25_score: float = 3.0
-    rag_weight: float = 0.6
-    reranker_top_k: int = 7
+# Alias for backward compatibility with existing `from .tuner_config import
+# RetrievalConfig` imports -- same class, not a copy.
+RetrievalConfig = RAGConfig
 
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "vector_k": self.vector_k,
-            "max_hybrid_results": self.max_hybrid_results,
-            "min_hybrid_score": self.min_hybrid_score,
-            "min_rag_score": self.min_rag_score,
-            "min_bm25_score": self.min_bm25_score,
-            "rag_weight": self.rag_weight,
-            "reranker_top_k": self.reranker_top_k,
-        }
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "RetrievalConfig":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
-
-
-# Default (baseline) config — mirrors current graph_rag.py hard-coded values
-BASELINE_CONFIG = RetrievalConfig()
+# Default (baseline) config — loads from config/rag_config.py's single
+# source of truth (dataclass defaults + rag_config_overrides.json if a
+# tuning run has already applied one). Guaranteed to match what's actually
+# running, because it's the same loader graph_rag.py uses.
+BASELINE_CONFIG = RAGConfig.load()
 
 # Parameter search space for random / grid search
 SEARCH_SPACE: Dict[str, List[Any]] = {
