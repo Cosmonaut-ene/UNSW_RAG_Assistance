@@ -250,6 +250,7 @@ class RAGEvaluator:
         # Calculate aggregate metrics
         aggregate_scores = self._calculate_aggregate_scores(individual_results)
         latency_stats = self._calculate_latency_stats(individual_results)
+        fallback_stats = self._calculate_fallback_stats(individual_results)
         evaluation_time = time.time() - batch_start_time
         
         # Create comprehensive report
@@ -269,6 +270,12 @@ class RAGEvaluator:
             # itself took to *generate* each answer (response_time_ms from
             # services.query_processor.process_with_ai's performance dict).
             "generation_latency_stats": latency_stats,
+            # How often the pipeline declines to answer at all (CRAG found nothing
+            # relevant / hallucination_check rejected the draft / NAVIGATION intent) --
+            # see _calculate_aggregate_scores() for why this has to be tracked
+            # separately from faithfulness/context_recall/context_precision rather
+            # than folded into them.
+            "fallback_stats": fallback_stats,
             "individual_results": individual_results,
             "metadata": {
                 "timestamp": datetime.now().isoformat(),
@@ -282,22 +289,41 @@ class RAGEvaluator:
         
         return evaluation_report
     
+    # Metrics that judge whether the answer is grounded in retrieved_contexts.
+    # A fallback answer never cites retrieved_contexts at all (fallback_node
+    # generates directly, without the RAG context), so these score it as
+    # unsupported by construction -- not because the fallback answer lied,
+    # but because there was no context for it to be "faithful" to in the
+    # first place. Averaging that in with genuinely-grounded answers conflates
+    # "the system is inaccurate" with "the system honestly declined to
+    # answer", so these three are averaged over non-fallback results only.
+    # answer_relevancy doesn't use contexts (it compares the answer against
+    # the question), so it stays meaningful for fallback answers too.
+    _CONTEXT_GROUNDED_METRICS = {"faithfulness", "context_recall", "context_precision"}
+
+    @staticmethod
+    def _is_fallback(result: Dict) -> bool:
+        return bool(result.get("rag_metadata", {}).get("performance", {}).get("fallback_used", False))
+
     def _calculate_aggregate_scores(self, results: List[Dict]) -> Dict[str, float]:
         """Calculate aggregate scores across all evaluations"""
-        
+
         score_sums = {}
         score_counts = {}
-        
+
         for result in results:
             if "scores" in result and result["scores"]:
+                is_fallback = self._is_fallback(result)
                 for metric, score in result["scores"].items():
+                    if metric in self._CONTEXT_GROUNDED_METRICS and is_fallback:
+                        continue
                     if isinstance(score, (int, float)) and not (isinstance(score, float) and math.isnan(score)):
                         if metric not in score_sums:
                             score_sums[metric] = 0
                             score_counts[metric] = 0
                         score_sums[metric] += score
                         score_counts[metric] += 1
-        
+
         # Calculate averages
         aggregate_scores = {}
         for metric in score_sums:
@@ -306,6 +332,27 @@ class RAGEvaluator:
                 aggregate_scores[f"{metric}_count"] = score_counts[metric]
 
         return aggregate_scores
+
+    def _calculate_fallback_stats(self, results: List[Dict]) -> Dict[str, Any]:
+        """
+        How often the pipeline fell back instead of answering from retrieved
+        context. This has to be reported as its own number -- excluding
+        fallback answers from faithfulness/context_recall/context_precision
+        (see _CONTEXT_GROUNDED_METRICS above) makes those scores look better
+        the more often the system declines to answer, so a rising fallback
+        rate has to stay visible somewhere or that failure mode goes silent.
+        """
+        total = len(results)
+        if total == 0:
+            return {"total_count": 0}
+
+        fallback_count = sum(1 for r in results if self._is_fallback(r))
+
+        return {
+            "total_count": total,
+            "fallback_count": fallback_count,
+            "fallback_rate": round(fallback_count / total, 4),
+        }
 
     def _calculate_latency_stats(self, results: List[Dict]) -> Dict[str, Any]:
         """
