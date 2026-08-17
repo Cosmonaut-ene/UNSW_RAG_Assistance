@@ -127,6 +127,26 @@ class TestCheckFaithfulness:
         assert result["unsupported_claims"] == []
 
     @patch('ai.llm_client.get_genai_model')
+    def test_context_not_truncated(self, mock_get_model):
+        """
+        Must see exactly what generate_node saw (ai/response_generator.py
+        build_context_and_sources doesn't truncate either) -- a live
+        30-query RAGAS run found answers flagged unfaithful purely because
+        this check only saw a 700-char prefix of docs that commonly run
+        1000-1800 chars, missing claims genuinely grounded past that cutoff.
+        """
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value.text = json.dumps({"faithful": True, "unsupported_claims": []})
+        mock_get_model.return_value = mock_model
+
+        long_content = "A" * 500 + "COMP9900 has a group project component." + "B" * 500
+        check_faithfulness("The course has a group project component.", [{"page_content": long_content}])
+
+        prompt_arg = mock_model.generate_content.call_args[0][0]
+        assert "COMP9900 has a group project component." in prompt_arg
+        assert prompt_arg.count("A") >= 500 and prompt_arg.count("B") >= 500
+
+    @patch('ai.llm_client.get_genai_model')
     def test_unfaithful_answer_lists_unsupported_claims(self, mock_get_model):
         mock_model = MagicMock()
         mock_model.generate_content.return_value.text = json.dumps({
