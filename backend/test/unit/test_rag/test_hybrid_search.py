@@ -449,3 +449,81 @@ class TestHybridSearchEngineIntegration:
         if len(results) > 1:
             scores = [result['metadata']['hybrid_score'] for result in results]
             assert scores == sorted(scores, reverse=True)
+
+class TestCombineResultsRealScores:
+    """
+    combine_results() must respect a real rag_score if the caller already
+    computed one (via search_documents_with_scores + normalize_similarity_score
+    in process_with_rag_detailed), only falling back to a flat 100 when no
+    score is present (B1 in SPEC.md).
+    """
+
+    def test_respects_preexisting_rag_score(self):
+        mock_vector_store = MockVectorStore()
+        hybrid_engine = HybridSearchEngine(vector_store=mock_vector_store)
+
+        # Above the default min_rag_score (30.0) so it survives filtering --
+        # this test is about whether the *value* is respected, not about
+        # threshold filtering (that's covered by test_low_score_gets_filtered_out)
+        rag_results = [
+            {
+                'page_content': 'A moderately relevant chunk',
+                'metadata': {'source': 'handbook.pdf', 'rag_score': 65.5}
+            }
+        ]
+
+        combined = hybrid_engine.combine_results(rag_results, [], max_results=5)
+
+        assert combined[0]['metadata']['rag_score'] == 65.5
+
+    def test_low_score_gets_filtered_out(self):
+        """
+        With the old hardcoded rag_score=100, this chunk would always have
+        passed the min_rag_score=30.0 threshold. With a real, low score, it
+        must now be correctly filtered out.
+        """
+        mock_vector_store = MockVectorStore()
+        hybrid_engine = HybridSearchEngine(vector_store=mock_vector_store)
+
+        rag_results = [
+            {
+                'page_content': 'A barely relevant chunk',
+                'metadata': {'source': 'handbook.pdf', 'rag_score': 23.5}
+            }
+        ]
+
+        combined = hybrid_engine.combine_results(rag_results, [], max_results=5)
+
+        assert combined == []
+
+    def test_defaults_to_100_when_no_score_present(self):
+        """Backward compatibility: callers that don't provide a score keep old behavior"""
+        mock_vector_store = MockVectorStore()
+        hybrid_engine = HybridSearchEngine(vector_store=mock_vector_store)
+
+        rag_results = [
+            {
+                'page_content': 'A chunk with no score info',
+                'metadata': {'source': 'handbook.pdf'}
+            }
+        ]
+
+        combined = hybrid_engine.combine_results(rag_results, [], max_results=5)
+
+        assert combined[0]['metadata']['rag_score'] == 100
+
+    def test_different_scores_produce_different_hybrid_scores(self):
+        """Two RAG-only results with different real scores must rank differently"""
+        mock_vector_store = MockVectorStore()
+        hybrid_engine = HybridSearchEngine(vector_store=mock_vector_store)
+
+        rag_results = [
+            {'page_content': 'Highly relevant chunk', 'metadata': {'source': 'a.pdf', 'rag_score': 95.0}},
+            {'page_content': 'Moderately relevant chunk', 'metadata': {'source': 'b.pdf', 'rag_score': 45.0}},
+        ]
+
+        combined = hybrid_engine.combine_results(rag_results, [], max_results=5)
+
+        # The higher-scored chunk must be ranked first
+        assert combined[0]['metadata']['source'] == 'a.pdf'
+        assert combined[0]['metadata']['hybrid_score'] > combined[1]['metadata']['hybrid_score']

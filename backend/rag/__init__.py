@@ -169,29 +169,34 @@ def process_with_rag_detailed(question: str, conversation_history: list = None) 
     Returns search results for the service layer to process with AI
     """
     try:
-        # Perform document search
-        search_results = search_similar_documents(question, k=50)
-        
-        print(f"[RAG] Processing {len(search_results)} retrieved chunks for query: {question[:50]}...")
-        
+        # Perform document search (with real similarity scores -- see B1 in
+        # SPEC.md: this used to call search_similar_documents(), which throws
+        # away Chroma's distance entirely, forcing hybrid_search.py to fake a
+        # flat rag_score=100 for every result regardless of actual relevance)
+        from .search_engine import normalize_similarity_score
+        scored_results = search_documents_with_scores(question, k=50)
+
+        print(f"[RAG] Processing {len(scored_results)} retrieved chunks for query: {question[:50]}...")
+
         # Convert to dict format
         result_docs = []
         matched_files = []
-        
-        for i, doc in enumerate(search_results, 1):
+
+        for i, (doc, distance) in enumerate(scored_results, 1):
             # Log individual chunk details
             metadata = doc.metadata if hasattr(doc, 'metadata') else {}
             source_file = metadata.get('source', 'Unknown')
             content_type = metadata.get('content_type', 'Unknown')
             chunk_preview = doc.page_content[:100].replace('\n', ' ') if hasattr(doc, 'page_content') else 'No content'
-            
-            print(f"[RAG] Chunk {i}: {source_file} ({content_type}) - {chunk_preview}...")
-            
+            rag_score = normalize_similarity_score(distance)
+
+            print(f"[RAG] Chunk {i} (score: {rag_score:.1f}): {source_file} ({content_type}) - {chunk_preview}...")
+
             result_docs.append({
                 'page_content': doc.page_content,
-                'metadata': metadata
+                'metadata': {**metadata, 'rag_score': rag_score}
             })
-            
+
             # Extract file info
             if source_file != 'Unknown':
                 filename = source_file.split('/')[-1] if '/' in source_file else source_file
