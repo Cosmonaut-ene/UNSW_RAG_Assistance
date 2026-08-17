@@ -13,6 +13,9 @@ from rag.graph_rag import (
     route_after_rewrite,
     grade_documents_node,
     route_after_grading,
+    hallucination_check_node,
+    fallback_node,
+    route_after_hallucination_check,
 )
 
 
@@ -33,7 +36,8 @@ def make_state(**overrides):
         "answer": "",
         "answered": False,
         "matched_files": [],
-        "fallback": False,
+        "hallucination_detected": False,
+        "fallback_used": False,
         "safety_blocked": False,
         "processing_steps": [],
         "generation_attempts": 0,
@@ -204,3 +208,100 @@ class TestRouteAfterGrading:
     def test_nonempty_reranked_docs_routes_to_generate(self):
         docs = [{"page_content": "a", "metadata": {}}]
         assert route_after_grading(make_state(reranked_docs=docs)) == "generate"
+
+
+class TestHallucinationCheckNode:
+    """
+    hallucination_check_node now sets hallucination_detected (not the old
+    overloaded fallback field), based on validate_citations() +
+    check_faithfulness() instead of scanning for "I don't know" phrases (D3).
+    """
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_faithful_valid_citations_not_flagged(self, mock_validate, mock_faithful):
+        mock_validate.return_value = (True, False)
+        mock_faithful.return_value = {"faithful": True, "unsupported_claims": []}
+
+        result = hallucination_check_node(make_state(answer="COMP9900 is a capstone course."))
+
+        assert result["hallucination_detected"] is False
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_unfaithful_answer_flagged(self, mock_validate, mock_faithful):
+        mock_validate.return_value = (True, False)
+        mock_faithful.return_value = {"faithful": False, "unsupported_claims": ["invented prerequisite"]}
+
+        result = hallucination_check_node(make_state(answer="COMP9900 requires COMP9999."))
+
+        assert result["hallucination_detected"] is True
+        assert "hallucination_detected" in result["processing_steps"]
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_invalid_citation_flagged_even_if_faithful(self, mock_validate, mock_faithful):
+        """A fabricated citation must be caught even when the LLM judges content faithful"""
+        mock_validate.return_value = (False, False)
+        mock_faithful.return_value = {"faithful": True, "unsupported_claims": []}
+
+        result = hallucination_check_node(make_state(answer="See [Fake](url)."))
+
+        assert result["hallucination_detected"] is True
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_missing_citation_flagged(self, mock_validate, mock_faithful):
+        mock_validate.return_value = (True, True)
+        mock_faithful.return_value = {"faithful": True, "unsupported_claims": []}
+
+        result = hallucination_check_node(make_state(answer="COMP9900 is a course, no sources."))
+
+        assert result["hallucination_detected"] is True
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_empty_answer_flagged(self, mock_validate, mock_faithful):
+        mock_validate.return_value = (True, False)
+        mock_faithful.return_value = {"faithful": False, "unsupported_claims": ["(empty answer)"]}
+
+        result = hallucination_check_node(make_state(answer=""))
+
+        assert result["hallucination_detected"] is True
+
+
+class TestFallbackNode:
+    """fallback_node now sets fallback_used, not the overloaded fallback field (D3)"""
+
+    @patch('ai.response_generator.generate_fallback_response')
+    def test_sets_fallback_used_not_hallucination_detected(self, mock_fallback):
+        mock_fallback.return_value = "I can help with UNSW CSE questions."
+
+        result = fallback_node(make_state())
+
+        assert result["fallback_used"] is True
+        assert "hallucination_detected" not in result
+
+
+class TestRouteAfterHallucinationCheck:
+
+    def test_detected_with_attempts_remaining_routes_to_fallback(self):
+        state = make_state(hallucination_detected=True, generation_attempts=1)
+        assert route_after_hallucination_check(state) == "fallback"
+
+    def test_not_detected_routes_to_end(self):
+        from langgraph.graph import END
+        state = make_state(hallucination_detected=False, generation_attempts=1)
+        assert route_after_hallucination_check(state) == END
+
+    def test_detected_but_attempts_exhausted_routes_to_end(self):
+        """
+        Attempts exhausted means the answer is served as-is even though
+        flagged -- this must not report fallback_used=True downstream
+        (that field is now set only by fallback_node actually running,
+        fixing the telemetry bug where the old shared `fallback` field
+        would misreport this case).
+        """
+        from langgraph.graph import END
+        state = make_state(hallucination_detected=True, generation_attempts=2)
+        assert route_after_hallucination_check(state) == END

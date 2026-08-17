@@ -16,7 +16,10 @@ Fallback paths:
   - safety_check not SAFE -> return warning
   - query_rewrite NAVIGATION intent -> fallback LLM
   - grade_documents INCORRECT -> fallback LLM
-  - hallucination_check FAIL -> regenerate (max 1 retry)
+  - hallucination_check detects a problem -> fallback LLM (one-shot; despite
+    generation_attempts existing, there is no actual "regenerate with the
+    same context and recheck" loop -- fallback_node is a dead end straight
+    to END, see D3 in SPEC.md)
 """
 
 import time
@@ -45,7 +48,8 @@ class RAGState(TypedDict):
     answer: str
     answered: bool
     matched_files: List[str]
-    fallback: bool
+    hallucination_detected: bool  # set by hallucination_check_node
+    fallback_used: bool  # set by fallback_node -- was conflated with hallucination_detected before D3
     safety_blocked: bool
     processing_steps: List[str]
 
@@ -288,40 +292,59 @@ def fallback_node(state: RAGState) -> dict:
     return {
         "answer": fallback_answer,
         "answered": True,
-        "fallback": True,
+        "fallback_used": True,
         "matched_files": [],
         "processing_steps": steps,
     }
 
 
 def hallucination_check_node(state: RAGState) -> dict:
-    """Check if the generated answer might be hallucinated"""
+    """
+    Verify the generated answer is faithful to retrieved context and its
+    citations are real (D3 in SPEC.md). Replaces the old keyword scan,
+    which only caught the model admitting "I don't know" -- confident
+    fabrication (a wrong course code, an invented prerequisite) sailed
+    straight through it undetected.
+
+    Two independent checks:
+      a) validate_citations() -- deterministic, no LLM call: every cited
+         source must be one of the documents actually retrieved for this
+         query. A fabricated citation is itself a form of hallucination.
+      b) check_faithfulness() -- structured LLM call: every claim in the
+         answer must be supported by the retrieved context.
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("hallucination_check")
 
     answer = state.get("answer", "")
+    reranked_docs = state.get("reranked_docs", [])
+    matched_files = state.get("matched_files", [])
 
-    # Simple heuristic checks for hallucination indicators
-    hallucination_phrases = [
-        "i don't have any information",
-        "i don't know",
-        "INSUFFICIENT_CONTEXT",
-        "within the current context",
-    ]
+    from rag.hallucination_checker import validate_citations, check_faithfulness
 
-    is_hallucinated = False
-    for phrase in hallucination_phrases:
-        if phrase.lower() in answer.lower():
-            is_hallucinated = True
-            steps.append(f"hallucination_detected:{phrase[:20]}")
-            break
+    citations_valid, citations_missing = validate_citations(answer, matched_files)
+    faithfulness = check_faithfulness(answer, reranked_docs)
 
-    if not answer:
-        is_hallucinated = True
-        steps.append("hallucination_detected:empty_answer")
+    is_hallucinated = (
+        not answer
+        or not faithfulness["faithful"]
+        or not citations_valid
+        or citations_missing
+    )
+
+    if is_hallucinated:
+        steps.append("hallucination_detected")
+        if not answer:
+            steps.append("empty_answer")
+        if not faithfulness["faithful"]:
+            steps.append(f"unfaithful_claims:{len(faithfulness['unsupported_claims'])}")
+        if not citations_valid:
+            steps.append("invalid_citation")
+        if citations_missing:
+            steps.append("missing_citation")
 
     return {
-        "fallback": is_hallucinated,
+        "hallucination_detected": is_hallucinated,
         "processing_steps": steps,
     }
 
@@ -352,7 +375,7 @@ def route_after_grading(state: RAGState) -> str:
 
 
 def route_after_hallucination_check(state: RAGState) -> str:
-    if state.get("fallback") and state.get("generation_attempts", 0) <= 1:
+    if state.get("hallucination_detected") and state.get("generation_attempts", 0) <= 1:
         return "fallback"
     return END
 
@@ -441,7 +464,8 @@ def invoke_rag_graph(query: str,
         "answer": "",
         "answered": False,
         "matched_files": [],
-        "fallback": False,
+        "hallucination_detected": False,
+        "fallback_used": False,
         "safety_blocked": False,
         "processing_steps": [],
         "generation_attempts": 0,
@@ -464,7 +488,7 @@ def invoke_rag_graph(query: str,
             "response_time_ms": response_time,
             "processing_steps": result.get("processing_steps", []),
             "cache_hit": False,
-            "fallback_used": result.get("fallback", False),
+            "fallback_used": result.get("fallback_used", False),
             "safety_blocked": result.get("safety_blocked", False),
         }
     }
