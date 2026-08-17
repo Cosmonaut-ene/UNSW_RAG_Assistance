@@ -232,7 +232,16 @@ def grade_documents_node(state: RAGState) -> dict:
 
 
 def generate_node(state: RAGState) -> dict:
-    """Generate answer from retrieved context"""
+    """
+    Generate answer from retrieved context.
+
+    Calls generate_response() directly rather than going through the old
+    process_with_ai_pipeline() -- that function re-ran its own safety check
+    and query rewrite internally, duplicating work safety_check_node and
+    query_rewrite_node already did upstream in this graph (two extra LLM
+    calls per request, and a second, independent safety verdict that could
+    silently disagree with the first).
+    """
     steps = list(state.get("processing_steps", []))
     steps.append("ai_generation")
 
@@ -240,24 +249,18 @@ def generate_node(state: RAGState) -> dict:
     rewritten_query = state.get("rewritten_query", state["query"])
     history = state.get("history", "")
 
-    from ai import process_query as ai_process_query
+    from ai.response_generator import generate_response, build_context_and_sources
 
-    # Convert to format expected by AI module
     search_results = [
         {"page_content": doc.get("page_content", ""), "metadata": doc.get("metadata", {})}
         for doc in reranked_docs
     ]
 
-    ai_result = ai_process_query(rewritten_query, search_results, history)
-    answer = ai_result.get("answer", "")
-    safety_blocked = ai_result.get("safety_blocked", False)
+    combined_context, context_matched_files = build_context_and_sources(search_results)
+    answer = generate_response(combined_context, rewritten_query, history)
 
-    if safety_blocked:
-        steps.append("safety_blocked_generation")
-
-    # Update matched files from AI result
     matched_files = list(state.get("matched_files", []))
-    for f in ai_result.get("matched_files", []):
+    for f in context_matched_files:
         if f not in matched_files:
             matched_files.append(f)
 
@@ -266,7 +269,6 @@ def generate_node(state: RAGState) -> dict:
     return {
         "answer": answer,
         "answered": True,
-        "safety_blocked": safety_blocked,
         "matched_files": matched_files,
         "generation_attempts": generation_attempts,
         "processing_steps": steps,
