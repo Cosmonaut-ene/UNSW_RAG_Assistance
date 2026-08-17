@@ -49,40 +49,33 @@ def generate_hypothetical_document(query: str, conversation_history: str = "") -
         return None
 
 
-def hyde_search(query: str,
-                hyde_doc: str,
+def hyde_search(hyde_doc: str,
                 search_fn,
                 k: int = 10) -> list:
     """
-    Perform HyDE-enhanced search: retrieve using both the original query
-    and the hypothetical document, then merge and deduplicate results.
+    Perform HyDE-enhanced search: retrieve using the hypothetical document's
+    embedding, which sits closer to real document embeddings than the short
+    original query does.
+
+    Note: this does NOT also search the original query — retrieve_node's main
+    path (process_with_rag_detailed) already does that with the same
+    underlying function. Searching it again here was pure duplicate work
+    whose results were mostly discarded at the final content-based dedupe
+    anyway.
 
     Args:
-        query: Original query
         hyde_doc: Generated hypothetical document
         search_fn: Function that takes (query, k) and returns list of documents
-        k: Number of results to retrieve per query
+        k: Number of results to retrieve
 
     Returns:
-        Merged and deduplicated list of documents
+        Deduplicated list of documents from the HyDE search
     """
-    # Search with original query
-    original_results = search_fn(query, k=k)
-
-    # Search with hypothetical document
     hyde_results = search_fn(hyde_doc, k=k)
 
-    # Merge and deduplicate by content prefix
+    # Deduplicate by content prefix (search_fn can return overlapping chunks)
     seen = set()
     merged = []
-
-    for doc in original_results:
-        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
-        key = content[:150]
-        if key not in seen:
-            seen.add(key)
-            merged.append(doc)
-
     for doc in hyde_results:
         content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
         key = content[:150]
@@ -90,5 +83,5 @@ def hyde_search(query: str,
             seen.add(key)
             merged.append(doc)
 
-    print(f"[HyDE] Merged results: {len(original_results)} original + {len(hyde_results)} hyde = {len(merged)} unique")
+    print(f"[HyDE] HyDE search returned {len(hyde_results)} results, {len(merged)} unique")
     return merged
