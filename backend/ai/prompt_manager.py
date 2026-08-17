@@ -78,35 +78,38 @@ class PromptManager:
     
     @staticmethod
     def get_query_rewrite_template() -> str:
-        """Get query rewriting prompt template"""
-        return """🎓 I'm your UNSW CSE Query Enhancement Assistant! I optimize queries for better search results. ✨
+        """
+        Query analysis prompt template -- produces both a rewritten query and
+        a HyDE hypothetical document in one structured call (C3 in SPEC.md).
 
-🛡️ **SMART FILTERING**: 
-- ✅ ALLOW: General career/study questions, program selection advice, UNSW clubs/activities
-- ❌ REDIRECT: Explicit mentions of other universities (USYD, UTS, etc.) → "REDIRECT: I can only help with UNSW-related questions."
+        Note: this template no longer judges whether a query is on-topic for
+        UNSW (that used to redirect off-topic queries here). That's
+        safety_check_node's job now (OFF_TOPIC classification, C1) -- this
+        template is only reached after a query has already passed that gate,
+        so it only needs to resolve references and detect navigation intent.
+        """
+        return """🎓 I'm your UNSW CSE Query Analysis Assistant! I prepare queries for retrieval. ✨
 
 {history_context}
 
-## 🚀 ENHANCEMENT RULES:
+## 🚀 TASK 1 — REWRITE THE QUERY:
 ✨ **Context-aware**: Use conversation history to resolve references
 🎯 **Keywords**: Extract essential terms for search
 📝 **Concise**: Shorter queries work better
 💬 **Greetings**: Keep social interactions natural
-🗺️ **Navigation**: "Where is X?" → "NAVIGATION_QUERY"
+🗺️ **Navigation**: If the query is asking for a physical location on campus (e.g. "Where is X?"), set intent to "NAVIGATION" and leave rewritten_query empty -- these are answered by MazeMap, not the knowledge base.
+
+## 📄 TASK 2 — HYPOTHETICAL DOCUMENT (only when intent is "REWRITE"):
+Write a 2-3 sentence hypothetical answer to the rewritten query, as if you had access to the UNSW CSE knowledge base. Write in the same factual, formal style and terminology as official UNSW documentation (e.g. course descriptions, handbook entries), so it reads like a real document -- this is used purely for embedding-based retrieval, not shown to the user. Do NOT invent specific course codes, unit numbers, or other identifiers you cannot verify; describe the topic in general, document-like language instead. Leave empty when intent is "NAVIGATION".
 
 ## 🎯 EXAMPLES:
-- "Tell me about COMP9020" → "Introduce COMP9020"
-- "Where is J17?" → "NAVIGATION_QUERY"
-- "Where can I park?" → "UNSW parking options visitor"
-- "Where to park for Open Day?" → "UNSW Open Day parking information"
-- "Parking at UNSW?" → "UNSW campus parking"
-- "Where can I study?" → "UNSW study space options"
-- "Compare COMP9900 and COMP9901" → "COMP9900 COMP9901 comparison"
-- History: User discussed COMP9020, Input: "prerequisites for it" → "COMP9020 prerequisites"
-- "What about CS at University of Sydney?" → "REDIRECT: I can only help with UNSW-related questions."
+- "Tell me about COMP9020" → intent="REWRITE", rewritten_query="Introduce COMP9020"
+- "Where is J17?" → intent="NAVIGATION", rewritten_query=""
+- "Where can I park?" → intent="REWRITE", rewritten_query="UNSW parking options visitor"
+- "Compare COMP9900 and COMP9901" → intent="REWRITE", rewritten_query="COMP9900 COMP9901 comparison"
+- History: User discussed COMP9020, Input: "prerequisites for it" → intent="REWRITE", rewritten_query="COMP9020 prerequisites"
 
 🎯 **Your Query:** "{original_query}"
-💫 **Enhanced Query:** (Return ONLY the enhanced query)
         """
         
     @staticmethod

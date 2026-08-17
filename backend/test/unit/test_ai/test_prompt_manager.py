@@ -83,26 +83,29 @@ class TestPromptManager:
         assert "Welcome back" in rendered
         
     def test_get_query_rewrite_template(self):
-        """Test query rewrite template structure and content"""
+        """Test query rewrite template structure and content (C3: merged with HyDE, REDIRECT removed)"""
         template = PromptManager.get_query_rewrite_template()
-        
+
         assert isinstance(template, str)
         assert "{history_context}" in template
         assert "{original_query}" in template
-        assert "Query Enhancement Assistant" in template
-        assert "REDIRECT:" in template
-        assert "NAVIGATION_QUERY" in template
-        
+        assert "Query Analysis Assistant" in template
+        # REDIRECT is gone -- off-topic judgment now belongs to safety_check_node (C1)
+        assert "REDIRECT:" not in template
+        assert "NAVIGATION" in template
+        # HyDE instructions now live in this template (C3)
+        assert "hypothetical" in template.lower()
+        assert "do not invent" in template.lower()
+
     def test_query_rewrite_template_examples(self):
         """Test that query rewrite template includes expected examples"""
         template = PromptManager.get_query_rewrite_template()
-        
+
         # Check for example patterns
         assert "Tell me about COMP9020" in template
         assert "Where is J17?" in template
-        assert "NAVIGATION_QUERY" in template
+        assert "NAVIGATION" in template
         assert "Compare COMP9900 and COMP9901" in template
-        assert "University of Sydney" in template
         
     def test_get_fallback_prompt_template_structure(self):
         """Test fallback prompt template structure"""
@@ -257,24 +260,25 @@ class TestPromptManagerIntegration:
         assert "previous discussion" in rendered.lower() or "conversation" in rendered.lower()
         
     def test_query_enhancement_scenarios(self):
-        """Test query enhancement template with various scenarios"""
+        """Test query enhancement template with various scenarios.
+
+        Off-topic redirect (e.g. 'University of Sydney') is no longer this
+        template's concern -- safety_check_node handles OFF_TOPIC classification
+        before a query ever reaches query_rewrite (C1/C3 in SPEC.md)."""
         template = PromptManager.get_query_rewrite_template()
-        
+
         test_cases = [
             ("Tell me about COMP9900", "course information"),
             ("Where is J17?", "location query"),
-            ("What about University of Sydney?", "non-UNSW redirect"),
             ("How do I get to the library?", "navigation query")
         ]
-        
+
         for query, expected_type in test_cases:
             formatted = template.format(history_context="", original_query=query)
             assert query in formatted
-            
+
             # Check that appropriate handling is mentioned
-            if "University of Sydney" in query:
-                assert "REDIRECT" in formatted
-            elif "Where is" in query or "How do I get" in query:
+            if "Where is" in query or "How do I get" in query:
                 assert "NAVIGATION" in formatted
 
 
