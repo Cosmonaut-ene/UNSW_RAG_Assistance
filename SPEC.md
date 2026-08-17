@@ -103,7 +103,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 
 | # | 模块 | 分支建议 | 状态 | PR | 依赖 |
 |---|---|---|---|---|---|
-| C1 | `safety_check` 改为单次结构化四分类 | `feat/safety-check-structured` | 未开始 | | — |
+| C1 | `safety_check` 改为单次结构化四分类 | `feat/safety-check-structured` | 已完成 | [#12](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/12) | — |
 | C2 | 生成 prompt 加分隔符 + 间接注入防线 | `feat/generation-injection-defense` | 未开始 | | 建议与 C1 同一 PR |
 | C3 | 合并 `query_rewrite` 与 `hyde_generate` 为单次结构化调用 | `refactor/merge-query-rewrite-hyde` | 未开始 | | 依赖 C1 |
 
