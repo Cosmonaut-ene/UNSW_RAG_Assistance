@@ -97,7 +97,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 | # | 模块 | 分支建议 | 状态 | PR | 依赖 |
 |---|---|---|---|---|---|
 | B1 | 修复向量检索分数被硬编码为 100 | `fix/vector-score-hardcoded` | 已完成 | [#10](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/10) | — |
-| B2 | 排查 context_recall 绝对值偏低的根因 | `chore/context-recall-investigation` | 未开始 | | 依赖 B1 |
+| B2 | 排查 context_recall 绝对值偏低的根因 | `chore/context-recall-investigation` | 已完成（结论：context_recall 0.100→0.175，B1 有效，绝对值仍偏低，下一瓶颈指向 CRAG/D1） | [#11](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/11) | 依赖 B1 |
 
 ### 阶段 C · 结构化输出范式
 
