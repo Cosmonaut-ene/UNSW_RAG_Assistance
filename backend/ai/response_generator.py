@@ -8,6 +8,8 @@ from .llm_client import get_chat_llm
 from .prompt_manager import PromptManager
 # Removed direct rag dependency - will be handled by services layer
 
+DEFAULT_FALLBACK_MESSAGE = "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+
 
 def build_context_and_sources(search_results: List[Dict]) -> Tuple[str, List[str]]:
     """
@@ -87,66 +89,67 @@ def generate_response(context: str, question: str, formatted_history: str = "") 
 
     return response.content if hasattr(response, 'content') else str(response)
 
-def generate_fallback_response(question: str, formatted_history: str = "") -> str:
+def generate_fallback_response(question: str, formatted_history: str = "", reason: str = "") -> str:
     """
-    Generate fallback response when no context is available
-    
+    Generate fallback response when no context is available.
+
     Args:
         question: User's question
-        conversation_history: Previous conversation exchanges
-        
+        formatted_history: Pre-formatted conversation history
+        reason: Why fallback was triggered -- "navigation", "no_relevant_docs",
+                or "hallucination_retry" (see RAGState.fallback_reason in
+                graph_rag.py). Only "navigation" gets the MazeMap
+                instructions injected; the other two reasons have nothing
+                to do with campus locations, and including that whole
+                section for them was pure noise that could nudge the model
+                toward offering directions for an unrelated question (E2
+                in SPEC.md).
+
     Returns:
         str: Fallback response with UNSW CSE assistant identity
     """
-    # History formatting is now handled by the calling service layer
-    
     try:
-        mazemap_context = PromptManager.get_mazemap_context()
         llm = get_chat_llm()
-        
+        template = PromptManager.get_fallback_prompt_template()
+
+        history_section = ""
         if formatted_history:
-            # Use fallback template with history
-            template = PromptManager.get_fallback_prompt_template()
-            # Modify template to include history
-            template_with_history = template.template.replace(
-                "❓ Question: {question}",
-                "== Conversation History ==\n{history}\n\n❓ Question: {question}"
+            history_section = (
+                "## 💬 OUR CONVERSATION SO FAR:\n"
+                f"{formatted_history}\n\n"
             )
-            template_with_history = template_with_history.replace(
-                'input_variables=["question", "mazemap_context"]',
-                'input_variables=["question", "mazemap_context", "history"]'
+
+        navigation_section = ""
+        if reason == "navigation":
+            navigation_section = (
+                "🗺️ **Campus Navigation:**\n"
+                f"{PromptManager.get_mazemap_context()}\n\n"
             )
-            
-            response = llm.invoke(template_with_history.format(
-                history=formatted_history,
-                question=question,
-                mazemap_context=mazemap_context
-            ))
-        else:
-            template = PromptManager.get_fallback_prompt_template()
-            response = llm.invoke(template.format(
-                question=question,
-                mazemap_context=mazemap_context
-            ))
+
+        response = llm.invoke(template.format(
+            question=question,
+            history_section=history_section,
+            navigation_section=navigation_section,
+        ))
     except Exception as e:
         print(f"[AI Response] Error in fallback response generation: {e}")
-        return "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
-    
-    print("[AI Response] Using fallback direct LLM with UNSW CSE assistant identity")
-    
+        return DEFAULT_FALLBACK_MESSAGE
+
+    print(f"[AI Response] Using fallback direct LLM with UNSW CSE assistant identity (reason={reason or 'unspecified'})")
+
     # Handle response extraction with error handling
     try:
         if hasattr(response, 'content'):
             result = response.content
             # Handle empty or None content
             if not result:
-                result = "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+                result = DEFAULT_FALLBACK_MESSAGE
             return result
         else:
             result = str(response)
             if not result or result.lower() in ['none', 'null', '']:
-                result = "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+                result = DEFAULT_FALLBACK_MESSAGE
             return result
     except Exception as e:
         print(f"[AI Response] Error extracting response content: {e}")
-        return "I'm here to help with UNSW CSE related questions. Could you please rephrase your question?"
+        return DEFAULT_FALLBACK_MESSAGE

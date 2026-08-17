@@ -104,17 +104,33 @@ Write a 2-3 sentence hypothetical answer to the rewritten query, as if you had a
         
     @staticmethod
     def get_fallback_prompt_template() -> PromptTemplate:
-        """Get fallback LLM prompt template"""
+        """
+        Fallback LLM prompt template (E2 in SPEC.md).
+
+        fallback_node is reached from three different trigger points
+        (query_rewrite NAVIGATION intent / grade_documents no relevant docs
+        / hallucination_check detected a problem), but used to inject the
+        full MazeMap navigation instructions unconditionally regardless of
+        which one fired -- irrelevant noise for the latter two, and could
+        even nudge the model toward offering campus directions for a
+        course-content question that just failed retrieval.
+
+        navigation_section is now conditional: populated with MazeMap
+        instructions only when fallback was triggered by a navigation
+        intent, empty string otherwise. history_section follows the same
+        conditional pattern as the main RAG template (D2).
+        """
         return PromptTemplate(
-            input_variables=["question", "mazemap_context"],
+            input_variables=["question", "navigation_section", "history_section"],
             template=(
                 "🎓 Hi! I'm your UNSW CSE Open Day Assistant! I'm here to help! ✨\n\n"
-                
-                "🗺️ **Campus Navigation:**\n"
-                "{mazemap_context}\n\n"
-                
+
+                "{history_section}"
+
+                "{navigation_section}"
+
                 "❓ **Your Question:** {question}\n\n"
-                
+
                 "## 🎯 HOW I HELP:\n"
                 "🤗 **Greetings**: Welcome + guidance on what I can help with\n"
                 "🗺️ **Locations**: Interactive campus maps and navigation\n"
@@ -122,7 +138,7 @@ Write a 2-3 sentence hypothetical answer to the rewritten query, as if you had a
                 "📝 **Information**: Clear lists and structured responses\n"
                 "📊 **Comparisons only**: Use tables only when directly comparing multiple options\n"
                 "💡 **Suggestions**: Specific questions for better results\n\n"
-                
+
                 "💫 My Response:"
             )
         )
