@@ -155,7 +155,7 @@ def retrieve_node(state: RAGState) -> dict:
             from rag.hyde import hyde_search
             from rag.search_engine import search_similar_documents
 
-            hyde_extra = hyde_search(rewritten_query, hyde_doc, search_similar_documents, k=10)
+            hyde_extra = hyde_search(hyde_doc, search_similar_documents, k=10)
             # Convert to dict format and add to results
             seen_content = set(r.get("page_content", "")[:100] for r in hybrid_results)
             for doc in hyde_extra:
