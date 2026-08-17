@@ -26,12 +26,21 @@ def generate_hypothetical_document(query: str, conversation_history: str = "") -
         from ai.llm_client import get_genai_model
         model = get_genai_model("gemini-2.5-flash")
 
+        # Note: deliberately does NOT ask the model to invent specific course
+        # codes or other precise identifiers. HyDE only needs this text to be
+        # embedded -- what matters is that its wording/style/structure matches
+        # real UNSW documentation closely enough for the embedding to land near
+        # real document vectors. Asking it to "contain specific course codes"
+        # risks the model fabricating a wrong code, which would pull retrieval
+        # toward an unrelated course instead of helping it.
         prompt = (
             "You are a knowledgeable UNSW Computer Science and Engineering assistant. "
             "Given the following question, write a detailed hypothetical answer as if you had "
-            "access to the UNSW CSE knowledge base. The answer should be factual-sounding and "
-            "contain specific details, course codes, and terminology that would appear in real "
-            "UNSW documentation. Keep it to 2-3 sentences.\n\n"
+            "access to the UNSW CSE knowledge base. Write in the same factual, formal style and "
+            "terminology as official UNSW documentation (e.g. course descriptions, handbook entries), "
+            "so it reads like a real document. Do NOT invent specific course codes, unit numbers, or "
+            "other identifiers you cannot verify -- describe the topic in general, document-like "
+            "language instead. Keep it to 2-3 sentences.\n\n"
             f"Question: {query}\n\n"
             "Hypothetical Answer:"
         )

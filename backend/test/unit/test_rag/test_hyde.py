@@ -2,9 +2,9 @@
 Unit tests for RAG HyDE (Hypothetical Document Embeddings) module
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from rag.hyde import hyde_search
+from rag.hyde import hyde_search, generate_hypothetical_document
 
 
 class FakeDoc:
@@ -56,3 +56,46 @@ class TestHydeSearch:
         results = hyde_search("hypothetical doc text", search_fn, k=10)
 
         assert results == []
+
+
+class TestGenerateHypotheticalDocumentPrompt:
+    """
+    The prompt must not ask the model to invent specific course codes --
+    a fabricated code would pull embedding-based retrieval toward an
+    unrelated course instead of helping it (see A3 in SPEC.md).
+    """
+
+    @patch('ai.llm_client.get_genai_model')
+    def test_prompt_does_not_ask_for_course_codes(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value.text = "A hypothetical answer."
+        mock_get_model.return_value = mock_model
+
+        generate_hypothetical_document("What is COMP9900?")
+
+        prompt_sent = mock_model.generate_content.call_args[0][0]
+        assert "course codes" not in prompt_sent.lower() or "do not invent" in prompt_sent.lower()
+        assert "contain specific details, course codes" not in prompt_sent
+
+    @patch('ai.llm_client.get_genai_model')
+    def test_prompt_explicitly_forbids_inventing_identifiers(self, mock_get_model):
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value.text = "A hypothetical answer."
+        mock_get_model.return_value = mock_model
+
+        generate_hypothetical_document("What is COMP9900?")
+
+        prompt_sent = mock_model.generate_content.call_args[0][0]
+        assert "do not invent" in prompt_sent.lower() or "not invent" in prompt_sent.lower()
+
+    @patch('ai.llm_client.get_genai_model')
+    def test_prompt_still_asks_for_document_style_language(self, mock_get_model):
+        """The style-matching instruction (HyDE's actual purpose) must remain"""
+        mock_model = MagicMock()
+        mock_model.generate_content.return_value.text = "A hypothetical answer."
+        mock_get_model.return_value = mock_model
+
+        generate_hypothetical_document("What is COMP9900?")
+
+        prompt_sent = mock_model.generate_content.call_args[0][0]
+        assert "unsw documentation" in prompt_sent.lower()
