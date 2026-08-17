@@ -59,8 +59,8 @@ def grade_documents(query: str,
         return "INCORRECT", []
 
     try:
-        from ai.llm_client import get_genai_model
-        model = get_genai_model("gemini-2.5-flash")
+        from ai.llm_client import get_genai_model, CLASSIFICATION_MODEL
+        model = get_genai_model(CLASSIFICATION_MODEL)
 
         snippets = []
         for i, doc in enumerate(documents):
