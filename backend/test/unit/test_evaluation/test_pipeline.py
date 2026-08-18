@@ -486,3 +486,150 @@ class TestSaveRunReport:
         pipeline_module.RESULTS_DIR = tmp_path / "does" / "not" / "exist"
 
         pipeline._save_run_report({"query": "Q1"})  # must not raise
+
+
+class TestBehavioralChecks:
+    """
+    _run_behavioral_checks() verifies navigation/out-of-scope queries
+    against real performance metadata rather than RAGAS scores -- there's
+    no ground_truth to compare a "the system should have declined to
+    answer" query against.
+    """
+
+    @pytest.fixture
+    def pipeline(self):
+        with patch('evaluation.pipeline.RAGEvaluator'), \
+             patch('evaluation.pipeline.EvaluationDataset'):
+            return EvaluationPipeline()
+
+    def test_navigation_query_passes_when_intent_is_navigation(self, pipeline):
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "Here's a map link", "contexts": [],
+            "metadata": {"performance": {"query_intent": "NAVIGATION", "fallback_used": True}}
+        })
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "Where is J17?", "category": "navigation", "expected_behavior": "navigation"}]
+        )
+
+        assert results["total_count"] == 1
+        assert results["passed_count"] == 1
+        assert results["pass_rate"] == 1.0
+        assert results["results"][0]["passed"] is True
+
+    def test_navigation_query_fails_when_intent_is_not_navigation(self, pipeline):
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "some answer", "contexts": [],
+            "metadata": {"performance": {"query_intent": "REWRITE", "fallback_used": False}}
+        })
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "Where is J17?", "category": "navigation", "expected_behavior": "navigation"}]
+        )
+
+        assert results["passed_count"] == 0
+        assert results["results"][0]["passed"] is False
+
+    def test_out_of_scope_query_passes_when_fallback_used(self, pipeline):
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "fallback text", "contexts": [],
+            "metadata": {"performance": {"query_intent": "REWRITE", "fallback_used": True, "fallback_reason": "no_relevant_docs"}}
+        })
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "What's the weather?", "category": "out_of_scope", "expected_behavior": "fallback"}]
+        )
+
+        assert results["passed_count"] == 1
+
+    def test_out_of_scope_query_passes_when_safety_blocked(self, pipeline):
+        """
+        Live smoke test finding: a genuinely off-topic query (e.g. weather)
+        often gets classified OFF_TOPIC by safety_check and never sets
+        fallback_used at all -- that's still "didn't hallucinate", just a
+        different mechanism than CRAG/hallucination_check's fallback path.
+        """
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "I can only help with UNSW-related questions.", "contexts": [],
+            "metadata": {"performance": {"query_intent": "", "fallback_used": False, "safety_blocked": True}}
+        })
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "What's the weather?", "category": "out_of_scope", "expected_behavior": "fallback"}]
+        )
+
+        assert results["passed_count"] == 1
+        assert results["results"][0]["passed"] is True
+
+    def test_out_of_scope_query_fails_when_answered_from_context(self, pipeline):
+        """The pipeline shouldn't have fabricated an answer to a query outside the corpus"""
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "a confident but unfounded answer", "contexts": ["some context"],
+            "metadata": {"performance": {"query_intent": "REWRITE", "fallback_used": False}}
+        })
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "What's the weather?", "category": "out_of_scope", "expected_behavior": "fallback"}]
+        )
+
+        assert results["passed_count"] == 0
+        assert results["results"][0]["passed"] is False
+
+    def test_empty_behavioral_queries_returns_zero_results(self, pipeline):
+        results = pipeline._run_behavioral_checks([])
+
+        assert results == {"total_count": 0, "passed_count": 0, "pass_rate": None, "results": []}
+
+    def test_error_during_check_counts_as_failed(self, pipeline):
+        pipeline._generate_rag_response = MagicMock(side_effect=Exception("pipeline error"))
+
+        results = pipeline._run_behavioral_checks(
+            [{"query": "Where is J17?", "category": "navigation", "expected_behavior": "navigation"}]
+        )
+
+        assert results["results"][0]["passed"] is False
+        assert "error" in results["results"][0]
+
+    def test_run_comprehensive_evaluation_separates_scored_and_behavioral_queries(self):
+        """
+        End-to-end: scored queries go through RAGAS, behavioral queries go
+        through _run_behavioral_checks -- neither pool leaks into the
+        other's evaluation path, and sample_size doesn't truncate the
+        behavioral queries off the end of the combined list.
+        """
+        with patch('evaluation.pipeline.RAGEvaluator') as mock_evaluator_class, \
+             patch('evaluation.pipeline.EvaluationDataset') as mock_dataset_class:
+            mock_evaluator = MagicMock()
+            mock_evaluator_class.return_value = mock_evaluator
+            mock_dataset = MagicMock()
+            mock_dataset_class.return_value = mock_dataset
+
+            pipeline = EvaluationPipeline()
+            pipeline.dataset.test_queries = [
+                {"query": "What is COMP9900?", "ground_truth": "...", "category": "course_information",
+                 "difficulty": "easy", "query_type": "direct", "expected_context_keywords": []},
+                {"query": "Where is J17?", "category": "navigation", "difficulty": "easy",
+                 "expected_behavior": "navigation"},
+            ]
+            pipeline.dataset.load_datasets = MagicMock()
+
+            pipeline._generate_rag_response = MagicMock(return_value={
+                "answer": "answer", "contexts": [],
+                "metadata": {"performance": {"query_intent": "NAVIGATION", "fallback_used": True}}
+            })
+            pipeline._save_run_report = MagicMock()
+            pipeline.evaluator.evaluate_batch = MagicMock(return_value={
+                "summary": {}, "aggregate_scores": {}, "performance_analysis": {}, "individual_results": []
+            })
+
+            result = pipeline.run_comprehensive_evaluation(sample_size=1)
+
+            # Only the scored query went to RAGAS
+            ragas_input = pipeline.evaluator.evaluate_batch.call_args[0][0]
+            assert len(ragas_input) == 1
+            assert ragas_input[0]["query"] == "What is COMP9900?"
+
+            # The navigation query was checked behaviorally instead
+            assert result["behavioral_test_results"]["total_count"] == 1
+            assert result["behavioral_test_results"]["passed_count"] == 1
+            assert result["pipeline_metadata"]["actual_queries_tested"] == 2

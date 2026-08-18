@@ -8,13 +8,48 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from evaluation.datasets import EvaluationDataset
+from evaluation.datasets import (
+    EvaluationDataset,
+    OUT_OF_SCOPE_QUERIES,
+    NAVIGATION_QUERIES,
+)
 from evaluation.config import QUERY_CATEGORIES
+
+
+def _fake_scraped_page(code):
+    """
+    Synthesize a scraped-handbook-shaped page for any course/program code,
+    so create_unsw_ground_truth() doesn't depend on the real knowledge base
+    being present on disk -- data/knowledge_base is gitignored runtime data
+    and won't exist in CI or an ad-hoc test container, only in the mounted
+    dev/prod environment.
+    """
+    return {
+        "metadata": {"title": f"Test Title {code}", "code": code},
+        "page_content": (
+            f"## Credit Points\n6\n\n"
+            f"## Overview\nThis is a test overview for {code} covering fundamental "
+            f"concepts, core skills, and practical applications relevant to the topic.\n\n"
+            f"## Assessments\nSome assessment details."
+        ),
+    }
 
 
 class TestEvaluationDataset:
     """Test evaluation dataset creation and management"""
-    
+
+    @pytest.fixture(autouse=True)
+    def mock_scraped_content(self):
+        """
+        create_unsw_ground_truth() reads the real knowledge base at
+        generation time (see VERIFIED_COURSE_CODES/VERIFIED_PROGRAM_CODES
+        in evaluation/datasets.py) so the test dataset can never again drift
+        from what's actually retrievable -- but that means unit tests need
+        this mocked rather than depending on data/knowledge_base existing.
+        """
+        with patch('evaluation.datasets._load_scraped_page', side_effect=_fake_scraped_page):
+            yield
+
     @pytest.fixture
     def dataset(self):
         """Create a test dataset instance"""
@@ -61,19 +96,26 @@ class TestEvaluationDataset:
         
         # Generate test queries
         test_queries = dataset.generate_test_queries(sample_size=20)
-        
+
         assert isinstance(test_queries, list)
-        assert len(test_queries) <= 20  # Should respect sample_size limit
-        
-        # Check query structure
+        # sample_size caps the RAGAS-scored portion; behavioral queries
+        # (navigation/out-of-scope) are always appended in full on top,
+        # since they test specific behaviors rather than being sampled.
+        max_expected = 20 + len(OUT_OF_SCOPE_QUERIES) + len(NAVIGATION_QUERIES)
+        assert len(test_queries) <= max_expected
+
+        # Check query structure. Behavioral queries (navigation/out-of-scope)
+        # use a different, smaller schema -- expected_behavior instead of
+        # query_type, since there's no RAGAS ground_truth for them.
         for query in test_queries:
             assert "query" in query
             assert "category" in query
             assert "difficulty" in query
-            assert "query_type" in query
             assert "id" in query
             assert isinstance(query["query"], str)
             assert len(query["query"].strip()) > 0
+            if "expected_behavior" not in query:
+                assert "query_type" in query
     
     def test_query_variations(self, dataset):
         """Test creation of query variations"""

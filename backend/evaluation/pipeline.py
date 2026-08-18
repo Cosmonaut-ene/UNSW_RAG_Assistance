@@ -56,27 +56,32 @@ class EvaluationPipeline:
             self.dataset.generate_test_queries(requested_size)
             self.dataset.save_datasets()
         
-        # Filter queries by category if specified
-        test_queries = self.dataset.test_queries
+        # Filter queries by category if specified. No further sample_size
+        # slicing here -- self.dataset.generate_test_queries() already
+        # applied sample_size to the RAGAS-scored portion above; behavioral
+        # items (expected_behavior set, see EvaluationDataset) are appended
+        # after that and must survive intact, or a blanket test_queries[:N]
+        # here would silently drop the navigation/out-of-scope checks
+        # whenever the scored portion alone reached sample_size.
+        all_queries = self.dataset.test_queries
         if categories:
-            test_queries = [q for q in test_queries if q.get('category') in categories]
-        
-        # Limit sample size if specified
-        if sample_size:
-            test_queries = test_queries[:sample_size]
-        
-        print(f"Evaluating {len(test_queries)} test queries...")
-        
-        # Generate RAG responses for each test query
+            all_queries = [q for q in all_queries if q.get('category') in categories]
+
+        scored_queries = [q for q in all_queries if 'expected_behavior' not in q]
+        behavioral_queries = [q for q in all_queries if 'expected_behavior' in q]
+
+        print(f"Evaluating {len(scored_queries)} scored queries + {len(behavioral_queries)} behavioral queries...")
+
+        # Generate RAG responses for each RAGAS-scored test query
         evaluation_data = []
-        
-        for i, query_item in enumerate(test_queries):
-            print(f"Processing query {i+1}/{len(test_queries)}: {query_item['query'][:50]}...")
-            
+
+        for i, query_item in enumerate(scored_queries):
+            print(f"Processing query {i+1}/{len(scored_queries)}: {query_item['query'][:50]}...")
+
             try:
                 # Generate response using existing RAG system
                 rag_response = self._generate_rag_response(query_item['query'])
-                
+
                 evaluation_data.append({
                     "query": query_item['query'],
                     "generated_answer": rag_response['answer'],
@@ -90,7 +95,7 @@ class EvaluationPipeline:
                     },
                     "rag_metadata": rag_response['metadata']
                 })
-                
+
             except Exception as e:
                 print(f"Error processing query {i+1}: {e}")
                 evaluation_data.append({
@@ -100,11 +105,18 @@ class EvaluationPipeline:
                     "ground_truth": query_item.get('ground_truth', query_item.get('expected_answer', query_item.get('ground_truth_answer'))),
                     "error": str(e)
                 })
-        
+
         # Run RAGAS evaluation
         print("Running RAGAS evaluation...")
         evaluation_report = self.evaluator.evaluate_batch(evaluation_data)
-        
+
+        # Behavioral checks (navigation intent, out-of-scope fallback) --
+        # these have no ground_truth for RAGAS to score against (there's no
+        # "correct grounded answer" for a query the corpus doesn't cover),
+        # so they're checked directly against rag_metadata.performance
+        # instead and reported separately.
+        behavioral_test_results = self._run_behavioral_checks(behavioral_queries)
+
         # Add pipeline metadata
         evaluation_report["pipeline_metadata"] = {
             "total_pipeline_time_seconds": round(time.time() - start_time, 3),
@@ -112,15 +124,82 @@ class EvaluationPipeline:
             "use_hybrid_search": self.use_hybrid_search,
             "categories_tested": categories or "all",
             "sample_size_requested": sample_size,
-            "actual_queries_tested": len(test_queries)
+            "actual_queries_tested": len(scored_queries) + len(behavioral_queries)
         }
-        
+        evaluation_report["behavioral_test_results"] = behavioral_test_results
+
         # Store results
         self.evaluation_results.append(evaluation_report)
         self._save_run_report(evaluation_report)
 
         print(f"✅ Evaluation completed in {time.time() - start_time:.1f} seconds")
         return evaluation_report
+
+    def _run_behavioral_checks(self, behavioral_queries: List[Dict]) -> Dict[str, Any]:
+        """
+        Run each behavioral query through the real pipeline and check its
+        actual performance metadata against what the query was designed to
+        prove:
+          - expected_behavior="navigation": query_intent must be
+            "NAVIGATION" (safety_and_rewrite_node correctly detected it and
+            routed straight to fallback_node without attempting retrieval).
+          - expected_behavior="fallback": fallback_used OR safety_blocked
+            must be True -- the pipeline must decline rather than fabricate
+            an answer to a query the knowledge base has no source document
+            for, whether that's via CRAG/hallucination_check's fallback
+            path or safety_check classifying it OFF_TOPIC outright (a live
+            smoke test showed "What's the weather forecast?" correctly
+            rejected as OFF_TOPIC, which never sets fallback_used -- that's
+            a different but equally valid form of "didn't hallucinate").
+
+        Returns a summary + per-query pass/fail list, not a RAGAS score --
+        there's no meaningful "faithfulness" to measure when the correct
+        answer is "the system shouldn't answer this from context".
+        """
+        results = []
+        for query_item in behavioral_queries:
+            query = query_item['query']
+            expected = query_item.get('expected_behavior')
+            try:
+                rag_response = self._generate_rag_response(query)
+                performance = rag_response['metadata'].get('performance', {})
+
+                if expected == 'navigation':
+                    passed = performance.get('query_intent') == 'NAVIGATION'
+                elif expected == 'fallback':
+                    passed = performance.get('fallback_used', False) or performance.get('safety_blocked', False)
+                else:
+                    passed = None  # unknown expected_behavior -- not a failure, just unscoreable
+
+                results.append({
+                    "query": query,
+                    "category": query_item.get('category'),
+                    "expected_behavior": expected,
+                    "passed": passed,
+                    "query_intent": performance.get('query_intent'),
+                    "fallback_used": performance.get('fallback_used'),
+                    "fallback_reason": performance.get('fallback_reason'),
+                    "safety_blocked": performance.get('safety_blocked'),
+                })
+            except Exception as e:
+                print(f"Error running behavioral check for '{query}': {e}")
+                results.append({
+                    "query": query,
+                    "category": query_item.get('category'),
+                    "expected_behavior": expected,
+                    "passed": False,
+                    "error": str(e),
+                })
+
+        scoreable = [r for r in results if r["passed"] is not None]
+        passed_count = sum(1 for r in scoreable if r["passed"])
+
+        return {
+            "total_count": len(results),
+            "passed_count": passed_count,
+            "pass_rate": round(passed_count / len(scoreable), 4) if scoreable else None,
+            "results": results,
+        }
 
     def _save_run_report(self, evaluation_report: Dict[str, Any]) -> None:
         """
