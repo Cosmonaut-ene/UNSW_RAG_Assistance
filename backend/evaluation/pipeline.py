@@ -9,7 +9,7 @@ from datetime import datetime
 
 from .metrics import RAGEvaluator
 from .datasets import EvaluationDataset
-from .config import TEST_CONFIG
+from .config import TEST_CONFIG, RESULTS_DIR
 
 # Import existing RAG system components
 from services.query_processor import process_with_ai
@@ -111,9 +111,32 @@ class EvaluationPipeline:
         
         # Store results
         self.evaluation_results.append(evaluation_report)
-        
+        self._save_run_report(evaluation_report)
+
         print(f"✅ Evaluation completed in {time.time() - start_time:.1f} seconds")
         return evaluation_report
+
+    def _save_run_report(self, evaluation_report: Dict[str, Any]) -> None:
+        """
+        Persist the full report -- every query's input (query, ground_truth),
+        output (generated_answer), and intermediate process (retrieved_contexts,
+        rag_metadata.performance.processing_steps, fallback reason, RAGAS
+        scores) -- to a timestamped file, one per run.
+
+        A `docker compose run --rm` container throws all of this away the
+        moment it exits; a 30-query RAGAS run takes ~30+ minutes, and without
+        this, post-hoc analysis (e.g. "why did fallback_rate not drop as much
+        as expected") means re-running the whole evaluation just to get data
+        that already existed in memory the first time.
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = RESULTS_DIR / f"eval_run_{timestamp}.json"
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(evaluation_report, f, indent=2, ensure_ascii=False, default=str)
+            print(f"[EvaluationPipeline] Full run report saved to {filepath}")
+        except Exception as e:
+            print(f"[EvaluationPipeline] Failed to save run report: {e}")
     
     def _generate_rag_response(self, query: str) -> Dict[str, Any]:
         """

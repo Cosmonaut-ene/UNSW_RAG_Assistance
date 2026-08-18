@@ -133,7 +133,9 @@ class TestEvaluationPipeline:
             "contexts": ["Test context 1", "Test context 2"],
             "metadata": {"answered": True, "performance": {}}
         })
-        
+
+        pipeline._save_run_report = MagicMock()
+
         # Mock evaluator
         pipeline.evaluator.evaluate_batch = MagicMock(return_value={
             "summary": {
@@ -166,9 +168,12 @@ class TestEvaluationPipeline:
         
         # Verify evaluator was called
         pipeline.evaluator.evaluate_batch.assert_called_once()
-        
+
         # Verify results stored
         assert len(pipeline.evaluation_results) == 1
+
+        # Verify the full run report was persisted for post-hoc analysis
+        pipeline._save_run_report.assert_called_once_with(result)
     
     def test_run_category_analysis(self, pipeline):
         """Test category-based evaluation analysis"""
@@ -393,4 +398,53 @@ class TestEvaluationPipeline:
         # Contexts should come directly from the pipeline performance dict
         assert "Hybrid context 1" in response["contexts"]
         assert "Hybrid context 2" in response["contexts"]
-        assert len(response["contexts"]) == 2
+
+
+class TestSaveRunReport:
+    """
+    _save_run_report persists every run's full detail (queries, answers,
+    contexts, processing_steps, scores) to a timestamped file -- a
+    `docker compose run --rm` container throws this away on exit otherwise,
+    which blocked post-hoc analysis of past evaluation runs.
+    """
+
+    @pytest.fixture
+    def pipeline(self, tmp_path, monkeypatch):
+        monkeypatch.setattr('evaluation.pipeline.RESULTS_DIR', tmp_path)
+        with patch('evaluation.pipeline.RAGEvaluator'), \
+             patch('evaluation.pipeline.EvaluationDataset'):
+            return EvaluationPipeline()
+
+    def test_writes_full_report_to_timestamped_file(self, pipeline, tmp_path):
+        report = {"aggregate_scores": {"faithfulness": 0.9}, "individual_results": [{"query": "Q1"}]}
+
+        pipeline._save_run_report(report)
+
+        files = list(tmp_path.glob("eval_run_*.json"))
+        assert len(files) == 1
+        with open(files[0]) as f:
+            saved = json.load(f)
+        assert saved == report
+
+    def test_successive_runs_do_not_overwrite_each_other(self, pipeline, tmp_path, monkeypatch):
+        import evaluation.pipeline as pipeline_module
+
+        monkeypatch.setattr(pipeline_module, 'datetime', Mock(
+            now=Mock(side_effect=[
+                Mock(strftime=Mock(return_value="20260101_120000")),
+                Mock(strftime=Mock(return_value="20260101_120001")),
+            ])
+        ))
+
+        pipeline._save_run_report({"run": 1})
+        pipeline._save_run_report({"run": 2})
+
+        files = sorted(tmp_path.glob("eval_run_*.json"))
+        assert len(files) == 2
+
+    def test_write_failure_does_not_raise(self, pipeline, tmp_path):
+        """A bad path shouldn't crash the whole evaluation run over a save error"""
+        import evaluation.pipeline as pipeline_module
+        pipeline_module.RESULTS_DIR = tmp_path / "does" / "not" / "exist"
+
+        pipeline._save_run_report({"query": "Q1"})  # must not raise

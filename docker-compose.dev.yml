@@ -24,6 +24,10 @@ services:
       - ./backend:/app
       - ./backend/logs:/app/logs
       - ./data/knowledge_base:/data/knowledge_base
+      # Evaluation runs write full per-query reports here (evaluation/config.py
+      # DATA_DIR) -- without this mount, `docker compose run --rm` throws every
+      # run's data away the moment the container exits.
+      - ./data/evaluation:/data/evaluation
     networks:
       - chatbot-network
     restart: unless-stopped
