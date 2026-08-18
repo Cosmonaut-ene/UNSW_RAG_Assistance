@@ -50,9 +50,6 @@ class RAGConfig:
     # --- CRAG grading (rag/retrieval_evaluator.py) ---
     crag_chunk_truncation: int = 700  # covers the ~600-char target chunk size with headroom (D1)
 
-    # --- Hallucination faithfulness check (rag/hallucination_checker.py) ---
-    faithfulness_context_truncation: int = 700  # consistent with CRAG's truncation (D3)
-
     # --- Safety check (ai/safety_checker.py) ---
     max_query_length: int = 10000  # spam/DoS guard, not a security judgment (C1)
 

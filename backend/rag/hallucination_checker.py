@@ -20,8 +20,6 @@ import json
 import re
 from typing import Dict, List, Tuple
 
-from config.rag_config import RAG_CONFIG
-
 FAITHFULNESS_SCHEMA = {
     "type": "object",
     "properties": {
@@ -94,8 +92,17 @@ def check_faithfulness(answer: str, context_docs: List[Dict], content_key: str =
         from ai.llm_client import get_genai_model
         model = get_genai_model("gemini-2.5-flash")
 
+        # NOT truncated: a live 30-query RAGAS run found this was checking
+        # answers against a 700-char prefix of each doc while generate_node
+        # (ai/response_generator.py build_context_and_sources) generated
+        # from the FULL, untruncated page_content -- reranked chunks here
+        # commonly run 1000-1800 chars, so any claim drawn from past
+        # character 700 got flagged "unsupported" even though it was
+        # genuinely grounded in the context the model actually saw. This
+        # check has to see exactly what generation saw, or it isn't really
+        # checking faithfulness to that context.
         context_text = "\n\n".join(
-            doc.get(content_key, doc.get("content", ""))[:RAG_CONFIG.faithfulness_context_truncation]
+            doc.get(content_key, doc.get("content", ""))
             for doc in context_docs
         )
 
