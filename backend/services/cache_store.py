@@ -2,6 +2,7 @@
 import os
 import json
 import hashlib
+import re
 import uuid
 from datetime import datetime
 from dateutil import tz
@@ -28,6 +29,27 @@ def get_question_hash(question):
 def similarity(a, b):
     """Calculate similarity between two strings"""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+# UNSW course/program codes: 4 letters + 4 digits (COMP1511, MATH3101,
+# SENG2011, INFS3700, ZEIT3118, ...).
+_COURSE_CODE_PATTERN = re.compile(r'\b[A-Za-z]{4}\d{4}\b')
+
+def extract_course_codes(text):
+    """
+    Extract the set of course/program codes mentioned in a question,
+    normalized to uppercase.
+
+    Two questions differing only in which course they name (e.g. "Can I
+    take COMP3311 without COMP2521?" vs "...without COMP2511?") can score
+    above 0.95 on SequenceMatcher similarity purely because the rest of the
+    sentence is identical -- COMP2521 and COMP2511 are different real
+    courses, so that's a wrong-answer cache hit, not a paraphrase. This is
+    used to gate the similarity fallback in find_cached_answer(): raising
+    the similarity threshold doesn't fix it (short questions can still
+    collide), and pushing it near 1.0 defeats the point of fuzzy matching
+    at all, so the fix is requiring the same set of course codes instead.
+    """
+    return {code.upper() for code in _COURSE_CODE_PATTERN.findall(text)}
 
 def load_all_cache_entries():
     """Load all cache entries from query_cache.jsonl"""
@@ -87,11 +109,24 @@ def find_cached_answer(question):
         # If no exact hash match, try similarity matching
         best_match = None
         best_similarity = 0.0
-        
+        query_codes = extract_course_codes(question)
+
         for entry in entries:
             cached_question = entry.get("question", "")
+
+            # A high SequenceMatcher score alone isn't enough: two
+            # questions naming different course codes can still score
+            # >0.95 if the rest of the sentence is identical ("without
+            # COMP2521?" vs "without COMP2511?"), which would silently
+            # return the wrong course's cached answer. Raising the
+            # threshold doesn't close this for short questions, and
+            # pushing it near 1.0 defeats fuzzy matching entirely -- so
+            # the set of course codes mentioned must match exactly first.
+            if query_codes != extract_course_codes(cached_question):
+                continue
+
             sim_score = similarity(question, cached_question)
-            
+
             # Use high similarity threshold (0.95) to ensure quality matches
             if sim_score > 0.95 and sim_score > best_similarity:
                 best_match = entry
