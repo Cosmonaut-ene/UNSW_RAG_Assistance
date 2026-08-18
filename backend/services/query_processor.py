@@ -176,6 +176,8 @@ def process_with_ai(question, session_id=None):
             "safety_blocked": perf.get("safety_blocked", False),
             "warning_returned": perf.get("warning_returned", False),
             "retrieved_contexts": retrieved_contexts,
+            "query_intent": perf.get("query_intent", ""),
+            "fallback_reason": perf.get("fallback_reason", ""),
         }
 
     except Exception as e:
