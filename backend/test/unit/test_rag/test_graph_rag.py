@@ -305,13 +305,35 @@ class TestHallucinationCheckNode:
 
     @patch('rag.hallucination_checker.check_faithfulness')
     @patch('rag.hallucination_checker.validate_citations')
-    def test_missing_citation_flagged(self, mock_validate, mock_faithful):
+    def test_missing_citation_alone_does_not_force_fallback(self, mock_validate, mock_faithful):
+        """
+        A live 30-query RAGAS run found this was ~45% of all hallucination
+        fallbacks -- check_faithfulness() already confirmed the answer
+        faithful with zero unsupported claims, but it got discarded anyway
+        purely because the model skipped the "add a Sources line"
+        formatting instruction. That's not hallucination.
+        """
         mock_validate.return_value = (True, True)
         mock_faithful.return_value = {"faithful": True, "unsupported_claims": []}
 
         result = hallucination_check_node(make_state(answer="COMP9900 is a course, no sources."))
 
+        assert result["hallucination_detected"] is False
+        assert "fallback_reason" not in result
+        # still logged for visibility, just doesn't force a fallback
+        assert "missing_citation" in result["processing_steps"]
+
+    @patch('rag.hallucination_checker.check_faithfulness')
+    @patch('rag.hallucination_checker.validate_citations')
+    def test_missing_citation_combined_with_unfaithful_still_flagged(self, mock_validate, mock_faithful):
+        """Missing citation doesn't mask a real hallucination signal when one is also present"""
+        mock_validate.return_value = (True, True)
+        mock_faithful.return_value = {"faithful": False, "unsupported_claims": ["invented prerequisite"]}
+
+        result = hallucination_check_node(make_state(answer="COMP9900 requires COMP9999."))
+
         assert result["hallucination_detected"] is True
+        assert "missing_citation" in result["processing_steps"]
 
     @patch('rag.hallucination_checker.check_faithfulness')
     @patch('rag.hallucination_checker.validate_citations')
