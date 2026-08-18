@@ -175,6 +175,44 @@ class TestEvaluationPipeline:
         # Verify the full run report was persisted for post-hoc analysis
         pipeline._save_run_report.assert_called_once_with(result)
     
+    def test_regenerates_when_cached_queries_smaller_than_requested_sample_size(
+        self, pipeline, mock_test_queries
+    ):
+        """
+        Regression test: evaluation/ data now persists across runs (see
+        _save_run_report), so a cached test_queries.json left over from an
+        earlier, smaller sample_size run must not silently cap every later,
+        larger request down to whatever was cached.
+        """
+        larger_query_set = mock_test_queries * 20  # 40 queries, cached set only has 2
+
+        pipeline.dataset.test_queries = mock_test_queries  # 2 cached queries
+        pipeline.dataset.load_datasets = MagicMock()
+        pipeline.dataset.create_unsw_ground_truth = MagicMock()
+
+        def fake_generate(size):
+            pipeline.dataset.test_queries = larger_query_set[:size]
+            return pipeline.dataset.test_queries
+
+        pipeline.dataset.generate_test_queries = MagicMock(side_effect=fake_generate)
+        pipeline.dataset.save_datasets = MagicMock()
+
+        pipeline._generate_rag_response = MagicMock(return_value={
+            "answer": "Test answer",
+            "contexts": ["Test context"],
+            "metadata": {}
+        })
+        pipeline._save_run_report = MagicMock()
+        pipeline.evaluator.evaluate_batch = MagicMock(return_value={
+            "summary": {}, "aggregate_scores": {}, "performance_analysis": {}, "individual_results": []
+        })
+
+        pipeline.run_comprehensive_evaluation(sample_size=30)
+
+        pipeline.dataset.generate_test_queries.assert_called_once_with(30)
+        call_args = pipeline.evaluator.evaluate_batch.call_args[0][0]
+        assert len(call_args) == 30
+
     def test_run_category_analysis(self, pipeline):
         """Test category-based evaluation analysis"""
         

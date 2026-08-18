@@ -42,12 +42,18 @@ class EvaluationPipeline:
         print("🔍 Starting comprehensive RAG evaluation...")
         start_time = time.time()
         
-        # Load or create test dataset
+        # Load or create test dataset. A cached test_queries.json smaller
+        # than what this run actually asked for must not be reused as-is --
+        # now that evaluation/ data persists across runs (see
+        # _save_run_report()), a leftover file from an earlier small sample_size
+        # run would otherwise silently truncate every later, larger request
+        # down to whatever was cached, with no error or warning.
+        requested_size = sample_size or TEST_CONFIG["sample_size"]
         self.dataset.load_datasets()
-        if not self.dataset.test_queries:
+        if not self.dataset.test_queries or len(self.dataset.test_queries) < requested_size:
             print("Creating test dataset...")
             self.dataset.create_unsw_ground_truth()
-            self.dataset.generate_test_queries(sample_size or TEST_CONFIG["sample_size"])
+            self.dataset.generate_test_queries(requested_size)
             self.dataset.save_datasets()
         
         # Filter queries by category if specified
