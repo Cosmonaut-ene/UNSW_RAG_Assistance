@@ -143,6 +143,40 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 | 缺 `PYTHONUNBUFFERED=1`，`print()` 日志卡在缓冲区不刷新 | 已完成 | [#7](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/7) |
 | 知识库挂载路径指错（挂了两个空目录，真实数据目录 `data/knowledge_base` 没挂进容器） | 已完成 | [#7](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/7) |
 
+### 计划外：结构审查 + RAGAS 全面评测 + 延迟优化（阶段 A-E 完成后，进入基础设施阶段前插入）
+
+不在最初的 17 项模块清单里。阶段 A-E 全部完成、代码层面"每一步都结构化"之后，用户要求在进入基础设施阶段前，先完整跑一次 RAGAS 评测并把生成延迟也纳入考量——这一轮排查从"延迟优化"出发，最终牵出了一条比预想长得多的根因链条，过程记录如下。
+
+| # | 模块 | 状态 | PR |
+|---|---|---|---|
+| L1 | 修复 `get_genai_model` 单例不区分 model 参数的 bug（换轻量模型的前置阻塞） | 已完成 | [#21](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/21) |
+| L2 | `safety_check`/CRAG 分级换用轻量模型（gemini-3.1-flash-lite） | 已完成 | [#22](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/22) |
+| L3 | `safety_check` 与 `query_rewrite` 并发发起 | 已完成 | [#23](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/23) |
+| L4 | `evaluation/metrics.py` 加 `fallback_rate` 独立指标，faithfulness/context_recall/context_precision 只在非fallback样本上聚合 | 已完成（发现 fallback 答案不引用 context，被 RAGAS faithfulness 天然误判为"不忠实"，混淆了"诚实拒答"和"编造事实"） | [#24](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/24) |
+| L5 | 修复 `missing_citation` 单独触发 fallback 的误判 | 已完成（占了当时约45%的 hallucination 误判 fallback） | [#25](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/25) |
+| L6 | 修复 `check_faithfulness` 截断长度（700字）与 `generate_node` 实际用的完整 context 不一致 | 已完成 | [#26](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/26) |
+| L7 | 评估运行自动持久化完整报告（输入/输出/中间过程），docker-compose 挂载 `/data/evaluation` | 已完成 | [#27](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/27) |
+| L8 | 修复测试集缓存比请求 sample_size 小时被静默截断 | 已完成 | [#28](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/28) |
+| L9 | `graph_rag` performance 字典暴露 `query_intent`/`fallback_reason` | 已完成 | [#29](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/29) |
+| L10 | 测试集重建：课程/项目类问题程序化生成（从知识库真实内容动态提取），PDF 类问题人工核实，新增越界拒答/导航识别行为测试 | 已完成（发现旧手写测试集里 COMP1521/COMP3331/MATH1081 等课程根本不在知识库里，这是 fallback_rate 长期偏高的重要原因之一） | [#30](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/30) |
+| L11 | 修复问答缓存模糊匹配的课程代码碰撞 bug（"…without COMP2521?" vs "…without COMP2511?" 相似度0.973，会返回错误课程的缓存答案） | 已完成 | [#31](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/31) |
+
+**最终结果（全部并入 main 后，30-query 完整 RAGAS + 行为测试）**：
+
+| 指标 | 本轮起点 | 本轮终点 |
+|---|---|---|
+| 平均响应延迟 | 25.5s | 15.0s（-41%） |
+| Faithfulness（非fallback样本） | 历史基线 0.718 | 0.987 |
+| Context Recall | 历史基线 0.100 | 0.501 |
+| Context Precision | 历史基线 0.152 | 0.711 |
+| Fallback Rate | 50~57% | 26.7% |
+| 行为测试（越界拒答 + 导航识别） | 未建立此测试类别 | 9/9 通过 |
+
+**没做完、明确留到之后再说的部分**：
+- 流式输出（减少感知延迟，不影响总耗时）——未排期
+- 问答缓存的"定期分析报告"自动化（当前只有可手动触发的评估脚本，没有定时任务）——未排期
+- 剩余 26.7% 的 fallback 里，哪些是真该拒答、哪些还能再抢救，未继续深挖
+
 ---
 
 ## 5. 验收标准
