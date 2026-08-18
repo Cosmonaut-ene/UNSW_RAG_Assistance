@@ -519,6 +519,13 @@ def invoke_rag_graph(query: str,
             "processing_steps": result.get("processing_steps", []),
             "cache_hit": False,
             "fallback_used": result.get("fallback_used", False),
+            # Previously only inferable by scanning processing_steps for
+            # magic strings ("navigation" fired iff "retrieval" is absent,
+            # etc.) -- exposing these directly lets evaluation code assert
+            # "this query was correctly classified as navigation" or "this
+            # fell back for the expected reason" without that guesswork.
+            "query_intent": result.get("query_intent", ""),
+            "fallback_reason": result.get("fallback_reason", ""),
             "safety_blocked": result.get("safety_blocked", False),
         }
     }
