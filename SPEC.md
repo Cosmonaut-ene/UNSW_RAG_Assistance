@@ -128,7 +128,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 |---|---|---|---|---|
 | I1 | k3s 单节点部署（Deployment/Service/Ingress + Helm chart） | `feat/k3s-deployment` | 未开始 | |
 | I2 | GitHub Actions CI/CD（build/test/GHCR/手动部署 approve） | `feat/cicd-pipeline` | 未开始 | |
-| I3 | Terraform（VPS + DNS 供应） | `feat/terraform-vps` | 未开始 | |
+| I3 | Terraform（VPS + DNS 供应，DNS 部分因域名未定而暂缓） | `feat/terraform-vps` | 已完成 | [#32](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/32) |
 | I4 | OpenTelemetry tracing（RAG pipeline 每节点 span）+ Grafana Cloud 接入 | `feat/otel-tracing` | 未开始 | |
 
 ### 计划外：开发环境修复（在验证 A1 时发现，已完成）
