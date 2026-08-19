@@ -28,6 +28,19 @@ terraform apply
 SERVER_IP="$(terraform output -raw server_ipv4)"
 echo "    server_ipv4 = $SERVER_IP"
 
+# Purge any stale known_hosts entry for this IP before connecting. Hetzner
+# can (and does) hand the same IP back to a *different*, brand-new server
+# on a later `terraform apply` after down.sh destroyed the last one --
+# same address, different host key. `StrictHostKeyChecking=accept-new`
+# only auto-trusts hosts with NO existing entry; a *mismatched* existing
+# entry (from the old server that used to live at this IP) still hard-fails
+# with "REMOTE HOST IDENTIFICATION HAS CHANGED", and the wait loop below
+# would spin on that error forever, looking exactly like a hang. Safe to
+# purge unconditionally here because $SERVER_IP came straight out of
+# `terraform output` above -- this is a box we just created, not an
+# unknown host from user input.
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$SERVER_IP" >/dev/null 2>&1 || true
+
 echo "==> 2/7 waiting for SSH..."
 until ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -o BatchMode=yes \
     "root@$SERVER_IP" true 2>/dev/null; do
