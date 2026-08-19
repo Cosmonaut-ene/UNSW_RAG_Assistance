@@ -1,5 +1,9 @@
-# Use Python 3.12 slim image
-FROM python:3.12-slim
+# Pinned to a specific Debian release, not the floating python:3.12-slim
+# tag -- that tag silently moved to a Debian 13 (trixie) base at some
+# point, which dropped `apt-key` entirely and broke this build (caught by
+# a fresh CI run with no local layer cache to hide it; a locally-cached
+# image had masked it here).
+FROM python:3.12-slim-bookworm
 
 # Set working directory
 WORKDIR /app
@@ -11,8 +15,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     unzip \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
