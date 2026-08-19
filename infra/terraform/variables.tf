@@ -12,6 +12,12 @@ variable "ssh_public_key_path" {
   default     = "~/.ssh/id_ed25519.pub"
 }
 
+variable "ci_deploy_public_key" {
+  description = "Public half of the dedicated GitHub Actions deploy keypair (I2 in SPEC.md -- see .github/workflows/README.md for how it's generated and where the private half goes). Attached to every server this module creates so it doesn't need re-adding by hand after every infra/scripts/down.sh + up.sh cycle. Empty string skips it (e.g. before I2 exists yet)."
+  type        = string
+  default     = ""
+}
+
 variable "server_name" {
   description = "Name of the Hetzner Cloud server (also used as its hostname)."
   type        = string

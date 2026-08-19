@@ -9,6 +9,12 @@ resource "hcloud_ssh_key" "default" {
   public_key = file(pathexpand(var.ssh_public_key_path))
 }
 
+resource "hcloud_ssh_key" "ci_deploy" {
+  count      = var.ci_deploy_public_key != "" ? 1 : 0
+  name       = "${var.server_name}-ci-deploy-key"
+  public_key = var.ci_deploy_public_key
+}
+
 resource "hcloud_firewall" "web" {
   name = "${var.server_name}-firewall"
 
@@ -39,7 +45,7 @@ resource "hcloud_server" "chatbot" {
   server_type = var.server_type
   image       = var.server_image
   location    = var.location
-  ssh_keys    = [hcloud_ssh_key.default.id]
+  ssh_keys    = concat([hcloud_ssh_key.default.id], hcloud_ssh_key.ci_deploy[*].id)
   firewall_ids = [hcloud_firewall.web.id]
 
   user_data = file("${path.module}/cloud-init.yaml")

@@ -1,0 +1,154 @@
+name: CI/CD
+
+# I2 in SPEC.md: push main -> build/test -> GHCR -> deploy needs manual
+# approval (via the `production` GitHub Environment's required reviewers,
+# configured in repo Settings -- not expressible in this YAML file itself).
+#
+# Test gate (SPEC.md section 5): backend pytest + frontend vitest must
+# both pass before build-and-push runs at all; PRs run the same tests
+# without ever reaching build/deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/unsw_rag_assistance-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/unsw_rag_assistance-frontend
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Built (not pushed) via buildx with GHA layer caching -- this image
+      # is ~10GB (google-chrome + spacy + sentence-transformers), so
+      # caching is what keeps this from being a 10+ minute build on every
+      # push. Tests run against exactly this image rather than a bare
+      # Python venv on the runner, matching how every test run in this
+      # project's history has actually been executed (docker run against
+      # the backend image) -- a venv-only test job risks passing on
+      # dependencies the venv happens to have that the real image doesn't,
+      # or vice versa.
+      - name: Build backend image (test target)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          load: true
+          tags: ${{ env.BACKEND_IMAGE }}:ci-test
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Run backend test suite
+        run: |
+          docker run --rm \
+            -e ADMIN_PASSWORD=ci-test-only \
+            -e SECRET_KEY=ci-test-only \
+            -e GOOGLE_API_KEY=unused-ci-placeholder \
+            "${{ env.BACKEND_IMAGE }}:ci-test" \
+            bash -c "pip install -q -r test/requirements-test.txt && python -m pytest test/unit -q"
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - working-directory: frontend
+        run: npm ci
+
+      - working-directory: frontend
+        run: npm run test:run
+
+  build-and-push:
+    needs: [test-backend, test-frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # This Environment is what actually gates the job on manual approval --
+    # create it in repo Settings > Environments > "production" and add at
+    # least one required reviewer. Without that configuration this job
+    # runs automatically, same as any other job.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy Helm chart to the VPS
+        run: |
+          rsync -az -e "ssh -i ~/.ssh/deploy_key" \
+            infra/helm/chatbot/ \
+            "root@${{ secrets.DEPLOY_HOST }}:/opt/chatbot-chart/"
+
+      - name: helm upgrade --install (pinned to this commit's image tags)
+        run: |
+          ssh -i ~/.ssh/deploy_key "root@${{ secrets.DEPLOY_HOST }}" "
+            which helm || (curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+            helm upgrade --install chatbot /opt/chatbot-chart -n chatbot --create-namespace \
+              --reuse-values \
+              --set backend.image.tag=${{ github.sha }} \
+              --set frontend.image.tag=${{ github.sha }}
+            kubectl -n chatbot rollout status deployment/backend --timeout=300s
+            kubectl -n chatbot rollout status deployment/frontend --timeout=120s
+          "
+
+      - name: Smoke test
+        run: |
+          curl -sf "http://${{ secrets.DEPLOY_HOST }}/api/admin/health"
