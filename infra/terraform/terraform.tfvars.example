@@ -9,3 +9,4 @@
 # server_name       = "unsw-rag-chatbot"
 # server_type       = "cx23"
 # location          = "nbg1"
+# ci_deploy_public_key = "ssh-ed25519 AAAA... github-actions-deploy@unsw-rag-chatbot"
