@@ -67,9 +67,15 @@ frontend Service, which proxies `/api` to the backend Service in-cluster.
 
 ## Upgrade after a new image push
 
+Handled automatically by CI/CD (I2, `.github/workflows/ci-cd.yml`) now:
+every push to `main` that passes tests builds and pushes `:<commit-sha>`,
+and the `deploy` job (after manual approval) runs
+`helm upgrade --install --reuse-values --set image.tag=<sha>` — real
+immutable per-commit deploys, not the `:latest` + `imagePullPolicy: Always`
+placeholder this section used to describe.
+
+Manual equivalent, if you ever need to redeploy without pushing a new
+commit (e.g. just to pick up a values.yaml change):
 ```bash
-kubectl -n chatbot rollout restart deployment/backend deployment/frontend
+helm upgrade chatbot infra/helm/chatbot -n chatbot --reuse-values
 ```
-(`imagePullPolicy: Always` means a rollout restart re-pulls `:latest`
-rather than needing a version bump every time — fine for this demo scale,
-CI/CD (I2) will move to immutable tags per build.)
