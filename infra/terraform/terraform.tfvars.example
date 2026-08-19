@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored -- never commit it, it will contain
+# your Hetzner API token indirectly if you put it here instead of the
+# TF_VAR_hcloud_token env var (either works; env var is preferred so
+# the token never touches disk in this directory at all).
+
+# hcloud_token      = "your-hetzner-api-token"   # prefer: export TF_VAR_hcloud_token=... instead
+# ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+# server_name       = "unsw-rag-chatbot"
+# server_type       = "cx23"
+# location          = "nbg1"

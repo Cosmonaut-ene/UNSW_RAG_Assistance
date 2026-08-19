@@ -102,6 +102,19 @@ id_rsa.pub
 *.cert
 
 # ==========================================
+# TERRAFORM (infra/terraform) -- state files and tfvars can contain the
+# Hetzner API token, server IPs, and other values that must never be
+# committed (I3 in SPEC.md)
+# ==========================================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
+# ==========================================
 # PROJECT SPECIFIC
 # ==========================================
 # Chat logs and user data
