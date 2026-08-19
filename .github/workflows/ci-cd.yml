@@ -50,9 +50,16 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
+      # backend/.dockerignore deliberately excludes test/ from the image
+      # (production images shouldn't ship test code) -- so the image alone
+      # has nothing to run pytest against. Bind-mount the checked-out repo
+      # over /app, exactly like every local test run this project has ever
+      # done (`docker run -v "$(pwd)/backend:/app" ...`), rather than
+      # baking tests into the image just to satisfy CI.
       - name: Run backend test suite
         run: |
           docker run --rm \
+            -v "${{ github.workspace }}/backend:/app" \
             -e ADMIN_PASSWORD=ci-test-only \
             -e SECRET_KEY=ci-test-only \
             -e GOOGLE_API_KEY=unused-ci-placeholder \
