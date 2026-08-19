@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  # Named exactly "backend" on purpose -- frontend/nginx.conf's
+  # `proxy_pass http://backend:5000;` resolves this via in-cluster DNS
+  # unchanged from the docker-compose setup, no nginx config fork needed
+  # between environments.
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: {{ .Values.backend.port }}
+      targetPort: {{ .Values.backend.port }}

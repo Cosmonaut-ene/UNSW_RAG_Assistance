@@ -1,0 +1,58 @@
+backend:
+  image:
+    repository: ghcr.io/cosmonaut-ene/unsw_rag_assistance-backend
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  port: 5000
+  resources:
+    requests:
+      cpu: 300m
+      memory: 1200Mi
+    limits:
+      cpu: "1.5"
+      memory: 3000Mi
+
+frontend:
+  image:
+    repository: ghcr.io/cosmonaut-ene/unsw_rag_assistance-frontend
+    tag: latest
+    pullPolicy: Always
+  replicas: 1
+  port: 80
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# hostPath to the pre-seeded knowledge base data on the node. Fine for a
+# single-node k3s cluster (I1's whole point) -- would need a real shared
+# volume (NFS/object storage) the moment this becomes multi-node, since
+# hostPath ties the pod to whichever node has the directory.
+knowledgeBase:
+  hostPath: /opt/chatbot-data/knowledge_base
+
+# HuggingFace model cache (embeddings model, ~100MB) -- doesn't need
+# pre-seeding, just needs to survive pod restarts so it isn't
+# re-downloaded every time. k3s's built-in local-path-provisioner
+# handles this without installing anything extra.
+huggingfaceCache:
+  storageClassName: local-path
+  size: 2Gi
+
+# Created imperatively via `kubectl create secret generic <secretName>
+# --from-literal=...` (see infra/helm/README.md) -- deliberately not a
+# Helm-templated Secret, so real values never pass through `helm
+# install --set` or a values file that could end up committed.
+secretName: chatbot-secrets
+
+ingress:
+  enabled: true
+  className: traefik
+  # Empty = matches any Host header, which is what a bare-IP demo needs
+  # (no domain decided yet, see SPEC.md section 0). Fill in once a
+  # domain exists and DNS points at the VPS.
+  host: ""

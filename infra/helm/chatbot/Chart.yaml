@@ -1,0 +1,6 @@
+apiVersion: v2
+name: chatbot
+description: UNSW CSE Open Day chatbot (Flask + LangGraph RAG backend, Vue3 frontend) -- I1 in SPEC.md
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
