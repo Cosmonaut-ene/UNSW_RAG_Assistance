@@ -24,7 +24,18 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies. torch is a transitive dependency (via
+# sentence-transformers) with no version pinned in requirements.txt, and
+# PyPI's default torch wheel bundles full CUDA support -- ~6.85GB of
+# nvidia-*/torch/triton packages that are pure waste here: embeddings run
+# CPU-only (see model_kwargs={"device": "cpu"} in ai/llm_client.py) and
+# this deploys to a Hetzner VPS with no GPU at all. Installing the
+# CPU-only build first means the later `pip install -r requirements.txt`
+# finds it already satisfies sentence-transformers' torch requirement and
+# never pulls in the CUDA variant. This single change took the image from
+# ~10GB to a size GHCR could actually push without a single 3GB+ layer
+# timing out mid-upload (see PR history).
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download en_core_web_sm
 
