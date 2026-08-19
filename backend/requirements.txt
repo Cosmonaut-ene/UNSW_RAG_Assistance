@@ -53,13 +53,13 @@ jsonschema==4.24.0
 jsonschema-specifications==2025.4.1
 kubernetes==33.1.0
 langchain>=0.3.0
-langchain-chroma>=0.2.0
+langchain-chroma==0.2.4  # newer releases (0.2.5+) require chromadb>=1.0.20, conflicting with the chromadb==1.0.13 pin above; 0.2.4 is the last release compatible with it and what this project has actually run on
 langchain-community>=0.3.0
 langchain-core>=0.3.0
 langchain-google-genai>=2.0.0
 langchain-huggingface>=0.1.0
 langchain-text-splitters>=0.3.0
-langgraph>=0.2.0
+langgraph>=0.2.0,<0.6.0  # unbounded >=0.2.0 sent pip's resolver backtracking through the entire 1.x release history on every cache-miss build (CI hang, ~2000s+ before being killed); 0.5.4 is what this project has actually been built and tested against throughout
 langsmith==0.1.134
 markdown-it-py==3.0.0
 MarkupSafe==3.0.2
