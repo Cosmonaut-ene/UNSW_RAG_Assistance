@@ -126,7 +126,7 @@ safety_check（结构化四分类：SAFE/HARMFUL/OFF_TOPIC/INJECTION）
 
 | # | 模块 | 分支建议 | 状态 | PR |
 |---|---|---|---|---|
-| I1 | k3s 单节点部署（Deployment/Service/Ingress + Helm chart） | `feat/k3s-deployment` | 未开始 | |
+| I1 | k3s 单节点部署（Deployment/Service/Ingress + Helm chart） | `feat/k3s-deployment` | 已完成（端到端验证：真实查询走通检索→重排序→CRAG→生成全流程；另加 `infra/scripts/up.sh`/`down.sh` 一键起停，省 Hetzner 按小时计费的钱） | [#33](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/33)、[#34](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/34) |
 | I2 | GitHub Actions CI/CD（build/test/GHCR/手动部署 approve） | `feat/cicd-pipeline` | 未开始 | |
 | I3 | Terraform（VPS + DNS 供应，DNS 部分因域名未定而暂缓） | `feat/terraform-vps` | 已完成 | [#32](https://github.com/Cosmonaut-ene/UNSW_RAG_Assistance/pull/32) |
 | I4 | OpenTelemetry tracing（RAG pipeline 每节点 span）+ Grafana Cloud 接入 | `feat/otel-tracing` | 未开始 | |
