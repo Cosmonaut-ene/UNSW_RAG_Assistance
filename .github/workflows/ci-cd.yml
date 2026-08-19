@@ -15,8 +15,13 @@ on:
     branches: [main]
 
 env:
-  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/unsw_rag_assistance-backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/unsw_rag_assistance-frontend
+  # NOT ${{ github.repository_owner }} -- that preserves the GitHub
+  # username's actual casing ("Cosmonaut-ene"), but Docker image
+  # references must be all-lowercase; a live CI run failed with
+  # "invalid tag ... repository name must be lowercase" over exactly
+  # this. Hardcoded to match the images already pushed manually to GHCR.
+  BACKEND_IMAGE: ghcr.io/cosmonaut-ene/unsw_rag_assistance-backend
+  FRONTEND_IMAGE: ghcr.io/cosmonaut-ene/unsw_rag_assistance-frontend
 
 jobs:
   test-backend:
