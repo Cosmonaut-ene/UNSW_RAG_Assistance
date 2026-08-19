@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.huggingfaceCache.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.huggingfaceCache.size }}
