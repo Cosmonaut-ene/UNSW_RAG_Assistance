@@ -16,6 +16,9 @@ This chatbot combines:
 - **Cross-encoder reranking** — ms-marco-MiniLM-L-6-v2, re-scores top-50 retrieved chunks, returns top-12 for generation
 - **Web scraping** — Selenium + BeautifulSoup for up-to-date UNSW handbook content
 - **PDF processing** — PyMuPDF with Gemini-powered contextual chunk summarisation
+- **RAGAS** — automated evaluation (faithfulness, context recall/precision, answer relevancy) driving iterative pipeline fixes
+- **Terraform + k3s + Helm** — production deployment on a Hetzner VPS (see [Production Deployment](#production-deployment))
+- **GitHub Actions CI/CD** — test-gated builds, GHCR image publishing, manual-approval deployment
 
 ## Architecture
 
@@ -232,6 +235,29 @@ npm install
 npm run dev      # http://localhost:3000
 npm run build    # Production build
 ```
+
+---
+
+## Production Deployment
+
+The Docker Compose setup above is for local development. The live demo
+runs on a single-node **k3s** cluster on a Hetzner Cloud VPS:
+
+| Layer | Tooling | Details |
+|---|---|---|
+| Infrastructure | Terraform | Provisions the VPS + firewall + SSH keys — [`infra/terraform/`](infra/terraform/) |
+| Orchestration | k3s + Helm | Deployment/Service/Ingress chart — [`infra/helm/`](infra/helm/) |
+| CI/CD | GitHub Actions | push to `main` → test (backend pytest + frontend vitest) → build & push to GHCR → **manual-approval-gated** deploy — [`.github/workflows/`](.github/workflows/) |
+| Cost control | `infra/scripts/up.sh` / `down.sh` | Hetzner bills the same whether a server is running or merely stopped, so `down.sh` fully destroys the VPS between sessions and `up.sh` reprovisions everything (Terraform → k3s → Helm) from scratch — [`infra/README.md`](infra/README.md) |
+
+Each of those directories has its own README with the exact commands
+and one-time setup (secrets, SSH keys, GitHub Environment) — this
+section is just the map.
+
+The backend image is deliberately kept CPU-only (no CUDA/torch GPU
+deps — the embedding model runs on CPU and the VPS has no GPU anyway),
+which is most of the difference between the ~10GB a naive `pip
+install` produces and the ~3.65GB actually shipped to GHCR.
 
 ---
 
@@ -475,8 +501,8 @@ curl http://localhost:3001/api/admin/health
 
 ### Test Coverage
 
-- **Backend**: 209 test functions — AI modules, RAG pipeline, services, API endpoints
-- **Frontend**: component tests, auth utilities, integration flows
+- **Backend**: 357 passing (2 skipped) — AI modules, RAG pipeline, evaluation harness, services, API endpoints. Enforced as a CI gate (`.github/workflows/ci-cd.yml`) — a failing test blocks the image build entirely.
+- **Frontend**: component tests, auth utilities, integration flows — same CI gate via vitest.
 
 ---
 
