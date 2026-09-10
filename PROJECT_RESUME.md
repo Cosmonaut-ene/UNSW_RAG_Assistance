@@ -17,8 +17,8 @@
 - 主导构建基于 **Retrieval-Augmented Generation（RAG）** 的 UNSW CSE 校园开放日问答系统，为访客提供课程、项目及校园设施的精准信息查询服务
 - 设计并实现 **LangGraph 图结构 RAG 流水线**，将 8 个处理节点（安全检测 → 查询改写 → HyDE → 混合检索 → 重排序 → CRAG 评级 → 生成 → 幻觉检测）编排为 DAG，消除了原有 if/elif 手动控制流，支持多路径回退策略
 - 引入 **HyDE（Hypothetical Document Embeddings）** 技术：生成假设性文档桥接稀疏查询与长文档语义，使模糊查询的检索召回率显著提升
-- 实现 **Cross-encoder 重排序**（ms-marco-MiniLM-L-6-v2）+ **CRAG 文档评级**，在 Top-30 混合检索结果中精选 Top-7，过滤低相关 chunk，显著降低生成幻觉率
-- 构建 **混合检索系统**：向量检索（ChromaDB + sentence-transformers/all-MiniLM-L6-v2，本地运行无 API 限制）与 BM25 关键词检索融合，通过 Reciprocal Rank Fusion 合并评分
+- 实现 **Cross-encoder 重排序**（ms-marco-MiniLM-L-6-v2）+ **CRAG 文档评级**，在 Top-50 混合检索结果中精选 Top-12，过滤低相关 chunk，显著降低生成幻觉率
+- 构建 **混合检索系统**：向量检索（ChromaDB + sentence-transformers/all-MiniLM-L6-v2，本地运行无 API 限制）与 BM25 关键词检索融合，通过加权分数融合（0.7 语义 + 0.3 关键词）合并评分
 - 采用 **Contextual Retrieval** 技术（Anthropic 提出）：以 Gemini 为每个 PDF chunk 生成文档级摘要前缀，解决 chunk 脱离上下文导致检索失准问题
 - 搭建 **RAGAS 评测框架**，编写 50+ 条 UNSW 真实 Q&A ground truth，覆盖 5 类场景（课程信息、学位项目、先修要求、入学条件、校园设施），用于量化评估 Answer Relevancy、Faithfulness 等指标
 - 使用 **Docker Compose** 容器化部署全栈应用（Flask 后端 + Vue 3 前端），通过 volume bind-mount 实现后端热重载，HuggingFace 模型通过 named volume 持久化缓存
@@ -35,8 +35,8 @@ Stack: Python · Flask · LangGraph · ChromaDB · Google Gemini · Vue 3 · Doc
 - Built a production-ready **Retrieval-Augmented Generation (RAG)** chatbot serving UNSW CSE Open Day visitors with accurate information on courses, degree programs, and campus facilities
 - Architected an **8-node LangGraph pipeline** (safety → rewrite → HyDE → hybrid retrieval → cross-encoder rerank → CRAG grading → generate → hallucination check), replacing procedural if/elif control flow with a DAG supporting multi-path fallback strategies
 - Implemented **HyDE (Hypothetical Document Embeddings)**: generates plausible answers to bridge the semantic gap between short user queries and long documents, improving recall on vague queries
-- Applied **cross-encoder reranking** (ms-marco-MiniLM-L-6-v2) and **Corrective RAG (CRAG)** document grading to select Top-7 from Top-30 hybrid search results, reducing hallucination rates
-- Built a **hybrid search system** combining local sentence-transformers vector search (ChromaDB) with BM25 keyword search, fused via Reciprocal Rank Fusion
+- Applied **cross-encoder reranking** (ms-marco-MiniLM-L-6-v2) and **Corrective RAG (CRAG)** document grading to select Top-12 from Top-50 hybrid search results, reducing hallucination rates
+- Built a **hybrid search system** combining local sentence-transformers vector search (ChromaDB) with BM25 keyword search, fused via weighted score combination (0.7 semantic + 0.3 keyword)
 - Applied **Contextual Retrieval** (Anthropic technique): prepended Gemini-generated document summaries to every PDF chunk to preserve context during retrieval
 - Established a **RAGAS evaluation pipeline** with 50+ manually curated ground-truth Q&A pairs across 5 categories for quantitative measurement of Answer Relevancy and Faithfulness
 - Containerized the full-stack application with **Docker Compose**; backend code changes apply via bind-mount hot-reload, embedding model persisted via named volume
@@ -72,20 +72,19 @@ RAG 的解法：先从知识库中检索与问题相关的文档片段（chunk�
 
 **Q: 本项目的 RAG 流水线有哪些节点？各自负责什么？**
 
-本项目使用 LangGraph 构建了一个 8 节点 DAG：
+> ⚠️ 2026-09-10 代码级核实更正：实际是 **7 个节点**，`safety_check` 和 `query_rewrite`（连同 HyDE 假设文档生成）已合并进同一个节点 `safety_and_rewrite`，并没有独立的 `hyde_generate` 节点——HyDE 的**生成**部分复用了 query rewrite 那一次 Gemini 结构化调用（省一次 LLM 往返），只有 HyDE 的**检索**部分（`hyde_search`）单独成一个函数。以下是 `backend/rag/graph_rag.py` 里的真实节点：
 
 | 节点 | 作用 |
 |------|------|
-| `safety_check` | 检测查询是否安全/与 UNSW 相关，对无关或有害问题直接拒绝 |
-| `query_rewrite` | 用 LLM 改写歧义查询，提升检索质量；识别纯导航意图（NAVIGATION）或不相关请求（REDIRECT） |
-| `hyde_generate` | 生成假设性文档（HyDE），扩展语义空间 |
-| `retrieve` | 混合检索：向量检索 + BM25，Top-30 结果 |
-| `rerank` | Cross-encoder 重排序，Top-30 → Top-7 |
-| `grade_documents` | CRAG 评级：LLM 判断检索结果是否相关，不相关则走 fallback |
+| `safety_and_rewrite` | 合并节点：安全检测 + LLM 改写歧义查询 + 识别导航/无关意图 + 生成 HyDE 假设文档（同一次结构化 Gemini 调用产出，不是独立步骤）|
+| `retrieve` | 混合检索：向量检索 + BM25 + HyDE 检索结果去重合并 |
+| `rerank` | Cross-encoder 重排序 |
+| `grade_documents` | CRAG 评级：LLM 逐文档判断相关性，返回 CORRECT/INCORRECT，评级失败时 fail-open 默认 CORRECT（保留全部文档，可用性优先于精度）|
 | `generate` | 用相关 chunk 作为 context，调用 Gemini 生成最终答案 |
-| `hallucination_check` | 检查答案中是否含有幻觉特征短语（如"I don't know"、"INSUFFICIENT_CONTEXT"），最多重试一次 |
+| `fallback` | 无 RAG context 直接回答，或返回固定提示语——安全检测失败/导航意图/CRAG 判定不相关/幻觉检测触发，都会走到这里 |
+| `hallucination_check` | 检查答案是否有幻觉特征；**注意：当前实现没有真正的"重新生成再检查"循环**，触发后直接进入 `fallback` 而非带着同样 context 回 `generate` 重试——这是代码自己的 docstring 里写明的已知简化，面试时如果被问"幻觉检测触发后具体怎么重试"，应如实说清楚这一点，而不是描述成一个真正的重试循环 |
 
-多路径 fallback：安全检测不通过 → 直接返回警告；文档评级不通过 → 调用 LLM 直接回答（无 RAG context）；幻觉检测不通过 → 重试一次后 fallback。
+3 个条件分支点（`safety_and_rewrite` 之后、`grade_documents` 之后、`hallucination_check` 之后），都可能路由到 `fallback`，这是一个真实的 DAG（而不是纯线性流程），但没有环路。
 
 ---
 
@@ -131,11 +130,13 @@ BM25（Best Matching 25）是一种基于词频（TF）和逆文档频率（IDF�
 - **向量检索**：擅长语义理解，但对专有名词（如 `COMP9900`、`K17`）不敏感——"COMP9900"和"COMP1511"向量距离很近，但语义截然不同
 - **BM25**：擅长精确词匹配，但无法理解同义词、改写
 
-混合检索（Hybrid Search）用 **Reciprocal Rank Fusion（RRF）** 融合两路排名：
+> ⚠️ 2026-09-10 代码级核实更正：本项目**没有使用 RRF**（`backend/rag/hybrid_search.py` 里找不到任何 `1/(k+rank)` 形式的代码）。实际融合方式是**加权分数相加**，不是排名融合。面试时如果被追问 RRF 公式细节，不要按这里曾经写的内容回答——直接说"是加权score fusion，不是RRF"更准确也更安全。
+
+混合检索（Hybrid Search）用**加权分数融合**（weighted score fusion）合并两路结果：
+```python
+hybrid_score = rag_score * rag_weight + bm25_score * bm25_weight
 ```
-RRF_score = 1/(k + rank_vector) + 1/(k + rank_bm25)
-```
-兼顾语义理解与关键词精度。本项目混合评分阈值：`min_hybrid_score=70.0`，`min_bm25_score=3.0`，`min_rag_score=25.0`。
+当前配置（`backend/config/rag_config.py`）：`rag_weight=0.7`，`bm25_weight=0.3`；过滤阈值 `min_hybrid_score=50.0`，`min_bm25_score=1.0`，`min_rag_score=25.0`（这组数字来自 2026-04 的自动化调优，调优前是 `rag_weight=0.6`、`min_hybrid_score=70.0`，见 EVALUATION_REPORT_100_QUERIES.md）。判定逻辑是"三个阈值任一达标即保留"（`passes_hybrid or passes_rag or passes_bm25`），不是要求全部达标。
 
 ---
 
@@ -162,11 +163,11 @@ HyDE（Hypothetical Document Embeddings，Gao et al. 2023）解决的问题：
 | 工作方式 | 独立编码 query 和 doc，计算余弦相似度 | 将 query + doc 拼接，一起输入模型打分 |
 | 速度 | 快（向量可预计算） | 慢（每对 (query, doc) 需推理一次） |
 | 精度 | 较低（无法捕捉 query-doc 交互） | 高（充分建模 query-doc 语义交互） |
-| 典型用途 | 初步召回（Top-100） | 精细重排序（Top-10 → Top-7） |
+| 典型用途 | 初步召回（Top-100） | 精细重排序（缩小候选集） |
 
-本项目用 Cross-encoder 做两阶段检索的第二阶段：
-1. Bi-encoder（向量检索）粗召回 Top-30
-2. Cross-encoder（`ms-marco-MiniLM-L-6-v2`）精细重排序 → Top-7
+本项目用 Cross-encoder 做两阶段检索的第二阶段（2026-09-10 核实：当前配置是 50→12，非早期文档写的 30→7）：
+1. Bi-encoder（向量检索 + BM25 混合）粗召回 Top-50（`vector_k`/`max_hybrid_results`，2026-04 automated tuning 后从 20/30 提高到 50/50）
+2. Cross-encoder（`ms-marco-MiniLM-L-6-v2`）精细重排序 → Top-12（`reranker_top_k`，同样是调优后从 7 提高到 12）
 
 每个文档内容截断至 1500 字符避免超出 token 限制，重排分数写入 `metadata["rerank_score"]`。
 
@@ -178,14 +179,14 @@ CRAG（Yan et al. 2024）的核心思想：在生成前加一道"相关性检查
 
 流程：
 1. 从向量库检索文档
-2. 用 LLM 评估这些文档与原始查询的相关性（二元判断：CORRECT / INCORRECT）
-3. 如果 CORRECT → 正常生成
-4. 如果 INCORRECT → 文档与查询无关，走 fallback（直接调用 LLM 无 RAG context 回答，或返回"不知道"）
+2. 用 LLM **逐个文档**判断相关性，一次结构化调用返回一个布尔数组（不是对整批文档只判一次"相关/不相关"）
+3. 至少一个文档判为相关 → grade=CORRECT，只把判为相关的文档送去生成
+4. 全部判为不相关 → grade=INCORRECT，走 fallback（直接调用 LLM 无 RAG context 回答，或返回"不知道"）
 
-本项目实现细节：
-- 只取 Top-5 文档的前 300 字符做评估，节省 API 调用
-- 评估 prompt 为二元 yes/no
-- 评估失败时默认 CORRECT，避免误拦截正常查询
+本项目实现细节（2026-09-10 代码核实，更正此前"只取 Top-5、300 字符"的错误描述）：
+- **评估全部送入的文档**（reranker 出来的 ~12 篇），不是只抽样 Top-5——`grade_documents()` docstring 明确写"covering every document (not just a sample of them)"
+- 每篇截断至 `RAG_CONFIG.crag_chunk_truncation`（700 字符，非 300），一次 Gemini 结构化调用拿到整个布尔数组
+- 评估失败（LLM 调用异常）时默认 CORRECT、保留全部未过滤文档，是"可用性优先于精度"的 fail-open 设计，代码注释里写明是故意的
 
 ---
 
@@ -207,6 +208,8 @@ CRAG（Yan et al. 2024）的核心思想：在生成前加一道"相关性检查
 - 每个 chunk 前缀：`[Document Context: {摘要}]\n\n{chunk 正文}`
 
 这是 **Anthropic Contextual Retrieval** 技术：解决 chunk 碎片化导致检索时脱离上下文的问题。
+
+> 范围说明（2026-09-10 代码核实）：这个 Gemini 摘要前缀**只应用于 PDF**（`document_loader.py`/`text_splitter.py`）。爬虫抓取的 UNSW 网页内容（实际是知识库里数量更大的那部分）用的是便宜的 metadata header（代码/标题/类型/来源拼接），不调用 LLM。面试时不要说成"全库都用了 Contextual Retrieval"，准确说法是"对 PDF 用了真正的 LLM 生成摘要，对爬虫内容用了更轻量的结构化 header，是成本和效果的权衡"。
 
 ---
 
@@ -347,8 +350,15 @@ LangGraph RAG 图（graph_rag.py）
 
 - `.env` 文件含 `GOOGLE_API_KEY`，`.gitignore` 明确排除 `.env` 和 `key.json`，不进入版本控制
 - `data/` 目录（含向量库、聊天日志）同样被 `.gitignore` 排除
-- Admin 接口使用 JWT Token 鉴权，token 有效期 1 小时
-- `SECRET_KEY` 用于签名 JWT，通过环境变量注入，不硬编码
+- Admin 接口使用 JWT Token 鉴权，token 有效期 1 小时（`services/auth.py` 里 `ADMIN_PASSWORD` 未设置会直接 `raise ValueError`，不会有静默的弱密码兜底）
+
+> ⚠️ 2026-09-10 代码核实更正："`SECRET_KEY` 不硬编码"这句话是错的，是本文档过去的一个真实错误，不是环境差异。`backend/app.py` 里实际是：
+> ```python
+> app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-change-in-production')
+> ```
+> 也就是说**如果部署时忘了设置 `SECRET_KEY` 环境变量，会静默 fallback 到一个写在源码里、任何人 clone 仓库都能看到的默认值**，而不是报错拒绝启动——这是一个真实的安全弱点，不是"环境变量注入、不硬编码"。另外，登录接口 `/api/admin/login` 没有任何限流（未发现 rate limiter），存在被暴力破解的风险。
+>
+> 面试建议：与其被问到才承认，不如主动说——"我们目前 `SECRET_KEY` 有一个不安全的默认值兜底，`ADMIN_PASSWORD` 缺失会正确拒绝启动但 `SECRET_KEY` 没有做同样的强制校验，另外登录接口没做限流，这些是我知道但还没来得及修的真实安全债，如果继续做会优先修这两个"——这比声称"全部做了鉴权和加密"更让面试官信服你真的读过自己的代码。
 
 ---
 
