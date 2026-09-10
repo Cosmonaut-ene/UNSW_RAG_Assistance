@@ -1,193 +1,177 @@
 """
 Integration tests for complete query processing workflows
 Tests end-to-end query processing from user input to response
+
+Rewritten 2026-09-10: process_with_ai() used to call safety/rewrite/
+retrieval/generation functions directly, and this file mocked each of
+them individually. Since the LangGraph migration, process_with_ai()
+only does a cache check + history retrieval and then delegates entirely
+to rag.graph_rag.invoke_rag_graph() (see services/query_processor.py) --
+the old mock targets (load_vector_store, HybridSearchEngine,
+process_with_rag_detailed, ai.query_enhancer.get_chat_llm,
+ai.safety_checker.get_genai_model, ai.response_generator.get_chat_llm)
+no longer exist at the query_processor call boundary at all. Individual
+graph nodes (safety_and_rewrite, generate, grade_documents,
+hallucination_check) already have their own unit tests in
+test/unit/test_rag/test_graph_rag.py -- this file's job is only to
+verify process_with_ai()'s own thin layer: cache short-circuit, history
+formatting, delegating to invoke_rag_graph(), and error handling. So it
+mocks at that one real boundary instead of re-mocking graph internals.
 """
 
 import pytest
 from unittest.mock import patch, MagicMock
-import json
-
-from services.query_processor import process_with_ai, save_to_admin_system
-from test.mocks.mock_llm import create_mock_chat_llm_with_responses
-from test.mocks.mock_vector_store import MockVectorStore
 
 
 @pytest.mark.integration
 class TestCompleteQueryFlow:
     """Test complete query processing workflow"""
-    
-    @patch('services.query_processor.process_with_rag_detailed')
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.query_enhancer.get_chat_llm')
-    @patch('ai.safety_checker.get_genai_model')
-    @patch('services.query_processor.HybridSearchEngine')
-    @patch('services.query_processor.load_vector_store')
-    def test_successful_rag_query_flow(self, mock_load_vector_store, mock_hybrid_class,
-                                     mock_safety_llm, mock_enhancer_llm, mock_find_cache,
-                                     mock_rag_process, mock_paths):
+    def test_successful_rag_query_flow(self, mock_find_cache, mock_invoke_graph, mock_paths):
         """Test successful RAG query processing flow"""
-        
-        # Setup mocks
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "This query is appropriate for UNSW assistance"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        mock_enhancer = create_mock_chat_llm_with_responses("query_enhancement")
-        mock_enhancer_llm.return_value = mock_enhancer
-        
-        mock_vector_store = MockVectorStore()
-        mock_load_vector_store.return_value = mock_vector_store
-        
-        mock_rag_process.return_value = {
-            "search_results": [
-                {
-                    "page_content": "COMP9900 is a capstone project course",
-                    "metadata": {"source": "handbook.pdf", "course_code": "COMP9900"}
-                }
-            ]
-        }
-        
-        mock_hybrid_engine = MagicMock()
-        mock_hybrid_results = [
-            {
-                "page_content": "COMP9900 is a capstone project course for computer science students",
-                "metadata": {
-                    "source": "handbook.pdf",
-                    "course_code": "COMP9900",
-                    "hybrid_score": 85.0
-                }
-            }
-        ]
-        mock_hybrid_engine.search_hybrid.return_value = mock_hybrid_results
-        mock_hybrid_class.return_value = mock_hybrid_engine
-        
-        with patch('services.query_processor.ai_process_query') as mock_ai_process:
-            mock_ai_process.return_value = {
-                "answer": "COMP9900 is a capstone project course for computer science students at UNSW.",
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+
+        mock_invoke_graph.return_value = {
+            "answer": "COMP9900 is a capstone project course for computer science students at UNSW.",
+            "answered": True,
+            "matched_files": ["handbook.pdf"],
+            "retrieved_contexts": ["COMP9900 is a capstone project course"],
+            "performance": {
+                "response_time_ms": 500,
+                "processing_steps": ["safety_check", "query_rewriting", "retrieval", "reranking", "crag_grading", "ai_generation"],
+                "cache_hit": False,
+                "fallback_used": False,
+                "query_intent": "REWRITE",
+                "fallback_reason": "",
                 "safety_blocked": False,
-                "matched_files": ["handbook.pdf"]
             }
-            
-            # Execute query
-            answer, answered, matched_files, performance = process_with_ai(
-                "What is COMP9900?", 
-                session_id="test_session_123"
-            )
-            
-            # Verify results
-            assert answered is True
-            assert "COMP9900" in answer
-            assert "capstone project" in answer
-            assert "handbook.pdf" in matched_files
-            assert performance["response_time_ms"] > 0
-            assert performance["cache_hit"] is False
-            assert "rag_success" in performance["processing_steps"]
-            
-    @patch('services.query_processor.find_best_answer')
-    @patch('ai.safety_checker.get_genai_model')
-    def test_cached_query_flow(self, mock_safety_llm, mock_find_cache):
-        """Test query flow with cache hit"""
-        
-        # Setup cache hit
-        cached_answer = "COMP9900 is a capstone project course (from cache)"
-        mock_find_cache.return_value = (cached_answer, True, {"cache_id": "test_cache"})
-        
-        # Execute query
+        }
+
         answer, answered, matched_files, performance = process_with_ai(
             "What is COMP9900?",
             session_id="test_session_123"
         )
-        
-        # Verify cache hit
+
+        assert answered is True
+        assert "COMP9900" in answer
+        assert "capstone project" in answer
+        assert "handbook.pdf" in matched_files
+        # >= 0, not > 0: invoke_rag_graph is mocked to return instantly, so
+        # the real wall-clock time process_with_ai measures around it can
+        # legitimately round down to 0ms on a fast machine.
+        assert performance["response_time_ms"] >= 0
+        assert performance["cache_hit"] is False
+        assert "ai_generation" in performance["processing_steps"]
+        mock_invoke_graph.assert_called_once()
+
+    @patch('services.query_processor.find_best_answer')
+    def test_cached_query_flow(self, mock_find_cache):
+        """Test query flow with cache hit"""
+        from services.query_processor import process_with_ai
+
+        # find_best_answer() returns (answer, found) -- a 2-tuple, not the
+        # 3-tuple (answer, found, cache_entry) that the lower-level
+        # find_cached_answer() it wraps returns.
+        cached_answer = "COMP9900 is a capstone project course (from cache)"
+        mock_find_cache.return_value = (cached_answer, True)
+
+        answer, answered, matched_files, performance = process_with_ai(
+            "What is COMP9900?",
+            session_id="test_session_123"
+        )
+
         assert answered is True
         assert answer == cached_answer
         assert performance["cache_hit"] is True
         assert "cache_hit" in performance["processing_steps"]
         assert performance["response_time_ms"] < 1000  # Should be fast
-        
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.safety_checker.get_genai_model')
-    def test_safety_blocked_query_flow(self, mock_safety_llm, mock_find_cache):
+    def test_safety_blocked_query_flow(self, mock_find_cache, mock_invoke_graph, mock_paths):
         """Test query flow when safety check blocks query"""
-        
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        # Setup safety check to block
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "This query is inappropriate and should be blocked"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        # Execute query
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+
+        # Real answer text and step name from rag/graph_rag.py's
+        # safety_and_rewrite_node (safety_blocked branch).
+        mock_invoke_graph.return_value = {
+            "answer": "I can only help with UNSW-related questions. Please ask about UNSW programs and courses.",
+            "answered": True,
+            "matched_files": [],
+            "retrieved_contexts": [],
+            "performance": {
+                "response_time_ms": 50,
+                "processing_steps": ["safety_check", "safety_blocked"],
+                "cache_hit": False,
+                "fallback_used": False,
+                "query_intent": "",
+                "fallback_reason": "",
+                "safety_blocked": True,
+            }
+        }
+
         answer, answered, matched_files, performance = process_with_ai(
             "Tell me about University of Sydney courses",
             session_id="test_session_123"
         )
-        
-        # Verify safety blocking
+
         assert answered is True
         assert "UNSW-related questions" in answer
         assert performance["safety_blocked"] is True
-        assert "safety_warning_returned" in performance["processing_steps"]
-        
-    @patch('services.query_processor.process_with_rag_detailed')
+        assert "safety_blocked" in performance["processing_steps"]
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.query_enhancer.get_chat_llm')
-    @patch('ai.safety_checker.get_genai_model')
-    @patch('services.query_processor.HybridSearchEngine')
-    @patch('services.query_processor.load_vector_store')
-    @patch('ai.response_generator.get_chat_llm')
-    def test_fallback_query_flow(self, mock_fallback_llm, mock_load_vector_store, 
-                                mock_hybrid_class, mock_safety_llm, mock_enhancer_llm,
-                                mock_find_cache, mock_rag_process):
+    def test_fallback_query_flow(self, mock_find_cache, mock_invoke_graph, mock_paths):
         """Test query flow when RAG fails and fallback is used"""
-        
-        # Setup mocks for failed RAG
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "This query is appropriate"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        mock_enhancer = create_mock_chat_llm_with_responses("query_enhancement")
-        mock_enhancer_llm.return_value = mock_enhancer
-        
-        mock_vector_store = MockVectorStore()
-        mock_load_vector_store.return_value = mock_vector_store
-        
-        # RAG returns no results
-        mock_rag_process.return_value = {"search_results": []}
-        
-        mock_hybrid_engine = MagicMock()
-        mock_hybrid_engine.search_hybrid.return_value = []  # No hybrid results
-        mock_hybrid_class.return_value = mock_hybrid_engine
-        
-        # Setup fallback LLM
-        mock_fallback = MagicMock()
-        mock_fallback.invoke.return_value.content = "I can help you with general information about UNSW programs."
-        mock_fallback_llm.return_value = mock_fallback
-        
-        # Execute query
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+
+        # Real step name is "fallback" (fallback_node); real
+        # fallback_reason values are "navigation" | "no_relevant_docs" |
+        # "hallucination_retry" (see RAGState in rag/graph_rag.py).
+        mock_invoke_graph.return_value = {
+            "answer": "I can help you with general information about UNSW programs.",
+            "answered": True,
+            "matched_files": [],
+            "retrieved_contexts": [],
+            "performance": {
+                "response_time_ms": 300,
+                "processing_steps": ["safety_check", "query_rewriting", "retrieval", "reranking", "crag_grading", "crag_incorrect", "fallback"],
+                "cache_hit": False,
+                "fallback_used": True,
+                "query_intent": "REWRITE",
+                "fallback_reason": "no_relevant_docs",
+                "safety_blocked": False,
+            }
+        }
+
         answer, answered, matched_files, performance = process_with_ai(
             "What programs does UNSW offer?",
             session_id="test_session_123"
         )
-        
-        # Verify fallback was used
+
         assert answered is True
         assert "UNSW programs" in answer
         assert performance["fallback_used"] is True
-        assert "no_search_results_fallback" in performance["processing_steps"]
-        
+        assert "fallback" in performance["processing_steps"]
+        assert performance["fallback_reason"] == "no_relevant_docs"
+
     @patch('services.query_processor.append_chat_log')
     @patch('services.query_processor.save_to_cache')
     def test_query_logging_and_caching(self, mock_save_cache, mock_append_log, mock_paths):
         """Test that queries are properly logged and cached"""
-        
+        from services.query_processor import save_to_admin_system
+
         mock_append_log.return_value = "test_message_id_123"
-        
-        # Test saving successful query
+
         message_id = save_to_admin_system(
             question="What is COMP9900?",
             answer="COMP9900 is a capstone project course.",
@@ -197,15 +181,14 @@ class TestCompleteQueryFlow:
             performance_data={
                 "response_time_ms": 500,
                 "tokens_used": 100,
-                "processing_steps": ["rag_success"],
+                "processing_steps": ["ai_generation"],
                 "cache_hit": False
             }
         )
-        
-        # Verify logging
+
         assert message_id == "test_message_id_123"
         mock_append_log.assert_called_once()
-        
+
         log_entry = mock_append_log.call_args[0][0]
         assert log_entry["question"] == "What is COMP9900?"
         assert log_entry["answer"] == "COMP9900 is a capstone project course."
@@ -214,8 +197,7 @@ class TestCompleteQueryFlow:
         assert log_entry["matched_files"] == ["handbook.pdf"]
         assert log_entry["response_time_ms"] == 500
         assert log_entry["tokens_used"] == 100
-        
-        # Verify caching
+
         mock_save_cache.assert_called_once()
         cache_call = mock_save_cache.call_args
         assert cache_call[1]["question"] == "What is COMP9900?"
@@ -226,16 +208,14 @@ class TestCompleteQueryFlow:
 @pytest.mark.integration
 class TestConversationHistoryIntegration:
     """Test conversation history integration in query processing"""
-    
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.load_all_chat_logs')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.query_enhancer.get_chat_llm')
-    @patch('ai.safety_checker.get_genai_model')
-    def test_conversation_history_retrieval_and_usage(self, mock_safety_llm, mock_enhancer_llm,
-                                                     mock_find_cache, mock_load_logs):
-        """Test that conversation history is properly retrieved and used"""
-        
-        # Setup conversation history
+    def test_conversation_history_retrieval_and_usage(self, mock_find_cache, mock_load_logs, mock_invoke_graph):
+        """Test that conversation history is retrieved and passed to the graph"""
+        from services.query_processor import process_with_ai
+
         mock_load_logs.return_value = [
             {
                 "session_id": "test_session_123",
@@ -245,7 +225,7 @@ class TestConversationHistoryIntegration:
                 "timestamp": "2025-01-01T10:00:00+11:00"
             },
             {
-                "session_id": "test_session_123", 
+                "session_id": "test_session_123",
                 "question": "What are the prerequisites?",
                 "answer": "Prerequisites include COMP2511 and COMP3311.",
                 "answered": True,
@@ -259,158 +239,140 @@ class TestConversationHistoryIntegration:
                 "timestamp": "2025-01-01T09:00:00+11:00"
             }
         ]
-        
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "This query is appropriate"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        # Setup query enhancer to use history
-        mock_enhancer = MagicMock()
-        mock_enhancer.invoke.return_value.content = "COMP9900 assessment structure breakdown"
-        mock_enhancer_llm.return_value = mock_enhancer
-        
-        with patch('services.query_processor.process_with_rag_detailed') as mock_rag:
-            mock_rag.return_value = {"search_results": []}
-            
-            with patch('services.query_processor.HybridSearchEngine'):
-                with patch('ai.response_generator.get_chat_llm') as mock_fallback:
-                    mock_fallback_llm = MagicMock()
-                    mock_fallback_llm.invoke.return_value.content = "Based on our previous discussion about COMP9900, the assessment includes project work and presentations."
-                    mock_fallback.return_value = mock_fallback_llm
-                    
-                    # Execute query with follow-up question
-                    answer, answered, matched_files, performance = process_with_ai(
-                        "What about the assessment?",
-                        session_id="test_session_123"
-                    )
-                    
-                    # Verify that query enhancement was called with history context
-                    mock_enhancer.invoke.assert_called_once()
-                    enhancer_call = mock_enhancer.invoke.call_args[0][0]
-                    
-                    # The prompt should include conversation history
-                    prompt_content = enhancer_call.content if hasattr(enhancer_call, 'content') else str(enhancer_call)
-                    assert "COMP9900" in prompt_content
-                    assert "capstone project" in prompt_content
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+
+        mock_invoke_graph.return_value = {
+            "answer": "Based on our previous discussion about COMP9900, the assessment includes project work and presentations.",
+            "answered": True,
+            "matched_files": [],
+            "retrieved_contexts": [],
+            "performance": {
+                "response_time_ms": 400,
+                "processing_steps": ["fallback"],
+                "cache_hit": False,
+                "fallback_used": True,
+                "query_intent": "REWRITE",
+                "fallback_reason": "no_relevant_docs",
+                "safety_blocked": False,
+            }
+        }
+
+        process_with_ai(
+            "What about the assessment?",
+            session_id="test_session_123"
+        )
+
+        # process_with_ai formats history and passes it through to the
+        # graph as formatted_history -- verify only the current session's
+        # two prior turns made it in, not the other session's turn.
+        mock_invoke_graph.assert_called_once()
+        call_kwargs = mock_invoke_graph.call_args.kwargs
+        formatted_history = call_kwargs.get("formatted_history", "")
+        assert "COMP9900" in formatted_history
+        assert "capstone project" in formatted_history
+        assert "Different session" not in formatted_history
 
 
-@pytest.mark.integration  
+@pytest.mark.integration
 class TestErrorHandlingIntegration:
     """Test error handling in integrated workflows"""
-    
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.safety_checker.get_genai_model')
-    def test_multiple_component_failures(self, mock_safety_llm, mock_find_cache):
-        """Test graceful handling when multiple components fail"""
-        
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        # Safety check fails
-        mock_safety_llm.side_effect = Exception("Safety API unavailable")
-        
-        with patch('ai.query_enhancer.get_chat_llm') as mock_enhancer_llm:
-            # Query enhancer also fails
-            mock_enhancer_llm.side_effect = Exception("Query enhancer API unavailable")
-            
-            # Execute query
-            answer, answered, matched_files, performance = process_with_ai(
-                "What is COMP9900?",
-                session_id="test_session_123"
-            )
-            
-            # Should still return some response (fallback)
-            assert isinstance(answer, str)
-            assert len(answer) > 0
-            # May or may not be answered depending on fallback behavior
-            
+    def test_multiple_component_failures(self, mock_find_cache, mock_invoke_graph, mock_paths):
+        """Test graceful handling when the graph itself raises"""
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+        mock_invoke_graph.side_effect = Exception("Safety API unavailable")
+
+        answer, answered, matched_files, performance = process_with_ai(
+            "What is COMP9900?",
+            session_id="test_session_123"
+        )
+
+        # process_with_ai's except-branch returns a fixed message and
+        # answered=False -- see services/query_processor.py
+        assert isinstance(answer, str)
+        assert len(answer) > 0
+        assert answered is False
+        assert "graph_error" in performance["processing_steps"]
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.safety_checker.get_genai_model') 
-    def test_network_timeout_handling(self, mock_safety_llm, mock_find_cache):
+    def test_network_timeout_handling(self, mock_find_cache, mock_invoke_graph, mock_paths):
         """Test handling of network timeouts"""
-        
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "This query is appropriate"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        with patch('ai.query_enhancer.get_chat_llm') as mock_enhancer_llm:
-            mock_enhancer = MagicMock()
-            # Simulate timeout
-            mock_enhancer.invoke.side_effect = TimeoutError("Request timeout")
-            mock_enhancer_llm.return_value = mock_enhancer
-            
-            # Execute query
-            answer, answered, matched_files, performance = process_with_ai(
-                "What is COMP9900?",
-                session_id="test_session_123"
-            )
-            
-            # Should handle timeout gracefully
-            assert isinstance(answer, str)
-            # Should indicate that original query was returned due to enhancement failure
-            
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+        mock_invoke_graph.side_effect = TimeoutError("Request timeout")
+
+        answer, answered, matched_files, performance = process_with_ai(
+            "What is COMP9900?",
+            session_id="test_session_123"
+        )
+
+        assert isinstance(answer, str)
+        assert answered is False
+        assert "no_answer" in performance["processing_steps"]
+
 
 @pytest.mark.integration
 @pytest.mark.performance
 class TestQueryFlowPerformance:
     """Test performance characteristics of integrated query flow"""
-    
+
+    @patch('rag.graph_rag.invoke_rag_graph')
     @patch('services.query_processor.find_best_answer')
-    @patch('ai.safety_checker.get_genai_model')
-    @patch('ai.query_enhancer.get_chat_llm')
-    def test_query_processing_performance(self, mock_enhancer_llm, mock_safety_llm, mock_find_cache):
+    def test_query_processing_performance(self, mock_find_cache, mock_invoke_graph, mock_paths):
         """Test that query processing completes within reasonable time"""
-        
-        # Setup fast mocks
-        mock_find_cache.return_value = (None, False, None)  # No cache hit
-        
-        mock_safety_model = MagicMock()
-        mock_safety_model.generate_content.return_value.text = "Query is appropriate"
-        mock_safety_llm.return_value = mock_safety_model
-        
-        mock_enhancer = MagicMock()
-        mock_enhancer.invoke.return_value.content = "enhanced query"
-        mock_enhancer_llm.return_value = mock_enhancer
-        
-        with patch('services.query_processor.process_with_rag_detailed') as mock_rag:
-            mock_rag.return_value = {"search_results": []}
-            
-            with patch('services.query_processor.HybridSearchEngine'):
-                with patch('ai.response_generator.get_chat_llm') as mock_fallback:
-                    mock_fallback_llm = MagicMock()
-                    mock_fallback_llm.invoke.return_value.content = "Quick response"
-                    mock_fallback.return_value = mock_fallback_llm
-                    
-                    # Execute query and measure time
-                    answer, answered, matched_files, performance = process_with_ai(
-                        "What is COMP9900?",
-                        session_id="test_session_123"
-                    )
-                    
-                    # Verify performance metrics
-                    assert performance["response_time_ms"] > 0
-                    assert performance["response_time_ms"] < 5000  # Should complete within 5 seconds
-                    assert performance["tokens_used"] > 0
-                    assert len(performance["processing_steps"]) > 0
-                    
+        from services.query_processor import process_with_ai
+
+        mock_find_cache.return_value = (None, False)  # No cache hit
+
+        mock_invoke_graph.return_value = {
+            "answer": "Quick response",
+            "answered": True,
+            "matched_files": [],
+            "retrieved_contexts": [],
+            "performance": {
+                "response_time_ms": 200,
+                "processing_steps": ["fallback"],
+                "cache_hit": False,
+                "fallback_used": True,
+                "query_intent": "",
+                "fallback_reason": "no_relevant_docs",
+                "safety_blocked": False,
+            }
+        }
+
+        answer, answered, matched_files, performance = process_with_ai(
+            "What is COMP9900?",
+            session_id="test_session_123"
+        )
+
+        # >= 0, not > 0: invoke_rag_graph is mocked to return instantly, so
+        # the real wall-clock time process_with_ai measures around it can
+        # legitimately round down to 0ms on a fast machine.
+        assert performance["response_time_ms"] >= 0
+        assert performance["response_time_ms"] < 5000  # Should complete within 5 seconds
+        assert performance["tokens_used"] > 0
+        assert len(performance["processing_steps"]) > 0
+
     @patch('services.query_processor.find_best_answer')
     def test_cache_hit_performance(self, mock_find_cache):
         """Test that cache hits are significantly faster"""
-        
-        # Setup cache hit
+        from services.query_processor import process_with_ai
+
         cached_answer = "Fast cached response"
-        mock_find_cache.return_value = (cached_answer, True, {"cache_id": "test"})
-        
-        # Execute query
+        mock_find_cache.return_value = (cached_answer, True)
+
         answer, answered, matched_files, performance = process_with_ai(
             "Cached query",
             session_id="test_session_123"
         )
-        
-        # Cache hits should be very fast
+
         assert performance["response_time_ms"] < 100  # Should be under 100ms
         assert performance["cache_hit"] is True
         assert answer == cached_answer
