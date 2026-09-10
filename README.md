@@ -10,7 +10,7 @@ This chatbot combines:
 - **sentence-transformers/all-MiniLM-L6-v2** — local embedding model (no API quota, runs inside Docker)
 - **ChromaDB** — vector database for semantic document search
 - **BM25** — keyword search for improved retrieval accuracy
-- **LangGraph** — graph-based RAG pipeline orchestration (safety → rewrite → HyDE → retrieve → rerank → grade → generate → hallucination check)
+- **LangGraph** — graph-based RAG pipeline orchestration (7 nodes: safety+rewrite+HyDE-generation merged into one node → retrieve → rerank → grade → generate → hallucination check → fallback; see `backend/rag/graph_rag.py` — verified 2026-09-10, the previous 8-node list here was stale)
 - **HyDE** — Hypothetical Document Embeddings, improves fuzzy query retrieval
 - **CRAG** — Corrective RAG document grading, filters low-relevance chunks before generation
 - **Cross-encoder reranking** — ms-marco-MiniLM-L-6-v2, re-scores top-50 retrieved chunks, returns top-12 for generation
@@ -324,21 +324,22 @@ The embedding model runs **locally** (sentence-transformers) — no API quota co
 
 ### Advanced RAG Pipeline (LangGraph)
 
-The query processing pipeline is implemented as a LangGraph state machine with the following nodes:
+The query processing pipeline is implemented as a LangGraph state machine. Verified against `backend/rag/graph_rag.py` on 2026-09-10 — it's actually 7 nodes, not 8; safety check, query rewrite, and HyDE hypothetical-document *generation* are fused into a single node (one Gemini call instead of three):
 
 ```
-safety_check → query_rewrite → hyde_expansion
-    → hybrid_retrieve → cross_encoder_rerank
-    → crag_grade → generate → hallucination_check
+safety_and_rewrite (safety + rewrite + HyDE-doc generation, one LLM call)
+    → retrieve (hybrid semantic+BM25, includes HyDE-doc search)
+    → rerank (cross-encoder)
+    → grade_documents (CRAG)
+    → generate → hallucination_check
+    → fallback (reachable from safety_and_rewrite, grade_documents, or hallucination_check)
 ```
 
-- **Safety check**: rejects off-topic or harmful queries upfront
-- **Query rewrite**: expands ambiguous queries for better recall
-- **HyDE**: generates a hypothetical answer to anchor embedding search
-- **Hybrid retrieve**: semantic (ChromaDB) + keyword (BM25) with score fusion
+- **Safety + rewrite + HyDE**: one structured Gemini call rejects off-topic/harmful queries, rewrites ambiguous ones, detects pure-navigation intent, and generates the HyDE hypothetical document — all in a single round trip
+- **Hybrid retrieve**: semantic (ChromaDB) + keyword (BM25) with weighted score fusion (0.7 semantic + 0.3 keyword, not RRF), plus HyDE-doc search results merged in
 - **Cross-encoder rerank**: scores (query, chunk) pairs; promotes relevant, demotes noise
-- **CRAG grade**: filters chunks below relevance threshold before generation
-- **Hallucination check**: validates response is grounded in retrieved context
+- **CRAG grade**: per-document LLM relevance judgment (boolean array, not one verdict for the whole batch); fails open to "keep everything" on error
+- **Hallucination check**: validates response is grounded in retrieved context; on failure it routes straight to `fallback`, not a real "regenerate and recheck" retry loop — that's a known simplification, not implemented yet
 
 ### Hybrid Search Technology
 
@@ -501,8 +502,9 @@ curl http://localhost:3001/api/admin/health
 
 ### Test Coverage
 
-- **Backend**: 357 passing (2 skipped) — AI modules, RAG pipeline, evaluation harness, services, API endpoints. Enforced as a CI gate (`.github/workflows/ci-cd.yml`) — a failing test blocks the image build entirely.
-- **Frontend**: component tests, auth utilities, integration flows — same CI gate via vitest.
+- **Backend**: 367 passing, 2 skipped, 0 failed (`test/unit` + `test/integration`, verified 2026-09-10). CI (`.github/workflows/ci-cd.yml`) only runs `test/unit` (357 of these) — a failing unit test blocks the image build.
+  - `test/integration/test_query_flow.py` was rewritten 2026-09-10 (previously 9 of its tests failed — they `patch()`ed functions removed by the LangGraph refactor, e.g. `services.query_processor.load_vector_store`, `ai.query_enhancer.get_chat_llm`). It's not run by CI, so this had gone unnoticed. It now mocks at the real current boundary (`rag.graph_rag.invoke_rag_graph`) and passes; still worth running locally (`pytest test/integration`) since CI won't catch a regression here.
+- **Frontend**: 42 tests passing across 4 files (verified 2026-09-10 via `npx vitest run`) — auth utils, Login page, LoadingSpinner component, auth-flow integration. Same CI gate via vitest.
 
 ---
 
